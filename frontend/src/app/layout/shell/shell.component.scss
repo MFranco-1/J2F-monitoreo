@@ -1,0 +1,100 @@
+/* layout/shell/shell.component.scss */
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  transition: margin-left var(--transition-normal);
+
+  &.sidebar-collapsed {
+    margin-left: 64px;
+  }
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 60px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-lg);
+  backdrop-filter: blur(8px);
+
+  .toggle-sidebar {
+    font-size: 18px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+  }
+
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+
+  .user-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #244e69;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .user-details {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+
+    .user-name {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .user-role {
+      font-size: var(--font-size-xs);
+      color: var(--text-muted);
+    }
+  }
+}
+
+.page-wrapper {
+  flex: 1;
+  padding: var(--spacing-xl);
+  overflow-y: auto;
+}
+
+.main-content { min-width:0; padding:0; }
+.topbar { height:72px; min-height:72px; background:white; gap:18px; padding:0 32px; }
+.topbar-label { flex:1; font-size:10px; letter-spacing:1.3px; color:#687f92; }
+.topbar-label b { color:#244e69; margin-left:8px; font-weight:700; }
+.topbar .user-avatar { background:#e7eef4; color:#244e69; border-radius:9px; }
+.topbar .user-role { font-size:11px; }
+.page-wrapper { width:100%; max-width:1560px; margin:0 auto; padding:34px; }
+@media(max-width:900px) { .main-content { margin-left:64px; } .page-wrapper { padding:22px 18px; } .topbar { padding:0 18px; } .topbar-label { display:none; } .topbar { justify-content:space-between; } }
+@media(max-width:500px) { .topbar .user-details { display:none; } .topbar { height:60px; min-height:60px; } }

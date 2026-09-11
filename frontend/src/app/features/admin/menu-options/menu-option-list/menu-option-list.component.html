@@ -1,0 +1,126 @@
+<!-- menu-option-list/menu-option-list.component.html -->
+<!-- Vista de Opciones de Menú - basada en wireframe image_3.png -->
+<div class="admin-page">
+  <div class="page-header">
+    <h1>Opciones de Menú Registradas</h1>
+    <p>Configuración dinámica del menú lateral del sistema</p>
+  </div>
+
+  <div class="alert-banner alert-success" *ngIf="successMsg()"> {{ successMsg() }}</div>
+  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg() && !showModal()"> {{ errorMsg() }}</div>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <span class="text-muted">{{ menuOptions().length }} opciones registradas</span>
+    </div>
+    <button id="btn-new-menu-option" class="btn-primary" [disabled]="states().length === 0" (click)="openNew()">+ Nuevo</button>
+  </div>
+
+  <div class="table-container">
+    <div class="loading-overlay" *ngIf="loading()"><div class="spinner"></div></div>
+    <table class="data-table" *ngIf="!loading()">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>URL</th>
+          <th>Menú Padre</th>
+          <th>Perfiles con Acceso</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let opt of menuOptions()">
+          <td>{{ opt.id }}</td>
+          <td>
+            <div class="menu-name">
+              <span *ngIf="opt.parent_id" class="indent-icon">↳</span>
+              <span>{{ opt.name }}</span>
+            </div>
+          </td>
+          <td><code class="url-code">{{ opt.url || '—' }}</code></td>
+          <td class="text-muted">{{ getParentName(opt) }}</td>
+          <td>
+            <div class="profile-chips">
+              <span class="badge badge-open" *ngFor="let p of (opt.profiles ?? [])">{{ p.name }}</span>
+              <span class="text-muted" *ngIf="(opt.profiles ?? []).length === 0">Sin acceso asignado</span>
+            </div>
+          </td>
+          <td>
+            <span class="badge" [class]="getStateBadge(opt)">{{ opt.state?.name || '—' }}</span>
+          </td>
+          <td>
+            <div class="action-buttons">
+              <button class="btn-secondary btn-sm" [id]="'btn-edit-menu-' + opt.id" (click)="openEdit(opt)">Editar</button>
+              <button class="btn-danger btn-sm" [id]="'btn-delete-menu-' + opt.id" (click)="delete(opt)">Eliminar</button>
+            </div>
+          </td>
+        </tr>
+        <tr *ngIf="menuOptions().length === 0">
+          <td colspan="7">
+            <div class="empty-state"><p>No hay opciones de menú</p></div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-backdrop" *ngIf="showModal()" (click)="closeModal()">
+  <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>{{ editingOption() ? 'Editar Opción' : 'Nueva Opción de Menú' }}</h2>
+      <button class="modal-close" aria-label="Cerrar" (click)="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()"> {{ errorMsg() }}</div>
+      <div class="form-group">
+        <label for="mo-name">Nombre *</label>
+        <input id="mo-name" class="form-control" [(ngModel)]="form.name" maxlength="100" placeholder="ej. Usuarios" />
+      </div>
+      <div class="form-group">
+        <label for="mo-url">URL / Ruta</label>
+        <input id="mo-url" maxlength="255" class="form-control" [(ngModel)]="form.url" placeholder="/admin/users" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="mo-parent">Menú Padre</label>
+          <select id="mo-parent" class="form-control" [(ngModel)]="form.parent_id">
+            <option [ngValue]="null">Ninguno (raíz)</option>
+            <option *ngFor="let p of parentOptions()" [ngValue]="p.id">{{ p.name }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="mo-order">Orden</label>
+          <input id="mo-order" type="number" class="form-control" [(ngModel)]="form.order" min="0" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="mo-state">Estado</label>
+        <select id="mo-state" class="form-control" [(ngModel)]="form.state_id">
+          <option *ngFor="let state of states()" [ngValue]="state.id">{{ state.name }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Perfiles con Acceso</label>
+        <div class="profile-checkboxes">
+          <label class="checkbox-item" *ngFor="let profile of profiles()">
+            <input type="checkbox"
+              [checked]="isProfileSelected(profile.id)"
+              (change)="toggleProfile(profile.id)"
+            />
+            <span>{{ profile.name }}</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closeModal()">Cancelar</button>
+      <button id="btn-save-menu-option" class="btn-primary" (click)="save()" [disabled]="saving() || states().length === 0">
+        {{ editingOption() ? 'Guardar Cambios' : 'Crear Opción' }}
+      </button>
+    </div>
+  </div>
+</div>

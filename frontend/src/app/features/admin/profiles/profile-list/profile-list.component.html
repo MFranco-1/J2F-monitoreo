@@ -1,0 +1,113 @@
+<!-- features/admin/profiles/profile-list/profile-list.component.html -->
+<!-- Vista de Perfiles Registrados - basada en wireframe image_1.png -->
+<div class="admin-page">
+  <div class="page-header">
+    <h1>Perfiles Registrados</h1>
+    <p>Gestión de roles y permisos del sistema</p>
+  </div>
+
+  <!-- Mensajes de feedback -->
+  <div class="alert-banner alert-success" *ngIf="successMsg()"> {{ successMsg() }}</div>
+  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg() && !showModal()"> {{ errorMsg() }}</div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <span class="text-muted">{{ profiles().length }} perfiles registrados</span>
+    </div>
+    <button id="btn-new-profile" class="btn-primary" [disabled]="states().length === 0" (click)="openNew()">
+      + NUEVO
+    </button>
+  </div>
+
+  <!-- Tabla -->
+  <div class="table-container">
+    <div class="loading-overlay" *ngIf="loading()">
+      <div class="spinner"></div>
+    </div>
+
+    <table class="data-table" *ngIf="!loading()">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Descripción</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let profile of profiles()">
+          <td>{{ profile.id }}</td>
+          <td><strong>{{ profile.name }}</strong></td>
+          <td class="text-muted">{{ profile.description || '—' }}</td>
+          <td>
+            <span class="badge" [class]="getStateBadge(profile)">
+              {{ profile.state?.name || '—' }}
+            </span>
+          </td>
+          <td>
+            <div class="action-buttons">
+              <button
+                class="btn-secondary btn-sm"
+                [id]="'btn-edit-profile-' + profile.id"
+                (click)="openEdit(profile)"
+              >
+                 EDITAR
+              </button>
+              <button
+                class="btn-danger btn-sm"
+                [id]="'btn-delete-profile-' + profile.id"
+                (click)="delete(profile)"
+              >
+                 BORRAR
+              </button>
+            </div>
+          </td>
+        </tr>
+        <tr *ngIf="profiles().length === 0">
+          <td colspan="5">
+            <div class="empty-state">
+              
+              <p>No hay perfiles registrados</p>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-backdrop" *ngIf="showModal()" (click)="closeModal()">
+  <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>{{ editingProfile() ? 'Editar Perfil' : 'Nuevo Perfil' }}</h2>
+      <button class="modal-close" aria-label="Cerrar" (click)="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()"> {{ errorMsg() }}</div>
+
+      <div class="form-group">
+        <label for="pf-name">Nombre del Perfil *</label>
+        <input id="pf-name" maxlength="100" class="form-control" [(ngModel)]="form.name" placeholder="ej. Operador, Supervisor" />
+      </div>
+      <div class="form-group">
+        <label for="pf-desc">Descripción</label>
+        <textarea id="pf-desc" maxlength="255" class="form-control" [(ngModel)]="form.description" rows="3" placeholder="Descripción del perfil..."></textarea>
+      </div>
+      <div class="form-group">
+        <label for="pf-state">Estado *</label>
+        <select id="pf-state" class="form-control" [(ngModel)]="form.state_id">
+          <option *ngFor="let state of states()" [ngValue]="state.id">{{ state.name }}</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closeModal()">Cancelar</button>
+      <button id="btn-save-profile" class="btn-primary" (click)="save()" [disabled]="saving() || states().length === 0">
+        {{ editingProfile() ? 'Guardar Cambios' : 'Crear Perfil' }}
+      </button>
+    </div>
+  </div>
+</div>

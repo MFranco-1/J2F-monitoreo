@@ -1,0 +1,233 @@
+/* features/alerts/alert-detail/alert-detail.component.scss */
+
+.alert-detail-page { max-width: 1200px; }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.detail-left, .detail-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.info-card {
+  .info-header {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    span:last-child {
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+  }
+
+  .info-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .info-description {
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-muted);
+    margin-bottom: var(--spacing-md);
+
+    p {
+      color: var(--text-secondary);
+      font-size: var(--font-size-sm);
+      margin-top: var(--spacing-xs);
+      line-height: 1.6;
+    }
+  }
+}
+
+.state-change-card {
+  h3 {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    margin-bottom: var(--spacing-md);
+  }
+}
+
+.history-card {
+  h3 {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    margin-bottom: var(--spacing-lg);
+  }
+}
+
+/* Timeline */
+.history-timeline {
+  position: relative;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.timeline-item {
+  display: flex;
+  gap: var(--spacing-md);
+  position: relative;
+  padding-bottom: var(--spacing-md);
+
+  &:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 20px;
+    width: 2px;
+    height: calc(100% - 8px);
+    background: var(--border-default);
+  }
+}
+
+.timeline-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  border: 2px solid var(--bg-primary);
+  flex-shrink: 0;
+  margin-top: 4px;
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.4);
+}
+
+.timeline-content {
+  flex: 1;
+
+  .timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+
+    .timeline-action {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .timeline-time {
+      font-size: var(--font-size-xs);
+      color: var(--text-muted);
+    }
+  }
+
+  .timeline-detail {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .timeline-state {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: var(--font-size-xs);
+
+    .state-from { color: var(--text-muted); }
+    .state-to { color: var(--accent-cyan); font-weight: 600; }
+  }
+
+  .timeline-user {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+}
+
+/* Shared table styles for alerts */
+.alert-title-link {
+  color: var(--text-primary);
+  font-weight: 500;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+
+  &:hover { color: var(--text-link); }
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.url-code {
+  font-family: 'Courier New', monospace;
+  font-size: var(--font-size-xs);
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--accent-cyan);
+}
+
+.menu-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  .indent-icon {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+  }
+}
+
+.profile-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.profile-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+
+  .checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+
+    input[type="checkbox"] { accent-color: var(--accent-blue); width: 16px; height: 16px; }
+    &:hover { color: var(--text-primary); }
+  }
+}
+
+.admin-page { max-width: 1400px; }
+
+/* Shared scss for all admin pages */

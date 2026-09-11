@@ -1,0 +1,29 @@
+<div class="login-page">
+  <section class="brand-panel" aria-label="J2F Soluciones de Información">
+    <div class="brand-wordmark">J2F<span>Soluciones de Información</span></div>
+    <div class="brand-message"><span class="brand-overline">CENTRO DE MONITOREO 24/7</span>
+      <h1>Información clara.<br>Atención oportuna.</h1>
+      <p>Un espacio para gestionar alertas, coordinar la atención y mantener el seguimiento de cada evento.</p>
+      <div class="brand-line"></div>
+    </div>
+    <span class="brand-caption">Gestión de alertas · Seguimiento operativo</span>
+  </section>
+  <section class="login-area">
+    <div class="login-card">
+      <div class="login-logo"><span class="login-eyebrow">ACCESO AL SISTEMA</span><h2>Bienvenido a J2F</h2><p>Ingresa con tu cuenta para continuar.</p></div>
+      <form class="login-form" (ngSubmit)="onSubmit()" #loginForm="ngForm">
+        <div class="form-group"><label for="identifier">Correo electrónico o DNI</label>
+          <input id="identifier" type="text" class="form-control" [(ngModel)]="identifier" name="identifier" placeholder="Ingresa tu correo o DNI" autocomplete="username" required />
+        </div>
+        <div class="form-group"><label for="password">Contraseña</label>
+          <input id="password" type="password" class="form-control" [(ngModel)]="password" name="password" placeholder="Ingresa tu contraseña" autocomplete="current-password" required />
+        </div>
+        <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()" role="alert">{{ errorMsg() }}</div>
+        <button id="btn-login-submit" type="submit" class="btn-primary login-btn" [disabled]="loading() || loginForm.invalid">
+          <span *ngIf="loading()" class="spinner-sm" aria-hidden="true"></span>{{ loading() ? 'Iniciando sesión...' : 'Ingresar al sistema' }}
+        </button>
+      </form>
+      <p class="login-footer">J2F · Centro de Monitoreo</p>
+    </div>
+  </section>
+</div>

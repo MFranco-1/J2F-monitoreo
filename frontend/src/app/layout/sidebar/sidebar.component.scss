@@ -1,0 +1,28 @@
+.sidebar { position:fixed; inset:0 auto 0 0; width:var(--sidebar-width); height:100dvh; background:#102d45; color:#d6e1ec; display:flex; flex-direction:column; z-index:200; overflow-y:auto; overflow-x:hidden; transition:width .2s; }
+.sidebar.collapsed { width:64px; }
+.sidebar-logo { display:flex; align-items:center; gap:12px; padding:28px 22px; color:white; border-bottom:1px solid #ffffff16; min-height:99px; }
+.logo-icon { display:grid; place-items:center; flex-shrink:0; width:38px; height:38px; color:#fff; border:1px solid #5b8da7; border-radius:8px; font-weight:800; font-size:13px; letter-spacing:-1px; }
+.logo-text { display:flex; flex-direction:column; white-space:nowrap; }
+.logo-title { font-size:22px; font-weight:750; letter-spacing:1px; line-height:1.2; }
+.logo-subtitle { font-size:10px; color:#aebfce; margin-top:4px; }
+.sidebar-nav { flex:1; padding:24px 12px; }
+.nav-section { margin-bottom:24px; }
+.nav-section-title { padding:0 12px 10px; font-size:10px; letter-spacing:1.6px; font-weight:600; color:#8fa8bb; }
+.nav-list { list-style:none; display:flex; flex-direction:column; gap:4px; }
+.nav-item { position:relative; width:100%; display:flex; align-items:center; gap:12px; padding:11px 12px; border:none; border-radius:6px; color:#c3d2df; text-align:left; background:none; font-size:13px; text-decoration:none; }
+.nav-item:hover { color:white; background:#ffffff0b; }
+.nav-item.active { color:#fff; background:#23485f; }
+.nav-item.active::before { content:''; position:absolute; left:0; top:10px; bottom:10px; width:3px; background:#65c1c1; border-radius:2px; }
+.nav-icon { flex-shrink:0; width:18px; height:18px; }
+.nav-label { min-width:0; flex:1; line-height:1.45; overflow-wrap:anywhere; }
+.nav-label small { display:block; font-size:10px; color:#a7b7c6; font-weight:400; }
+.nav-chevron { font-size:15px; }
+.nav-children { margin-left:13px; padding-left:7px; border-left:1px solid #ffffff25; }
+.nav-children .nav-item { font-size:12px; padding:9px; }
+.nav-item.disabled { color:#91a6b9; cursor:default; }
+.sidebar-footer { padding:20px 24px 26px; color:#c3d2df; font-size:11px; }
+.sidebar-footer span:last-child { display:block; margin-top:4px; color:#8fa8bb; font-size:10px; }
+.footer-rule { display:block; width:26px; border-top:2px solid #65c1c1; margin-bottom:12px; }
+.collapsed .sidebar-logo { padding:28px 13px; }
+.collapsed .sidebar-nav { padding:24px 8px; }
+.collapsed .nav-item { padding:13px; justify-content:center; }

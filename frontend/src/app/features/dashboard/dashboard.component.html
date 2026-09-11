@@ -1,0 +1,150 @@
+<!-- features/dashboard/dashboard.component.html -->
+<div class="dashboard">
+  <!-- Header -->
+  <div class="page-header">
+    <h1>Panel de control</h1>
+    <p *ngIf="!loading()">
+      Última actualización: {{ lastUpdate() | date:'HH:mm:ss' }}
+      <span class="live-badge">{{ connectionError() ? "SIN CONEXIÓN" : "ACTUALIZA CADA 30 S" }}</span>
+    </p>
+  </div>
+
+  <p class="alert-banner alert-error" role="alert" *ngIf="connectionError()">No se pudo actualizar. Se reintentará automáticamente.</p>
+
+  <!-- Loading -->
+  <div class="loading-overlay" *ngIf="loading()">
+    <div class="spinner"></div>
+  </div>
+
+  <ng-container *ngIf="!loading() && metrics()">
+    <!-- Métricas Principales -->
+    <div class="metrics-grid">
+      <!-- Total -->
+      <div class="metric-card total-card">
+        
+        <div class="metric-info">
+          <div class="metric-label">Total Alertas</div>
+          <div class="metric-value">{{ metrics()!.total_alerts }}</div>
+        </div>
+      </div>
+
+      <!-- Abiertas -->
+      <div class="metric-card open-card">
+        
+        <div class="metric-info">
+          <div class="metric-label">Abiertas</div>
+          <div class="metric-value" style="color: #245a8b;">
+            {{ metrics()!.by_state['Abierto'] || 0 }}
+          </div>
+        </div>
+      </div>
+
+      <!-- En Progreso -->
+      <div class="metric-card progress-card">
+        
+        <div class="metric-info">
+          <div class="metric-label">En Progreso</div>
+          <div class="metric-value" style="color: #a85615;">
+            {{ metrics()!.by_state['En Progreso'] || 0 }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Cerradas -->
+      <div class="metric-card closed-card">
+        
+        <div class="metric-info">
+          <div class="metric-label">Cerradas</div>
+          <div class="metric-value" style="color: #1f7256;">
+            {{ metrics()!.by_state['Cerrado'] || 0 }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Tiempo Promedio -->
+      <div class="metric-card time-card">
+        <div class="metric-info">
+          <div class="metric-label">Tiempo Prom. Resolución</div>
+          <div class="metric-value" style="color: #7450a7;">
+            {{ metrics()!.avg_response_time_minutes | number:'1.0-1' }}
+            <span style="font-size:14px; font-weight:400;">min</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráficos Section -->
+    <div class="charts-grid">
+      <!-- Distribución por Estado -->
+      <div class="card chart-card">
+        <h3 class="chart-title">Distribución por Estado</h3>
+        <div class="state-bars">
+          <div
+            class="state-bar-item"
+            *ngFor="let entry of getStateEntries()"
+          >
+            <div class="bar-header">
+              <span class="bar-label">{{ entry.name }}</span>
+              <span class="bar-count">{{ entry.count }}</span>
+            </div>
+            <div class="bar-track">
+              <div
+                class="bar-fill"
+                [style.width.%]="entry.pct"
+                [style.background]="entry.color"
+              ></div>
+            </div>
+            <div class="bar-pct">{{ entry.pct }}%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alertas Críticas Abiertas -->
+      <div class="card chart-card">
+        <h3 class="chart-title">
+           Alertas Críticas Abiertas
+          <span class="chart-badge">{{ metrics()!.critical_open.length }}</span>
+        </h3>
+        <div class="critical-list">
+          <div
+            class="critical-item"
+            *ngFor="let alert of metrics()!.critical_open"
+            [routerLink]="['/alerts', alert.id]"
+          >
+            <div class="critical-info">
+              <span class="badge badge-critical">Crítica</span>
+              <span class="critical-title">{{ alert.title }}</span>
+            </div>
+            <div class="critical-meta">
+              <span>{{ alert.service_type || '—' }}</span>
+              <span class="critical-time">{{ alert.opened_at | date:'dd/MM HH:mm' }}</span>
+            </div>
+          </div>
+          <div class="empty-state" *ngIf="metrics()!.critical_open.length === 0">
+            
+            <p>No hay alertas críticas abiertas</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card quick-actions">
+      <h3>Acciones Rápidas</h3>
+      <div class="actions-row">
+        <a routerLink="/alerts" id="btn-goto-alerts" class="action-btn">
+           Ver todas las alertas
+        </a>
+        <a routerLink="/assignments" id="btn-goto-assignments" class="action-btn">
+           Ver asignaciones
+        </a>
+        <a routerLink="/reports" id="btn-goto-reports" class="action-btn">
+           Generar reporte
+        </a>
+        <a routerLink="/history" id="btn-goto-history" class="action-btn">
+           Ver historial
+        </a>
+      </div>
+    </div>
+  </ng-container>
+</div>

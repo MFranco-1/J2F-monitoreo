@@ -1,0 +1,119 @@
+<!-- features/admin/users/user-list/user-list.component.html -->
+<!-- Vista de Usuarios Registrados - basada en wireframe image_2.png -->
+<div class="admin-page">
+  <div class="page-header">
+    <h1>Usuarios Registrados</h1>
+    <p>Gestión de operadores y administradores del sistema</p>
+  </div>
+
+  <div class="alert-banner alert-success" *ngIf="successMsg()"> {{ successMsg() }}</div>
+  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg() && !showModal()"> {{ errorMsg() }}</div>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <input
+        id="search-users"
+        class="search-input"
+        [(ngModel)]="searchTerm"
+        (input)="onSearch()"
+        placeholder="Buscar por nombre, DNI o correo..."
+      />
+    </div>
+    <button id="btn-new-user" class="btn-primary" [disabled]="states().length === 0" (click)="openNew()">+ Nuevo</button>
+  </div>
+
+  <div class="table-container">
+    <div class="loading-overlay" *ngIf="loading()"><div class="spinner"></div></div>
+    <table class="data-table" *ngIf="!loading()">
+      <thead>
+        <tr>
+          <th>DNI</th>
+          <th>Nombre Completo</th>
+          <th>Correo</th>
+          <th>Perfil</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let user of users()">
+          <td><code>{{ user.dni }}</code></td>
+          <td><strong>{{ user.full_name }}</strong></td>
+          <td class="text-muted">{{ user.email }}</td>
+          <td>
+            <span class="badge badge-open" *ngIf="user.profile">{{ user.profile.name }}</span>
+            <span class="text-muted" *ngIf="!user.profile">Sin perfil</span>
+          </td>
+          <td>
+            <span class="badge" [class]="getStateBadge(user)">{{ user.state?.name || '—' }}</span>
+          </td>
+          <td>
+            <div class="action-buttons">
+              <button class="btn-secondary btn-sm" [id]="'btn-edit-user-' + user.id" (click)="openEdit(user)">Editar</button>
+              <button class="btn-danger btn-sm" [id]="'btn-delete-user-' + user.id" (click)="delete(user)" [disabled]="user.state?.name === 'Inactivo'">Desactivar</button>
+            </div>
+          </td>
+        </tr>
+        <tr *ngIf="users().length === 0">
+          <td colspan="6">
+            <div class="empty-state"><p>No hay usuarios registrados</p></div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-backdrop" *ngIf="showModal()" (click)="closeModal()">
+  <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>{{ editingUser() ? 'Editar Usuario' : 'Nuevo Usuario' }}</h2>
+      <button class="modal-close" aria-label="Cerrar" (click)="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()"> {{ errorMsg() }}</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="u-dni">DNI *</label>
+          <input id="u-dni" class="form-control" [(ngModel)]="form.dni" maxlength="8" inputmode="numeric" placeholder="12345678" />
+        </div>
+        <div class="form-group">
+          <label for="u-name">Nombre completo *</label>
+          <input id="u-name" class="form-control" [(ngModel)]="form.full_name" maxlength="150" placeholder="Nombre completo" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="u-email">Correo Electrónico *</label>
+        <input id="u-email" type="email" maxlength="150" class="form-control" [(ngModel)]="form.email" placeholder="juan@empresa.com" />
+      </div>
+      <div class="form-group">
+        <label for="u-pass">{{ editingUser() ? 'Nueva Contraseña (dejar vacío para no cambiar)' : 'Contraseña *' }}</label>
+        <input id="u-pass" type="password" maxlength="1024" class="form-control" [(ngModel)]="form.password" placeholder="••••••••" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="u-profile">Perfil</label>
+          <select id="u-profile" class="form-control" [(ngModel)]="form.profile_id">
+            <option [ngValue]="null">Sin perfil</option>
+            <option *ngFor="let profile of profiles()" [ngValue]="profile.id">
+              {{ profile.name }}{{ profile.state?.name === 'Inactivo' ? ' (Inactivo)' : '' }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="u-state">Estado *</label>
+          <select id="u-state" class="form-control" [(ngModel)]="form.state_id">
+            <option *ngFor="let state of states()" [ngValue]="state.id">{{ state.name }}</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closeModal()">Cancelar</button>
+      <button id="btn-save-user" class="btn-primary" (click)="save()" [disabled]="saving() || states().length === 0">
+        {{ editingUser() ? 'Guardar Cambios' : 'Crear Usuario' }}
+      </button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,102 @@
+<!-- features/assignments/assignment-list/assignment-list.component.html -->
+<div class="admin-page">
+  <div class="page-header">
+    <h1>Asignaciones de Alertas</h1>
+    <p>Seguimiento de operadores y alertas en atención</p>
+  </div>
+
+  <div class="alert-banner alert-success" *ngIf="successMsg()"> {{ successMsg() }}</div>
+  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()"> {{ errorMsg() }}</div>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button
+        id="btn-toggle-active"
+        class="btn-secondary"
+        (click)="toggleFilter()"
+      >
+        {{ showActiveOnly ? ' Ver Todas' : ' Solo Activas' }}
+      </button>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <div class="loading-overlay" *ngIf="loading()"><div class="spinner"></div></div>
+    <table class="data-table" *ngIf="!loading()">
+      <thead>
+        <tr>
+          <th>Alerta #</th>
+          <th>Operador</th>
+          <th>Tipo</th>
+          <th>Asignada</th>
+          <th>Completada</th>
+          <th>T. Respuesta</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let a of assignments()">
+          <td>
+            <a [routerLink]="['/alerts', a.alert_id]" class="alert-title-link">#{{ a.alert_id }}</a>
+          </td>
+          <td><strong>{{ a.user?.full_name || '—' }}</strong></td>
+          <td>
+            <span class="badge" [class]="a.assignment_type === 'auto' ? 'badge-closed' : 'badge-open'">
+              {{ a.assignment_type === 'auto' ? ' Auto' : ' Manual' }}
+            </span>
+          </td>
+          <td class="text-muted">{{ a.assigned_at | date:'dd/MM/yy HH:mm' }}</td>
+          <td class="text-muted">{{ a.completed_at ? (a.completed_at | date:'dd/MM/yy HH:mm') : '—' }}</td>
+          <td>{{ a.response_time_minutes != null ? (a.response_time_minutes + ' min') : '—' }}</td>
+          <td>
+            <span class="badge" [class]="a.completed_at ? 'badge-closed' : 'badge-progress'">
+              {{ a.completed_at ? 'Completada' : 'En Curso' }}
+            </span>
+          </td>
+          <td>
+            <div class="action-buttons">
+              <button class="btn-secondary btn-sm" [id]="'btn-note-assignment-' + a.id" (click)="openNoteModal(a)" [disabled]="!canEdit(a)">
+                 Nota
+              </button>
+              <button
+                class="btn-success btn-sm"
+                [id]="'btn-complete-assignment-' + a.id"
+                (click)="completeAssignment(a)" [disabled]="!canEdit(a)"
+                *ngIf="!a.completed_at"
+              >
+                 Completar
+              </button>
+            </div>
+          </td>
+        </tr>
+        <tr *ngIf="assignments().length === 0">
+          <td colspan="8">
+            <div class="empty-state"><p>No hay asignaciones</p></div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Nota -->
+<div class="modal-backdrop" *ngIf="showNoteModal()" (click)="closeNoteModal()">
+  <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2> Notas de Atención</h2>
+      <button class="modal-close" aria-label="Cerrar" (click)="closeNoteModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="note-text">Observaciones del operador</label>
+        <textarea id="note-text" class="form-control" [(ngModel)]="noteText" rows="5"
+          placeholder="Detalla las acciones tomadas, hallazgos y resolución..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closeNoteModal()">Cancelar</button>
+      <button id="btn-save-note" class="btn-primary" (click)="saveNote()">Guardar Nota</button>
+    </div>
+  </div>
+</div>

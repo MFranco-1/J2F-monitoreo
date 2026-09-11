@@ -1,0 +1,39 @@
+<nav class="sidebar" [class.collapsed]="collapsed" id="app-sidebar" aria-label="Navegación principal">
+  <a class="sidebar-logo" routerLink="/dashboard" aria-label="J2F · Panel de control">
+    <div class="logo-icon">J2F</div>
+    <div class="logo-text" *ngIf="!collapsed">
+      <span class="logo-title">J2F</span>
+      <span class="logo-subtitle">Soluciones de Información</span>
+    </div>
+  </a>
+  <div class="sidebar-nav">
+    <div class="nav-section" *ngFor="let section of navSections">
+      <div class="nav-section-title" *ngIf="!collapsed">{{ section.title }}</div>
+      <ng-container *ngTemplateOutlet="navList; context: { $implicit: section.items }"></ng-container>
+    </div>
+  </div>
+  <div class="sidebar-footer" *ngIf="!collapsed"><span class="footer-rule"></span>Centro de Monitoreo<span>Gestión y atención de alertas</span></div>
+</nav>
+<ng-template #navList let-items>
+  <ul class="nav-list">
+    <li *ngFor="let item of items">
+      <a *ngIf="!item.children" class="nav-item" [routerLink]="item.disabled ? null : item.route"
+         [attr.aria-disabled]="item.disabled || null" [class.disabled]="item.disabled"
+         routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" ariaCurrentWhenActive="page"
+         [title]="item.label + (item.disabled ? ' (Pendiente)' : '')">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="iconPaths[item.icon] || iconPaths['folder']" /></svg>
+        <span class="nav-label" *ngIf="!collapsed">{{ item.label }}<small *ngIf="item.disabled">Pendiente</small></span>
+      </a>
+      <ng-container *ngIf="item.children">
+        <button class="nav-item nav-parent" (click)="toggleExpanded(item)" [attr.aria-expanded]="item.expanded" [title]="item.label">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path [attr.d]="iconPaths['folder']" /></svg>
+          <span class="nav-label" *ngIf="!collapsed">{{ item.label }}</span>
+          <span class="nav-chevron" *ngIf="!collapsed">{{ item.expanded ? '−' : '+' }}</span>
+        </button>
+        <div class="nav-children" *ngIf="item.expanded && !collapsed">
+          <ng-container *ngTemplateOutlet="navList; context: { $implicit: item.children }"></ng-container>
+        </div>
+      </ng-container>
+    </li>
+  </ul>
+</ng-template>

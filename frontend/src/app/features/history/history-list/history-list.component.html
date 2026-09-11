@@ -1,0 +1,66 @@
+<!-- features/history/history-list/history-list.component.html -->
+<div class="admin-page">
+  <div class="page-header">
+    <h1>Historial de Trazabilidad</h1>
+    <p>Registro completo de todas las acciones sobre alertas — {{ total() }} eventos</p>
+  </div>
+
+  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()">{{ errorMsg() }}</div>
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <select class="filter-select" (change)="applyFilter('action', $any($event.target).value)" id="filter-action">
+        <option value="">Todas las acciones</option>
+        <option value="created">Creadas</option>
+        <option value="state_changed">Cambio de Estado</option>
+        <option value="assigned">Asignadas</option>
+        <option value="escalated">Escaladas</option>
+        <option value="closed">Cerradas</option>
+      </select>
+      <input type="date" class="filter-select" (change)="applyFilter('date_from', $any($event.target).value)" id="filter-date-from" />
+      <input type="date" class="filter-select" (change)="applyFilter('date_to', $any($event.target).value)" id="filter-date-to" />
+    </div>
+  </div>
+
+  <div class="table-container">
+    <div class="loading-overlay" *ngIf="loading()"><div class="spinner"></div></div>
+    <table class="data-table" *ngIf="!loading()">
+      <thead>
+        <tr>
+          <th>Fecha/Hora</th>
+          <th>Alerta #</th>
+          <th>Acción</th>
+          <th>Estado Anterior</th>
+          <th>Nuevo Estado</th>
+          <th>Detalle</th>
+          <th>Operador</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let entry of history()">
+          <td class="text-muted">{{ entry.timestamp | date:'dd/MM/yy HH:mm:ss' }}</td>
+          <td>
+            <a [href]="'/alerts/' + entry.alert_id" class="alert-title-link">#{{ entry.alert_id }}</a>
+          </td>
+          <td>{{ getActionLabel(entry.action) }}</td>
+          <td class="text-muted">{{ entry.previous_state || '—' }}</td>
+          <td>{{ entry.new_state || '—' }}</td>
+          <td class="text-muted" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {{ entry.detail || '—' }}
+          </td>
+          <td>{{ entry.user?.full_name || 'Sistema' }}</td>
+        </tr>
+        <tr *ngIf="history().length === 0">
+          <td colspan="7">
+            <div class="empty-state"><p>No hay eventos en el historial</p></div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination" *ngIf="totalPages() > 1">
+    <button class="btn-secondary btn-sm" (click)="prevPage()" [disabled]="filters.page === 1">← Anterior</button>
+    <span>Página {{ filters.page }} / {{ totalPages() }}</span>
+    <button class="btn-secondary btn-sm" (click)="nextPage()" [disabled]="filters.page === totalPages()">Siguiente →</button>
+  </div>
+</div>

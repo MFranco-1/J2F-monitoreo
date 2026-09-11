@@ -1,0 +1,46 @@
+/* features/reports/report-list/report-list.component.scss */
+
+.result-card {
+  margin-bottom: var(--spacing-lg);
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-md);
+
+    h3 {
+      font-size: var(--font-size-lg);
+      font-weight: 600;
+    }
+  }
+
+  .result-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .result-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: var(--spacing-sm);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+
+    strong {
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary);
+    }
+
+    pre {
+      font-family: 'Courier New', monospace;
+      font-size: var(--font-size-xs);
+      color: var(--accent-cyan);
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  }
+}

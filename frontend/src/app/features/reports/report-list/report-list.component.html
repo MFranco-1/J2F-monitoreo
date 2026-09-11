@@ -1,0 +1,119 @@
+<!-- features/reports/report-list/report-list.component.html -->
+<div class="admin-page">
+  <div class="page-header">
+    <h1>Informes y Reportes</h1>
+    <p>Generación de métricas y análisis de rendimiento del centro de monitoreo</p>
+  </div>
+
+  <div class="alert-banner alert-success" *ngIf="successMsg()"> {{ successMsg() }}</div>
+  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg() && !showNewModal()"> {{ errorMsg() }}</div>
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <span class="text-muted">{{ reports().length }} reportes generados</span>
+    </div>
+    <button id="btn-new-report" class="btn-primary" (click)="openNewModal()">+ Nuevo Reporte</button>
+  </div>
+
+  <!-- Resultado del Reporte -->
+  <div class="card result-card" *ngIf="selectedResult()">
+    <div class="result-header">
+      <h3> Resultado del Reporte</h3>
+      <button class="btn-secondary btn-sm" (click)="closeResult()">× Cerrar</button>
+    </div>
+    <div class="result-body">
+      <div class="result-row" *ngFor="let entry of resultEntries()">
+        <strong>{{ entry[0] | titlecase }}:</strong>
+        <span *ngIf="!isObject(entry[1])">{{ entry[1] }}</span>
+        <pre *ngIf="isObject(entry[1])">{{ entry[1] | json }}</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <div class="loading-overlay" *ngIf="loading()"><div class="spinner"></div></div>
+    <table class="data-table" *ngIf="!loading()">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Tipo</th>
+          <th>Generado por</th>
+          <th>Fecha</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let report of reports()">
+          <td>{{ report.id }}</td>
+          <td><strong>{{ report.name }}</strong></td>
+          <td>{{ getTypeLabel(report.type) }}</td>
+          <td class="text-muted">{{ report.generator?.full_name || '—' }}</td>
+          <td class="text-muted">{{ report.created_at | date:'dd/MM/yy HH:mm' }}</td>
+          <td>
+            <div class="action-buttons">
+              <button
+                class="btn-primary btn-sm"
+                [id]="'btn-generate-report-' + report.id"
+                (click)="generateReport(report.id)"
+                [disabled]="generatingId() === report.id"
+              >
+                {{ generatingId() === report.id ? ' Generando...' : ' Generar' }}
+              </button>
+              <button class="btn-secondary btn-sm" [id]="'btn-view-report-' + report.id" (click)="viewResult(report)" *ngIf="report.has_result">
+                 Ver
+              </button>
+              <button class="btn-danger btn-sm" [id]="'btn-delete-report-' + report.id" (click)="deleteReport(report.id)">Eliminar</button>
+            </div>
+          </td>
+        </tr>
+        <tr *ngIf="reports().length === 0">
+          <td colspan="6">
+            <div class="empty-state"><p>No hay reportes generados aún</p></div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Nuevo Reporte -->
+<div class="modal-backdrop" *ngIf="showNewModal()" (click)="closeNewModal()">
+  <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2> Nuevo Reporte</h2>
+      <button class="modal-close" aria-label="Cerrar" (click)="closeNewModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()"> {{ errorMsg() }}</div>
+      <div class="form-group">
+        <label for="r-name">Nombre del Reporte *</label>
+        <input id="r-name" class="form-control" [(ngModel)]="newForm.name" placeholder="ej. Resumen mensual de alertas" />
+      </div>
+      <div class="form-group">
+        <label for="r-type">Tipo de Reporte</label>
+        <select id="r-type" class="form-control" [(ngModel)]="newForm.type">
+          <option *ngFor="let t of reportTypes" [value]="t.value">{{ t.label }}</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="r-start">Fecha Inicio</label>
+          <input id="r-start" type="date" class="form-control" [(ngModel)]="newForm.date_range_start" />
+        </div>
+        <div class="form-group">
+          <label for="r-end">Fecha Fin</label>
+          <input id="r-end" type="date" class="form-control" [(ngModel)]="newForm.date_range_end" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="r-desc">Descripción</label>
+        <textarea id="r-desc" class="form-control" [(ngModel)]="newForm.description" rows="2" placeholder="Descripción opcional..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closeNewModal()">Cancelar</button>
+      <button id="btn-create-generate-report" class="btn-primary" (click)="createReport()" [disabled]="saving()">Crear y Generar</button>
+    </div>
+  </div>
+</div>

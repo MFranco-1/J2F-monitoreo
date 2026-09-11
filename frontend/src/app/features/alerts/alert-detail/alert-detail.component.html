@@ -1,0 +1,121 @@
+<!-- features/alerts/alert-detail/alert-detail.component.html -->
+<div class="alert-detail-page" *ngIf="!loading()">
+  <div class="page-header">
+    <h1>Detalle de Alerta #{{ alert()?.id }}</h1>
+    <p>{{ alert()?.title }}</p>
+  </div>
+
+  <div class="alert-banner alert-success" *ngIf="successMsg()"> {{ successMsg() }}</div>
+  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()"> {{ errorMsg() }}</div>
+
+  <div class="detail-grid" *ngIf="alert()">
+    <!-- Panel izquierdo: info + acciones -->
+    <div class="detail-left">
+      <!-- Info Card -->
+      <div class="card info-card">
+        <div class="info-header">
+          <span class="badge" [class]="getPriorityClass(alert()?.priority ?? '')">
+            {{ getPriorityLabel(alert()?.priority || '') }}
+          </span>
+          <span class="badge" [class]="getStateClass(alert()?.state?.name ?? '')">
+            {{ alert()?.state?.name }}
+          </span>
+        </div>
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">Tipo de Servicio</span>
+            <span>{{ alert()?.service_type || '—' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Ubicación</span>
+            <span>{{ alert()?.location || '—' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Fuente</span>
+            <span>{{ alert()?.source || '—' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Abierta el</span>
+            <span>{{ alert()?.opened_at | date:'dd/MM/yyyy HH:mm' }}</span>
+          </div>
+          <div class="info-item" *ngIf="alert()?.response_time_minutes != null">
+            <span class="info-label">Tiempo de resolución</span>
+            <span>{{ alert()?.response_time_minutes }} min</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Asignado a</span>
+            <span>{{ alert()?.current_assignee?.full_name || 'Sin asignar' }}</span>
+          </div>
+        </div>
+
+        <div class="info-description" *ngIf="alert()?.description">
+          <span class="info-label">Descripción</span>
+          <p>{{ alert()?.description }}</p>
+        </div>
+
+        <!-- Auto-asignar -->
+        <button
+          class="btn-primary"
+          (click)="autoAssign()" [disabled]="!auth.isAdmin() || !!alert()!.current_assignee"
+          *ngIf="!alert()?.current_assignee && alert()?.state?.name !== 'Cerrado'"
+          id="btn-auto-assign-detail"
+        >
+           Auto-asignar Operador
+        </button>
+      </div>
+
+      <!-- Cambio de Estado -->
+      <div class="card state-change-card" *ngIf="transitions.length > 0 && canAttend">
+        <h3> Cambiar Estado</h3>
+        <div class="form-group">
+          <label for="new-state">Nuevo Estado</label>
+          <select id="new-state" class="form-control" [(ngModel)]="newStateName">
+            <option value="">— Seleccionar —</option>
+            <option *ngFor="let t of transitions" [value]="t">{{ t }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="state-notes">Notas (opcional)</label>
+          <textarea id="state-notes" class="form-control" [(ngModel)]="stateNotes" rows="2" placeholder="Observaciones del cambio..."></textarea>
+        </div>
+        <button id="btn-change-state" class="btn-primary" (click)="changeState()">
+          Aplicar Cambio de Estado
+        </button>
+      </div>
+    </div>
+
+    <!-- Panel derecho: historial -->
+    <div class="detail-right">
+      <div class="card history-card">
+        <h3> Historial de Trazabilidad</h3>
+        <div class="history-timeline">
+          <div class="timeline-item" *ngFor="let entry of history()">
+            <div class="timeline-dot"></div>
+            <div class="timeline-content">
+              <div class="timeline-header">
+                <span class="timeline-action">{{ getActionLabel(entry.action) }}</span>
+                <span class="timeline-time">{{ entry.timestamp | date:'dd/MM HH:mm' }}</span>
+              </div>
+              <div class="timeline-detail" *ngIf="entry.detail">{{ entry.detail }}</div>
+              <div class="timeline-state" *ngIf="entry.previous_state && entry.new_state">
+                <span class="state-from">{{ entry.previous_state }}</span>
+                <span>→</span>
+                <span class="state-to">{{ entry.new_state }}</span>
+              </div>
+              <div class="timeline-user" *ngIf="entry.user">
+                 {{ entry.user.full_name }}
+              </div>
+            </div>
+          </div>
+          <div class="empty-state" *ngIf="history().length === 0">
+            <p>Sin historial registrado</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="loading-overlay" *ngIf="loading()">
+  <div class="spinner"></div>
+</div>
