@@ -2,13 +2,24 @@
 import os
 from datetime import timedelta
 from sqlalchemy.engine import URL, make_url
+from sqlalchemy.exc import ArgumentError
 
 
 def database_url():
-    value = os.environ.get("DATABASE_URL")
+    value = os.environ.get("DATABASE_URL", "").strip()
     if value:
-        url = make_url(value)
-        if url.drivername in {"postgres", "postgresql"}:
+        # SQLAlchemy 2 no acepta el alias historico postgres://. Neon puede
+        # entregarlo en algunas integraciones; solo se normaliza el esquema y
+        # se conservan intactos el host, las credenciales y todos los parametros.
+        if value.startswith("postgres://"):
+            value = "postgresql://" + value[len("postgres://"):]
+        try:
+            url = make_url(value)
+        except ArgumentError:
+            # Se elimina el contexto de la excepcion para que un traceback no
+            # pueda incluir accidentalmente el valor recibido.
+            raise RuntimeError("DATABASE_URL no tiene un formato valido") from None
+        if url.drivername == "postgresql":
             url = url.set(drivername="postgresql+psycopg2")
     else:
         password = os.environ.get("PGPASSWORD")

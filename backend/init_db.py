@@ -6,6 +6,18 @@ from app import db
 from app import models
 from app.config import database_url
 
+EXPECTED_TABLES = {
+    "states",
+    "profiles",
+    "menu_options",
+    "profile_menu_option",
+    "users",
+    "alerts",
+    "assignments",
+    "history",
+    "reports",
+}
+
 
 def main():
     engine = None
@@ -18,7 +30,16 @@ def main():
             inspector = inspect(connection)
             existing = set(inspector.get_table_names())
             missing = []
-            for table in db.metadata.sorted_tables:
+            model_tables = {table.name: table for table in db.metadata.sorted_tables}
+            if set(model_tables) != EXPECTED_TABLES:
+                print(
+                    "La configuracion interna de modelos no contiene exactamente "
+                    "las 9 tablas esperadas.",
+                    file=sys.stderr,
+                )
+                return 1
+            for table_name in sorted(EXPECTED_TABLES):
+                table = model_tables[table_name]
                 if table.name not in existing:
                     missing.append(f"Tabla faltante: {table.name}")
                     continue

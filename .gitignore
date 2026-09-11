@@ -5,6 +5,15 @@
 *.swp
 *.swo
 .env
+.env.*
+!.env.example
+*.dump
+*.backup
+*.sql.gz
+venv/
+.venv/
+**/__pycache__/
+node_modules/
 
 # Backend (Python / Flask)
 backend/venv/

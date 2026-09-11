@@ -11,6 +11,35 @@ Este paquete sustituye la entrega anterior. Está adaptado a las nueve tablas en
 Conserva Angular 17.3, Flask 3.0.3, PostgreSQL y la presentación profesional de
 J2F en azul marino y blanco, sin emojis. No se añadieron módulos de negocio.
 
+## Trabajar con la base compartida de Neon
+
+Cada integrante puede usar la misma base remota sin instalar PostgreSQL. La URL
+debe recibirse por un canal privado y configurarse solo en su terminal; nunca se
+debe pegar en el código, el README, un commit o un archivo `.env` versionado.
+
+Después de clonar el repositorio, en PowerShell:
+
+```powershell
+git clone <URL_DEL_REPOSITORIO>
+cd J2F\backend
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+$env:DATABASE_URL = '<URL_DE_NEON_RECIBIDA_PRIVADAMENTE>'
+python init_db.py
+python run.py
+```
+
+`DATABASE_URL` tiene prioridad y puede ser la URL directa o la URL con pooler
+entregada por Neon. Se conservan sus parámetros, incluidos `sslmode` y
+`channel_binding`. Si comienza con `postgres://`, el backend normaliza solamente
+ese prefijo para SQLAlchemy. No imprimas la variable ni la guardes en GitHub.
+
+Para usar PostgreSQL local como alternativa, deja `DATABASE_URL` sin definir y
+configura `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` y `PGPASSWORD`. El archivo
+`.env.example` de la raíz contiene marcadores seguros; el proyecto no carga
+archivos `.env` automáticamente, por lo que no requiere `python-dotenv`.
+
 ## Sustituir la versión que ya tienes
 
 1. Detén el backend y el frontend con **Ctrl + C** en sus respectivas terminales.
@@ -138,7 +167,7 @@ instalar esta versión ni debe importarse en tu base existente**.
 
 ## Comprobaciones realizadas
 
-- **31 pruebas de backend aprobadas**. Incluyen autenticación y revocación,
+- **35 pruebas de backend aprobadas**. Incluyen autenticación y revocación,
   permisos, CRUD, perfil único, estados con identificadores distintos de 1/2,
   asignaciones, historial, fechas y los tres tipos de reportes existentes.
 - Comparación de los modelos con la estructura proporcionada: nombres de las
@@ -163,10 +192,9 @@ npm test
 npm run build
 ```
 
-Las pruebas se ejecutaron con SQLite aislada, nunca contra los datos de tu
-PostgreSQL. La comparación del esquema usa la estructura que enviaste; no se
-accedió remotamente a tu servidor. Los bloqueos concurrentes específicos de
-PostgreSQL y un despliegue remoto no se verificaron en este entorno.
+Las pruebas automatizadas se ejecutan con SQLite aislada, nunca contra los datos
+de PostgreSQL. `init_db.py` realiza por separado una validación de solo lectura
+de la conexión PostgreSQL configurada.
 
 ## Si algo impide iniciar
 
