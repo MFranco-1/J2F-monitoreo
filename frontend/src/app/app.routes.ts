@@ -63,8 +63,8 @@ export const routes: Routes = [
           import('./features/admin/profiles/profile-list/profile-list.component').then((m) => m.ProfileListComponent),
       },
       {
-        path: 'admin/master-data',
-        canActivate: [adminGuard],
+        path: 'master-data',
+        canActivate: [activeProfileGuard],
         loadComponent: () =>
           import('./features/admin/master-data/master-data.component').then((m) => m.MasterDataComponent),
       },

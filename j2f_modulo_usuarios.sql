@@ -136,6 +136,11 @@ COMMIT;
 
 -- 006: menú actual con sus agrupaciones y permisos, sin duplicar rutas.
 BEGIN;
+UPDATE menu_options current_option
+SET url='/master-data',updated_at=CURRENT_TIMESTAMP
+WHERE current_option.url='/admin/master-data'
+  AND NOT EXISTS (SELECT 1 FROM menu_options target WHERE target.url='/master-data');
+
 DO $$
 BEGIN
  IF NOT EXISTS (SELECT 1 FROM states WHERE LOWER(BTRIM(name))='activo' AND type='user') THEN
@@ -163,7 +168,7 @@ WITH active_state AS (
  ('Usuarios','/admin/users','users',60,'ADMINISTRACIÓN'),
  ('Perfiles','/admin/profiles','profiles',70,'ADMINISTRACIÓN'),
  ('Opciones de menú','/admin/menu-options','menu',80,'ADMINISTRACIÓN'),
- ('Datos maestros','/admin/master-data','database',90,'ADMINISTRACIÓN')
+ ('Datos maestros','/master-data','database',90,'ADMINISTRACIÓN')
 )
 INSERT INTO menu_options(name,url,icon,parent_id,"order",state_id,created_at,updated_at)
 SELECT s.name,s.url,s.icon,(SELECT MIN(id) FROM menu_options WHERE url IS NULL AND LOWER(name)=LOWER(s.parent_name)),s.menu_order,a.id,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
@@ -173,7 +178,7 @@ WITH mapping(url,parent_name) AS (VALUES
  ('/dashboard','MONITOREO'),('/alerts','MONITOREO'),('/assignments','MONITOREO'),
  ('/history','SEGUIMIENTO'),('/reports','SEGUIMIENTO'),('/admin/users','ADMINISTRACIÓN'),
  ('/admin/profiles','ADMINISTRACIÓN'),('/admin/menu-options','ADMINISTRACIÓN'),
- ('/admin/master-data','ADMINISTRACIÓN')
+ ('/master-data','ADMINISTRACIÓN')
 )
 UPDATE menu_options child SET parent_id=parent.id,updated_at=CURRENT_TIMESTAMP
 FROM mapping x JOIN menu_options parent ON parent.url IS NULL AND LOWER(parent.name)=LOWER(x.parent_name)
@@ -181,7 +186,7 @@ WHERE child.url=x.url AND child.parent_id IS DISTINCT FROM parent.id;
 
 WITH access(url,role) AS (VALUES
  ('/dashboard','administrador'),('/alerts','administrador'),('/assignments','administrador'),('/history','administrador'),('/reports','administrador'),
- ('/admin/users','administrador'),('/admin/profiles','administrador'),('/admin/menu-options','administrador'),('/admin/master-data','administrador'),
+ ('/admin/users','administrador'),('/admin/profiles','administrador'),('/admin/menu-options','administrador'),('/master-data','administrador'),
  ('/dashboard','tecnico'),('/alerts','tecnico'),('/assignments','tecnico'),('/history','tecnico')
 )
 INSERT INTO profile_menu_option(profile_id,menu_option_id)

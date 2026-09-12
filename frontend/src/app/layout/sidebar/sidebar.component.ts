@@ -43,7 +43,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
       { label: 'Usuarios', icon: 'users', route: '/admin/users' },
       { label: 'Perfiles', icon: 'profiles', route: '/admin/profiles' },
       { label: 'Opciones de menú', icon: 'menu', route: '/admin/menu-options' },
-      { label: 'Datos maestros', icon: 'database', route: '/admin/master-data' }
+      { label: 'Datos maestros', icon: 'database', route: '/master-data' }
     ] }
   ];
 
@@ -52,7 +52,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
   private subscription?: Subscription;
   navSections: { title: string; items: NavItem[] }[] = [];
   private readonly routes = new Set(['/dashboard', '/alerts', '/assignments', '/history', '/reports',
-    '/admin/users', '/admin/profiles', '/admin/menu-options', '/admin/master-data']);
+    '/admin/users', '/admin/profiles', '/admin/menu-options', '/master-data']);
 
   readonly iconPaths: Record<string, string> = ICON_PATHS;
 

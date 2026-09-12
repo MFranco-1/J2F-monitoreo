@@ -53,6 +53,9 @@ Abrir `http://localhost:4200`. Las rutas administrativas, incluidos los maestros
 requieren el perfil activo Administrador. El Técnico puede consultar maestros desde
 una alerta, pero no modificarlos.
 
+La pantalla de Datos maestros utiliza `/master-data`: los perfiles con esa opción
+asignada pueden consultarla, mientras que solo Administrador puede modificarla.
+
 La pantalla de alertas muestra todo por defecto. El filtro de cliente carga sus
 vehículos y limita las alertas; el filtro de vehículo limita el resultado a esa unidad.
 Seleccionar `Todos los clientes` restaura la consulta general.

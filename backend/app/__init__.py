@@ -172,7 +172,7 @@ def _seed_initial_data() -> None:
                    state_id=states[0].id, parent=sections["ADMINISTRACIÓN"]),
         MenuOption(name="Opciones de menú", url="/admin/menu-options", icon="menu", order=80,
                    state_id=states[0].id, parent=sections["ADMINISTRACIÓN"]),
-        MenuOption(name="Datos maestros", url="/admin/master-data", icon="database", order=90,
+        MenuOption(name="Datos maestros", url="/master-data", icon="database", order=90,
                    state_id=states[0].id, parent=sections["ADMINISTRACIÓN"]),
     ]
     for option in [*sections.values(), *menu_options]:

@@ -5,11 +5,13 @@ import { MasterDataService } from '../../../core/services/master-data.service';
 import { UserService } from '../../../core/services/user.service';
 import { Client, Vehicle, MasterKind } from '../../../shared/models/master-data.model';
 import { State } from '../../../shared/models/user.model';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({ selector:'app-master-data', standalone:true, imports:[NgFor,NgIf,FormsModule],
   templateUrl:'./master-data.component.html', styleUrl:'./master-data.component.scss' })
 export class MasterDataComponent implements OnInit {
   private service=inject(MasterDataService); private users=inject(UserService);
+  readonly auth=inject(AuthService);
   readonly tabs:{kind:MasterKind;label:string}[]=[{kind:'clients',label:'Clientes'},{kind:'vehicles',label:'Vehículos'},
     {kind:'gps-devices',label:'Dispositivos GPS'},{kind:'event-types',label:'Tipos de evento'}];
   kind:MasterKind='clients'; records=signal<any[]>([]); states=signal<State[]>([]);

@@ -280,7 +280,9 @@ test('la interfaz requerida está integrada sin pantalla ni modal de selección 
   assert.match(users, /type="checkbox"/);
   assert.match(alerts, /onClientChange|gps_device_id|event_type_id/);
   assert.match(alerts, /Todos los clientes|filter-client|filter-vehicle/);
-  assert.match(routes, /admin\/master-data/);
+  assert.match(routes, /path: 'master-data'[\s\S]*activeProfileGuard/);
+  const masters = fs.readFileSync(path.join(root, 'src/app/features/admin/master-data/master-data.component.html'), 'utf8');
+  assert.match(masters, /\*ngIf="auth\.isAdmin\(\)"/);
   assert.doesNotMatch(routes, /select-profile/);
 });
 

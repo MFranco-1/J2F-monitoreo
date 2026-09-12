@@ -3,13 +3,13 @@
   <div class="alert-banner alert-success" *ngIf="success()">{{success()}}</div>
   <div class="alert-banner alert-error" *ngIf="error()&&!showModal()" role="alert">{{error()}}</div>
   <div class="master-tabs" role="tablist"><button *ngFor="let tab of tabs" class="btn-secondary" [class.active]="kind===tab.kind" (click)="select(tab.kind)">{{tab.label}}</button></div>
-  <div class="toolbar"><span class="text-muted">{{records().length}} registros</span><button class="btn-primary" (click)="open()">+ Nuevo</button></div>
+  <div class="toolbar"><span class="text-muted">{{records().length}} registros</span><button *ngIf="auth.isAdmin()" class="btn-primary" (click)="open()">+ Nuevo</button></div>
   <div class="table-container"><div class="loading-overlay" *ngIf="loading()"><div class="spinner"></div></div>
-    <table class="data-table" *ngIf="!loading()"><thead><tr><th>ID</th><th>Nombre / Identificador</th><th>Detalle</th><th>Relación</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <table class="data-table" *ngIf="!loading()"><thead><tr><th>ID</th><th>Nombre / Identificador</th><th>Detalle</th><th>Relación</th><th>Estado</th><th *ngIf="auth.isAdmin()">Acciones</th></tr></thead>
       <tbody><tr *ngFor="let record of records()"><td>{{record.id}}</td><td><strong>{{title(record)}}</strong></td><td>{{detail(record)||'—'}}</td>
         <td>{{record.client?.business_name||record.vehicle?.plate||'—'}}</td><td><span class="badge" [class.badge-active]="record.state?.name==='Activo'" [class.badge-inactive]="record.state?.name!=='Activo'">{{record.state?.name}}</span></td>
-        <td><div class="action-buttons"><button class="btn-secondary btn-sm" (click)="open(record)">Editar</button><button class="btn-danger btn-sm" (click)="remove(record)">Eliminar</button></div></td></tr>
-        <tr *ngIf="!records().length"><td colspan="6"><div class="empty-state"><p>No hay registros</p></div></td></tr></tbody></table></div>
+        <td *ngIf="auth.isAdmin()"><div class="action-buttons"><button class="btn-secondary btn-sm" (click)="open(record)">Editar</button><button class="btn-danger btn-sm" (click)="remove(record)">Eliminar</button></div></td></tr>
+        <tr *ngIf="!records().length"><td [attr.colspan]="auth.isAdmin() ? 6 : 5"><div class="empty-state"><p>No hay registros</p></div></td></tr></tbody></table></div>
 </div>
 <div class="modal-backdrop" *ngIf="showModal()" (click)="close()"><div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
  <div class="modal-header"><h2>{{editing()?'Editar':'Nuevo'}} registro</h2><button class="modal-close" (click)="close()" aria-label="Cerrar">×</button></div>

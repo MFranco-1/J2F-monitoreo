@@ -251,7 +251,7 @@ class RegressionTests(unittest.TestCase):
             "/dashboard": "MONITOREO", "/alerts": "MONITOREO", "/assignments": "MONITOREO",
             "/history": "SEGUIMIENTO", "/reports": "SEGUIMIENTO",
             "/admin/users": "ADMINISTRACIÓN", "/admin/profiles": "ADMINISTRACIÓN",
-            "/admin/menu-options": "ADMINISTRACIÓN", "/admin/master-data": "ADMINISTRACIÓN",
+            "/admin/menu-options": "ADMINISTRACIÓN", "/master-data": "ADMINISTRACIÓN",
         }
         self.assertEqual(set(by_url), set(expected))
         self.assertTrue(all(by_url[url]["parent"]["name"] == parent
