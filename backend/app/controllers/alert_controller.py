@@ -26,9 +26,27 @@ VALID_TRANSITIONS = {
 def get_all_alerts(filters: dict) -> tuple:
     """
     Lista todas las alertas con filtros opcionales.
-    Filtros: state_name, priority, assigned_user_id, date_from, date_to
+    Filtros: client_id, vehicle_id, state, priority, date_from, date_to
     """
     query = Alert.query.join(State, Alert.state_id == State.id)
+
+    client_id = integer(filters.get("client_id"), "client_id", optional=True)
+    vehicle_id = integer(filters.get("vehicle_id"), "vehicle_id", optional=True)
+    client = db.session.get(Client, client_id) if client_id else None
+    vehicle = db.session.get(Vehicle, vehicle_id) if vehicle_id else None
+    if client_id and not client:
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("Cliente no encontrado")
+    if vehicle_id and not vehicle:
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("Vehículo no encontrado")
+    if client and vehicle and vehicle.client_id != client.id:
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("El vehículo no pertenece al cliente seleccionado")
+    if client_id:
+        query = query.join(Vehicle, Alert.vehicle_id == Vehicle.id).filter(Vehicle.client_id == client_id)
+    if vehicle_id:
+        query = query.filter(Alert.vehicle_id == vehicle_id)
 
     if filters.get("state"):
         query = query.filter(State.name == filters["state"])

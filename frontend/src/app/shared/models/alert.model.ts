@@ -58,6 +58,8 @@ export interface AlertsResponse {
 }
 
 export interface AlertFilters {
+  client_id?: number;
+  vehicle_id?: number;
   state?: string;
   priority?: string;
   date_from?: string;

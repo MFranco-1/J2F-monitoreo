@@ -11,6 +11,15 @@
   <!-- Toolbar y Filtros -->
   <div class="toolbar">
     <div class="toolbar-left">
+      <select class="filter-select" [ngModel]="filters.client_id || null" (ngModelChange)="onFilterClientChange($event)" id="filter-client">
+        <option [ngValue]="null">Todos los clientes</option>
+        <option *ngFor="let client of clients()" [ngValue]="client.id">{{ client.business_name }}</option>
+      </select>
+      <select class="filter-select" [ngModel]="filters.vehicle_id || null" (ngModelChange)="onFilterVehicleChange($event)" id="filter-vehicle"
+              [disabled]="!filters.client_id">
+        <option [ngValue]="null">Todos los vehículos</option>
+        <option *ngFor="let vehicle of filterVehicles()" [ngValue]="vehicle.id">{{ vehicle.plate }} · {{ vehicle.brand }} {{ vehicle.model }}</option>
+      </select>
       <select class="filter-select" (change)="applyFilter('state', $any($event.target).value)" id="filter-state">
         <option value="">Todos los estados</option>
         <option value="Abierto">Abierto</option>
@@ -120,7 +129,7 @@
       <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()"> {{ errorMsg() }}</div>
       <div class="form-row">
         <div class="form-group"><label for="a-client">Cliente</label><select id="a-client" class="form-control" [(ngModel)]="newForm.client_id" (change)="onClientChange()"><option [ngValue]="null">No especificado</option><option *ngFor="let item of clients()" [ngValue]="item.id">{{item.business_name}}</option></select></div>
-        <div class="form-group"><label for="a-vehicle">Vehículo</label><select id="a-vehicle" class="form-control" [(ngModel)]="newForm.vehicle_id" (change)="onVehicleChange()" [disabled]="!newForm.client_id"><option [ngValue]="null">No especificado</option><option *ngFor="let item of vehicles()" [ngValue]="item.id">{{item.plate}} · {{item.brand}} {{item.model}}</option></select></div>
+        <div class="form-group"><label for="a-vehicle">Vehículo</label><select id="a-vehicle" class="form-control" [(ngModel)]="newForm.vehicle_id" (change)="onVehicleChange()" [disabled]="!newForm.client_id"><option [ngValue]="null">No especificado</option><option *ngFor="let item of formVehicles()" [ngValue]="item.id">{{item.plate}} · {{item.brand}} {{item.model}}</option></select></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label for="a-device">Dispositivo GPS</label><select id="a-device" class="form-control" [(ngModel)]="newForm.gps_device_id" [disabled]="!newForm.vehicle_id"><option [ngValue]="null">No especificado</option><option *ngFor="let item of devices()" [ngValue]="item.id">{{item.imei}} · {{item.model}}</option></select></div>

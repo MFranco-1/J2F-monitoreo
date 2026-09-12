@@ -7,8 +7,9 @@ GPS y tipos de evento.
 ## Migración segura de PostgreSQL / Neon
 
 El código no ejecuta migraciones al arrancar. Antes de desplegarlo, crea un respaldo
-de Neon, revisa los scripts de [migrations](migrations/README.md) y ejecútalos en orden.
-No contienen `DROP` ni `TRUNCATE`; conservan `users.profile_id` y las alertas actuales.
+de Neon y revisa `j2f_modulo_usuarios.sql`. Es el único script SQL del proyecto:
+contiene cambios incrementales e idempotentes, no usa `DROP` ni `TRUNCATE` y conserva
+`users.profile_id`, las alertas y los demás datos actuales.
 
 Para aplicar todo desde un único archivo del proyecto:
 
@@ -17,17 +18,9 @@ $env:DATABASE_URL = '<URL_PRIVADA_DE_NEON>'
 psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f j2f_modulo_usuarios.sql
 ```
 
-El archivo raíz llama, en orden, a los seis scripts revisables. También se pueden
-ejecutar individualmente:
-
-```powershell
-psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/001_user_profile.sql
-psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/002_master_data.sql
-psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/003_alert_relationships.sql
-psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/004_history_active_profile.sql
-psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/005_seed_event_types.sql
-psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/006_seed_menu_options.sql
-```
+El mismo archivo incorpora tres clientes de demostración, tres vehículos para cada
+cliente y dieciocho alertas identificables mediante la fuente `Datos de prueba J2F`.
+Ejecutarlo nuevamente no duplica esos registros.
 
 Después, `backend/init_db.py` valida en modo de solo lectura las 14 tablas y sus
 columnas. No crea, altera ni borra datos.
@@ -60,6 +53,10 @@ Abrir `http://localhost:4200`. Las rutas administrativas, incluidos los maestros
 requieren el perfil activo Administrador. El Técnico puede consultar maestros desde
 una alerta, pero no modificarlos.
 
+La pantalla de alertas muestra todo por defecto. El filtro de cliente carga sus
+vehículos y limita las alertas; el filtro de vehículo limita el resultado a esa unidad.
+Seleccionar `Todos los clientes` restaura la consulta general.
+
 ## Pruebas
 
 ```powershell
@@ -71,9 +68,7 @@ npm test
 npm run build
 ```
 
-Las pruebas de backend usan SQLite aislada y no acceden a Neon. Consulta
-[requerimientos actualizados](docs/requerimientos_actualizados.md) y
-[datos maestros y eventos](docs/datos_maestros_y_eventos.md).
+Las pruebas de backend usan SQLite aislada y no acceden a Neon.
 
 ## Reversión
 

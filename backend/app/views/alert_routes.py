@@ -22,9 +22,11 @@ def get_metrics():
 def get_alerts():
     """
     GET /api/alerts — Lista alertas con filtros.
-    Query params: state, priority, date_from, date_to, page, per_page
+    Query params: client_id, vehicle_id, state, priority, date_from, date_to, page, per_page
     """
     filters = {
+        "client_id": request.args.get("client_id"),
+        "vehicle_id": request.args.get("vehicle_id"),
         "state": request.args.get("state"),
         "priority": request.args.get("priority"),
         "date_from": request.args.get("date_from"),

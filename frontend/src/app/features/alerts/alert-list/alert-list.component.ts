@@ -31,7 +31,8 @@ export class AlertListComponent implements OnInit {
   errorMsg = signal('');
   totalPages = signal(1);
   clients = signal<Client[]>([]);
-  vehicles = signal<Vehicle[]>([]);
+  filterVehicles = signal<Vehicle[]>([]);
+  formVehicles = signal<Vehicle[]>([]);
   devices = signal<GpsDevice[]>([]);
   eventTypes = signal<EventType[]>([]);
 
@@ -71,7 +72,7 @@ export class AlertListComponent implements OnInit {
   openNewModal(): void {
     this.newForm = { title: '', description: '', priority: 'medium', service_type: '', location: '', source: 'Manual',
       client_id: null, vehicle_id: null, gps_device_id: null, event_type_id: null };
-    this.vehicles.set([]); this.devices.set([]);
+    this.formVehicles.set([]); this.devices.set([]);
     this.showNewModal.set(true);
   }
 
@@ -95,8 +96,27 @@ export class AlertListComponent implements OnInit {
 
   onClientChange(): void {
     this.newForm.vehicle_id = null; this.newForm.gps_device_id = null; this.devices.set([]);
-    if (!this.newForm.client_id) { this.vehicles.set([]); return; }
-    this.masterData.vehicles(this.newForm.client_id, true).subscribe(data => this.vehicles.set(data['vehicles'] || []));
+    if (!this.newForm.client_id) { this.formVehicles.set([]); return; }
+    this.masterData.vehicles(this.newForm.client_id, true).subscribe(data => this.formVehicles.set(data['vehicles'] || []));
+  }
+
+  onFilterClientChange(value: number | null): void {
+    const clientId = value || undefined;
+    this.filters.client_id = clientId;
+    this.filters.vehicle_id = undefined;
+    this.filters.page = 1;
+    this.filterVehicles.set([]);
+    if (clientId) {
+      this.masterData.vehicles(clientId, true).subscribe(data =>
+        this.filterVehicles.set(data['vehicles'] || []));
+    }
+    this.loadAlerts();
+  }
+
+  onFilterVehicleChange(value: number | null): void {
+    this.filters.vehicle_id = value || undefined;
+    this.filters.page = 1;
+    this.loadAlerts();
   }
 
   onVehicleChange(): void {

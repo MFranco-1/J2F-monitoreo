@@ -511,6 +511,47 @@ class RegressionTests(unittest.TestCase):
             "client_id":second["id"], "vehicle_id":vehicle["id"]})
         self.assertEqual(result.status_code, 400)
 
+    def test_alerts_filter_by_client_and_vehicle_without_hiding_default_results(self):
+        def create_client(number):
+            return self.client.post("/api/master-data/clients/", headers=self.admin, json={
+                "document_type": "RUC", "document_number": number,
+                "business_name": f"Cliente {number}", "state_id": self.active,
+            }).get_json()["record"]
+
+        def create_vehicle(client_id, plate):
+            return self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+                "client_id": client_id, "plate": plate, "state_id": self.active,
+            }).get_json()["record"]
+
+        first, second = create_client("20500000001"), create_client("20500000002")
+        first_vehicle = create_vehicle(first["id"], "CLI-001")
+        second_vehicle = create_vehicle(first["id"], "CLI-002")
+        other_vehicle = create_vehicle(second["id"], "CLI-003")
+        for title, client, vehicle in [
+            ("Primera", first, first_vehicle), ("Segunda", first, second_vehicle),
+            ("Tercera", second, other_vehicle),
+        ]:
+            response = self.client.post("/api/alerts/", headers=self.admin, json={
+                "title": title, "client_id": client["id"], "vehicle_id": vehicle["id"],
+            })
+            self.assertEqual(response.status_code, 201, response.get_json())
+
+        all_alerts = self.client.get("/api/alerts/?per_page=200", headers=self.admin).get_json()
+        self.assertGreaterEqual(all_alerts["total"], 3)
+        by_client = self.client.get(
+            f"/api/alerts/?client_id={first['id']}&per_page=200", headers=self.admin).get_json()
+        self.assertEqual(by_client["total"], 2)
+        self.assertTrue(all(item["client"]["id"] == first["id"] for item in by_client["alerts"]))
+        by_vehicle = self.client.get(
+            f"/api/alerts/?vehicle_id={first_vehicle['id']}&per_page=200", headers=self.admin).get_json()
+        self.assertEqual(by_vehicle["total"], 1)
+        self.assertEqual(by_vehicle["alerts"][0]["vehicle"]["id"], first_vehicle["id"])
+        inconsistent = self.client.get(
+            f"/api/alerts/?client_id={first['id']}&vehicle_id={other_vehicle['id']}",
+            headers=self.admin,
+        )
+        self.assertEqual(inconsistent.status_code, 400)
+
 
 class InstalledSchemaTests(unittest.TestCase):
     def test_models_match_the_incremental_fourteen_table_schema(self):
@@ -568,18 +609,19 @@ class InstalledSchemaTests(unittest.TestCase):
 
 
 class MigrationScriptTests(unittest.TestCase):
-    def test_migrations_are_separated_safe_and_include_legacy_backfill(self):
-        root = Path(__file__).resolve().parents[2] / "migrations"
-        files = [root / f"00{number}_{name}.sql" for number, name in [
-            (1, "user_profile"), (2, "master_data"), (3, "alert_relationships"),
-            (4, "history_active_profile"), (5, "seed_event_types"), (6, "seed_menu_options")]]
-        self.assertTrue(all(path.exists() for path in files))
-        sql = "\n".join(path.read_text(encoding="utf8") for path in files)
+    def test_single_migration_is_safe_idempotent_and_includes_required_seeds(self):
+        path = Path(__file__).resolve().parents[2] / "j2f_modulo_usuarios.sql"
+        self.assertTrue(path.exists())
+        sql = path.read_text(encoding="utf8")
         executable = "\n".join(line for line in sql.splitlines() if not line.lstrip().startswith("--"))
         self.assertNotRegex(executable.lower(), r"\b(drop|truncate)\b")
-        first = files[0].read_text(encoding="utf8").lower()
-        self.assertIn("select id, profile_id from users", first)
-        self.assertIn("on conflict (user_id, profile_id) do nothing", first)
+        lowered = sql.lower()
+        self.assertIn("select id, profile_id from users", lowered)
+        self.assertIn("on conflict (user_id, profile_id) do nothing", lowered)
+        self.assertIn("j2f-demo-003", lowered)
+        self.assertIn("datos de prueba j2f", lowered)
+        self.assertGreaterEqual(lowered.count("where not exists"), 4)
+        self.assertGreaterEqual(lowered.count("on conflict"), 3)
 
 
 if __name__ == "__main__":

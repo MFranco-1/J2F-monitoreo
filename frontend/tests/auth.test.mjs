@@ -279,6 +279,7 @@ test('la interfaz requerida está integrada sin pantalla ni modal de selección 
   assert.match(dashboardTs, /if \(this\.auth\.hasActiveProfile\(\)\) this\.startMetrics/);
   assert.match(users, /type="checkbox"/);
   assert.match(alerts, /onClientChange|gps_device_id|event_type_id/);
+  assert.match(alerts, /Todos los clientes|filter-client|filter-vehicle/);
   assert.match(routes, /admin\/master-data/);
   assert.doesNotMatch(routes, /select-profile/);
 });
