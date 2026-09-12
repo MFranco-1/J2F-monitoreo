@@ -100,6 +100,7 @@ def _seed_initial_data() -> None:
     from app.models.state import State
     from app.models.profile import Profile
     from app.models.user import User
+    from app.models.menu_option import MenuOption
 
     # Solo insertar si no existen datos
     if State.query.first():
@@ -136,4 +137,33 @@ def _seed_initial_data() -> None:
     )
     admin_user.set_password("Admin@J2F2024")
     db.session.add(admin_user)
+
+    # El entorno de pruebas refleja las secciones y opciones registradas en Neon
+    # mediante j2f_modulo_usuarios.sql.
+    sections = {
+        "MONITOREO": MenuOption(name="MONITOREO", icon="folder", order=0, state_id=states[0].id),
+        "SEGUIMIENTO": MenuOption(name="SEGUIMIENTO", icon="folder", order=40, state_id=states[0].id),
+        "ADMINISTRACIÓN": MenuOption(name="ADMINISTRACIÓN", icon="folder", order=60, state_id=states[0].id),
+    }
+    menu_options = [
+        MenuOption(name="Panel de control", url="/dashboard", icon="dashboard", order=10,
+                   state_id=states[0].id, parent=sections["MONITOREO"]),
+        MenuOption(name="Alertas", url="/alerts", icon="alerts", order=20,
+                   state_id=states[0].id, parent=sections["MONITOREO"]),
+        MenuOption(name="Asignaciones", url="/assignments", icon="assignments", order=30,
+                   state_id=states[0].id, parent=sections["MONITOREO"]),
+        MenuOption(name="Historial", url="/history", icon="history", order=40,
+                   state_id=states[0].id, parent=sections["SEGUIMIENTO"]),
+        MenuOption(name="Reportes", url="/reports", icon="reports", order=50,
+                   state_id=states[0].id, parent=sections["SEGUIMIENTO"]),
+        MenuOption(name="Usuarios", url="/admin/users", icon="users", order=60,
+                   state_id=states[0].id, parent=sections["ADMINISTRACIÓN"]),
+        MenuOption(name="Perfiles", url="/admin/profiles", icon="profiles", order=70,
+                   state_id=states[0].id, parent=sections["ADMINISTRACIÓN"]),
+        MenuOption(name="Opciones de menú", url="/admin/menu-options", icon="menu", order=80,
+                   state_id=states[0].id, parent=sections["ADMINISTRACIÓN"]),
+    ]
+    for option in [*sections.values(), *menu_options]:
+        option.profiles = [admin_profile]
+    db.session.add_all([*sections.values(), *menu_options])
     db.session.commit()

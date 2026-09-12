@@ -15,8 +15,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let injectedAuth;
 const cache = new Map();
 const imports = {
-  '@angular/core': { ...angular, Injectable: () => value => value, inject: () => injectedAuth },
+  '@angular/core': { ...angular, Component: () => value => value,
+    Injectable: () => value => value, inject: () => injectedAuth },
+  '@angular/common': {},
   '@angular/common/http': http,
+  '@angular/forms': {},
   '@angular/router': {},
   rxjs: rx,
 };
@@ -41,6 +44,9 @@ function load(relative) {
 }
 const { AuthService } = load('src/app/core/services/auth.service.ts');
 const { authInterceptor } = load('src/app/core/interceptors/auth.interceptor.ts');
+const { UserService } = load('src/app/core/services/user.service.ts');
+const { SidebarComponent } = load('src/app/layout/sidebar/sidebar.component.ts');
+const { MenuOptionListComponent } = load('src/app/features/admin/menu-options/menu-option-list/menu-option-list.component.ts');
 const { environment } = load('src/environments/environment.ts');
 
 function setup() {
@@ -190,4 +196,59 @@ test('el formato multiperfil anterior requiere iniciar sesión de nuevo', () => 
   const auth = new AuthService({}, { navigate: () => {} });
   assert.equal(auth.isAuthenticated(), false);
   assert.equal(auth.isAdmin(), false);
+});
+
+test('las mutaciones de menú notifican al sidebar después de completarse', () => {
+  const client = {
+    post: () => rx.of({}),
+    put: () => rx.of({}),
+    delete: () => rx.of({}),
+  };
+  const users = new UserService(client);
+  let changes = 0;
+  users.menuChanges.subscribe(() => changes++);
+  users.createMenuOption({ name: 'Nueva' }).subscribe();
+  users.updateMenuOption(1, { state_id: 2 }).subscribe();
+  users.deleteMenuOption(1).subscribe();
+  assert.equal(changes, 3);
+});
+
+test('el sidebar elige el menú configurado o el respaldo, nunca ambos', () => {
+  const render = response => {
+    injectedAuth = {
+      isAdmin: () => true,
+      menuChanges: new rx.Subject(),
+      getMenuOptions: () => response,
+    };
+    const sidebar = new SidebarComponent();
+    sidebar.ngOnInit();
+    const sections = sidebar.navSections;
+    sidebar.ngOnDestroy();
+    return sections;
+  };
+  const dynamic = render(rx.of({ configured: true, menu_options: [
+    { id: 1, name: 'MONITOREO', url: null, icon: 'folder', state_id: 1, children: [
+      { id: 2, name: 'Alertas configuradas', url: '/alerts', icon: 'alerts', state_id: 1 }
+    ] }
+  ] }));
+  assert.equal(dynamic.length, 1);
+  assert.equal(dynamic[0].title, 'MONITOREO');
+  assert.equal(dynamic[0].items[0].label, 'Alertas configuradas');
+
+  assert.equal(render(rx.of({ configured: false, menu_options: [] })).length, 3);
+  assert.equal(render(rx.throwError(() => new Error('API no disponible'))).length, 3);
+  assert.deepEqual(render(rx.of({ configured: true, menu_options: [] })), []);
+});
+
+test('el CRUD muestra rutas y conserva las secciones solo como menús padre', () => {
+  const parent = { id: 9, name: 'MONITOREO', url: null, parent_id: null, state_id: 1 };
+  const child = { id: 3, name: 'Panel de control', url: '/dashboard', parent_id: 9, state_id: 1 };
+  injectedAuth = {
+    getMenuOptions: () => rx.of({ menu_options: [parent, child] }),
+    getProfiles: () => rx.of({ profiles: [], states: [] }),
+  };
+  const component = new MenuOptionListComponent();
+  component.loadData();
+  assert.deepEqual(component.menuOptions().map(option => option.name), ['Panel de control']);
+  assert.deepEqual(component.parentOptions().map(option => option.name), ['MONITOREO']);
 });

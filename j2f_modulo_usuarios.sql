@@ -1,136 +1,144 @@
 -- =====================================================================
 -- J2F Soluciones de Información
--- Módulo de Gestión de Usuarios, Perfiles y Opciones de Menú
--- Dialecto: PostgreSQL
--- Esquema normalizado en 3FN (ver DER acordado con el equipo)
+-- Datos del menú para la base existente de Neon (esquema public)
+-- Tablas utilizadas: states, profiles, menu_options, profile_menu_option
+-- No crea otra base de datos, tablas, columnas, rutas ni módulos.
+-- Puede ejecutarse más de una vez sin duplicar los datos.
 -- =====================================================================
 
--- Ejecutar en orden: primero las entidades independientes,
--- luego las tablas puente que dependen de ellas.
+BEGIN;
 
--- ---------------------------------------------------------------------
--- 1. PERFIL
--- ---------------------------------------------------------------------
-CREATE TABLE perfil (
-    id_perfil        INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    nombre           VARCHAR(50)  NOT NULL,
-    descripcion      VARCHAR(200),
-    estado_registro  SMALLINT     NOT NULL DEFAULT 1
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM states
+        WHERE LOWER(BTRIM(name)) = 'activo'
+          AND type = 'user'
+    ) THEN
+        RAISE EXCEPTION 'No existe el estado Activo de tipo user';
+    END IF;
+END $$;
+
+-- Secciones que ya mostraba el menú fijo.
+WITH section_seed(name, menu_order) AS (
+    VALUES
+        ('MONITOREO',       0),
+        ('SEGUIMIENTO',    40),
+        ('ADMINISTRACIÓN', 60)
+), active_state AS (
+    SELECT id
+    FROM states
+    WHERE LOWER(BTRIM(name)) = 'activo'
+      AND type = 'user'
+    ORDER BY id
+    LIMIT 1
+)
+INSERT INTO menu_options (name, url, icon, parent_id, "order", state_id, created_at, updated_at)
+SELECT seed.name, NULL, 'folder', NULL, seed.menu_order, state.id,
+       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM section_seed AS seed
+CROSS JOIN active_state AS state
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM menu_options AS existing
+    WHERE existing.url IS NULL
+      AND existing.parent_id IS NULL
+      AND existing.name = seed.name
 );
 
-COMMENT ON TABLE perfil IS 'Roles del sistema (Administrador, Técnico, etc.)';
-
--- ---------------------------------------------------------------------
--- 2. USUARIO
---    (usuario_creacion / usuario_modificacion son auto-referencia
---     para trazabilidad de auditoría: quién creó/editó el registro)
--- ---------------------------------------------------------------------
-CREATE TABLE usuario (
-    id_usuario            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    dni                   VARCHAR(8)   NOT NULL,
-    nombres               VARCHAR(80)  NOT NULL,
-    apellido_paterno      VARCHAR(50)  NOT NULL,
-    apellido_materno      VARCHAR(50),
-    celular               VARCHAR(9),
-    correo_electronico    VARCHAR(120) NOT NULL,
-    clave_hash            VARCHAR(255) NOT NULL,
-    usuario_creacion      INTEGER      REFERENCES usuario(id_usuario),
-    fecha_creacion        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    usuario_modificacion  INTEGER      REFERENCES usuario(id_usuario),
-    fecha_modificacion    TIMESTAMP,
-    estado_registro       SMALLINT     NOT NULL DEFAULT 1,
-    CONSTRAINT uq_usuario_dni    UNIQUE (dni),
-    CONSTRAINT uq_usuario_correo UNIQUE (correo_electronico)
+-- Las ocho rutas existentes. Solo se insertan si todavía no existen.
+WITH menu_seed(name, url, icon, menu_order) AS (
+    VALUES
+        ('Panel de control', '/dashboard',          'dashboard',   10),
+        ('Alertas',          '/alerts',             'alerts',      20),
+        ('Asignaciones',     '/assignments',        'assignments', 30),
+        ('Historial',        '/history',            'history',     40),
+        ('Reportes',         '/reports',            'reports',     50),
+        ('Usuarios',         '/admin/users',        'users',       60),
+        ('Perfiles',         '/admin/profiles',     'profiles',    70),
+        ('Opciones de menú', '/admin/menu-options', 'menu',        80)
+), active_state AS (
+    SELECT id
+    FROM states
+    WHERE LOWER(BTRIM(name)) = 'activo'
+      AND type = 'user'
+    ORDER BY id
+    LIMIT 1
+)
+INSERT INTO menu_options (name, url, icon, parent_id, "order", state_id, created_at, updated_at)
+SELECT seed.name, seed.url, seed.icon, NULL, seed.menu_order, state.id,
+       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM menu_seed AS seed
+CROSS JOIN active_state AS state
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM menu_options AS existing
+    WHERE existing.url = seed.url
 );
 
-COMMENT ON TABLE usuario IS 'Usuarios del sistema (operadores, supervisores, administradores)';
-COMMENT ON COLUMN usuario.clave_hash IS 'Hash de la contraseña (nunca texto plano)';
+-- Relaciona cada opción con su sección sin cambiar sus rutas ni iconos.
+WITH menu_parent(url, parent_name) AS (
+    VALUES
+        ('/dashboard',          'MONITOREO'),
+        ('/alerts',             'MONITOREO'),
+        ('/assignments',        'MONITOREO'),
+        ('/history',            'SEGUIMIENTO'),
+        ('/reports',            'SEGUIMIENTO'),
+        ('/admin/users',        'ADMINISTRACIÓN'),
+        ('/admin/profiles',     'ADMINISTRACIÓN'),
+        ('/admin/menu-options', 'ADMINISTRACIÓN')
+)
+UPDATE menu_options AS child
+SET parent_id = parent.id,
+    updated_at = CURRENT_TIMESTAMP
+FROM menu_parent AS relation
+JOIN menu_options AS parent
+  ON parent.name = relation.parent_name
+ AND parent.url IS NULL
+ AND parent.parent_id IS NULL
+WHERE child.url = relation.url
+  AND child.parent_id IS DISTINCT FROM parent.id;
 
--- ---------------------------------------------------------------------
--- 3. USUARIO_PERFIL  (relación N:M entre usuario y perfil)
--- ---------------------------------------------------------------------
-CREATE TABLE usuario_perfil (
-    id_usuario       INTEGER  NOT NULL REFERENCES usuario(id_usuario),
-    id_perfil        INTEGER  NOT NULL REFERENCES perfil(id_perfil),
-    estado_registro  SMALLINT NOT NULL DEFAULT 1,
-    PRIMARY KEY (id_usuario, id_perfil)
-);
+-- Las secciones operativas y sus opciones son visibles para todos los
+-- perfiles existentes. Administración se restringe al Administrador.
+WITH route_access(url, admin_only) AS (
+    VALUES
+        ('/dashboard',          FALSE),
+        ('/alerts',             FALSE),
+        ('/assignments',        FALSE),
+        ('/history',            FALSE),
+        ('/reports',            FALSE),
+        ('/admin/users',        TRUE),
+        ('/admin/profiles',     TRUE),
+        ('/admin/menu-options', TRUE)
+), section_access(name, admin_only) AS (
+    VALUES
+        ('MONITOREO',       FALSE),
+        ('SEGUIMIENTO',     FALSE),
+        ('ADMINISTRACIÓN',  TRUE)
+), target_menu AS (
+    SELECT option.id, access.admin_only
+    FROM route_access AS access
+    JOIN menu_options AS option ON option.url = access.url
+    UNION
+    SELECT option.id, access.admin_only
+    FROM section_access AS access
+    JOIN menu_options AS option
+      ON option.name = access.name
+     AND option.url IS NULL
+     AND option.parent_id IS NULL
+)
+INSERT INTO profile_menu_option (profile_id, menu_option_id)
+SELECT profile.id, target.id
+FROM target_menu AS target
+CROSS JOIN profiles AS profile
+WHERE (NOT target.admin_only OR LOWER(BTRIM(profile.name)) = 'administrador')
+  AND NOT EXISTS (
+      SELECT 1
+      FROM profile_menu_option AS assigned
+      WHERE assigned.profile_id = profile.id
+        AND assigned.menu_option_id = target.id
+  );
 
-COMMENT ON TABLE usuario_perfil IS 'Perfiles asignados a cada usuario (un usuario puede tener más de uno)';
-
--- ---------------------------------------------------------------------
--- 4. OPCION_MENU  (jerarquía padre-hijo vía id_padre, auto-referencia)
--- ---------------------------------------------------------------------
-CREATE TABLE opcion_menu (
-    id_opcion_menu   INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    nombre           VARCHAR(80)  NOT NULL,
-    url_menu         VARCHAR(150) NOT NULL,
-    descripcion      VARCHAR(200),
-    id_padre         INTEGER      REFERENCES opcion_menu(id_opcion_menu),
-    estado_registro  SMALLINT     NOT NULL DEFAULT 1
-);
-
-COMMENT ON TABLE opcion_menu IS 'Ítems del menú del sistema, con jerarquía padre-hijo';
-
--- ---------------------------------------------------------------------
--- 5. OPCION_MENU_PERFIL  (relación N:M entre opcion_menu y perfil)
--- ---------------------------------------------------------------------
-CREATE TABLE opcion_menu_perfil (
-    id_opcion_menu   INTEGER  NOT NULL REFERENCES opcion_menu(id_opcion_menu),
-    id_perfil        INTEGER  NOT NULL REFERENCES perfil(id_perfil),
-    orden            INTEGER  NOT NULL DEFAULT 1,
-    estado_registro  SMALLINT NOT NULL DEFAULT 1,
-    PRIMARY KEY (id_opcion_menu, id_perfil)
-);
-
-COMMENT ON TABLE opcion_menu_perfil IS 'Qué perfiles ven cada opción de menú, y en qué orden';
-
--- ---------------------------------------------------------------------
--- Índices para las llaves foráneas más consultadas
--- (Postgres no las indexa automáticamente, solo la PK)
--- ---------------------------------------------------------------------
-CREATE INDEX idx_usuario_perfil_perfil       ON usuario_perfil(id_perfil);
-CREATE INDEX idx_opcion_menu_padre           ON opcion_menu(id_padre);
-CREATE INDEX idx_opcion_menu_perfil_perfil   ON opcion_menu_perfil(id_perfil);
-
--- =====================================================================
--- DATOS DE PRUEBA (los mismos del modelo original / mockup)
--- Comenta o borra este bloque si no lo necesitas
--- =====================================================================
-
-INSERT INTO perfil (nombre, descripcion) VALUES
-    ('Administrador', 'Acceso completo al sistema'),
-    ('Técnico',        'Gestión operativa de trabajos y atención');
-
--- Nota: clave_hash de ejemplo, en la app real va un hash real (bcrypt/argon2)
-INSERT INTO usuario (dni, nombres, apellido_paterno, apellido_materno, celular, correo_electronico, clave_hash) VALUES
-    ('90999999', 'Carlos',  'Rodriguez', NULL,        NULL,          'crodriguez@gmail.com', '$2b$12$reemplazar_por_hash_real'),
-    ('56879826', 'Jose',    'Rios',      'Martinez',  '923876122',   'jrios@gmail.com',       '$2b$12$reemplazar_por_hash_real'),
-    ('90157845', 'Roberto', 'Diaz',      'Guerrero',  '987456100',   'rdiaz@gmail.com',       '$2b$12$reemplazar_por_hash_real');
-
--- Carlos tiene ambos perfiles; Jose y Roberto son solo Técnico
-INSERT INTO usuario_perfil (id_usuario, id_perfil) VALUES
-    (1, 1), (1, 2),
-    (2, 2),
-    (3, 2);
-
-INSERT INTO opcion_menu (id_opcion_menu, nombre, url_menu, descripcion, id_padre) OVERRIDING SYSTEM VALUE VALUES
-    (1,  'Mantenimiento',           '/',                              NULL, NULL),
-    (6,  'Trabajos',                '/',                              NULL, NULL),
-    (8,  'Registrar Trabajo',       'home/RegistrarTrabajo',          NULL, NULL),
-    (2,  'Tipo Servicio',           'home/TipoServicio',              NULL, 1),
-    (3,  'Fallas',                  'home/Fallas',                    NULL, 1),
-    (4,  'Tipo Asistencia',         'home/TipoAsistencia',            NULL, 1),
-    (5,  'Detalle Trabajo',         'home/DetalleTrabajo',            NULL, 1),
-    (9,  'Usuarios',                'home/Usuarios',                  NULL, 1),
-    (10, 'Lugares de atención',     'home/LugaresAtencion',           NULL, 1),
-    (7,  'Ordenes de Trabajo',      'home/OrdenesTrabajo',            NULL, 6),
-    (11, 'Sub Ordenes de trabajo',  'home/SubOrdenesTrabajo',         NULL, 7);
-
--- Reajusta la secuencia de identidad tras insertar IDs explícitos arriba
-SELECT setval(pg_get_serial_sequence('opcion_menu', 'id_opcion_menu'), 11, true);
-
-INSERT INTO opcion_menu_perfil (id_opcion_menu, id_perfil, orden) VALUES
-    (1, 1, 1), (2, 1, 2), (3, 1, 3), (4, 1, 4), (5, 1, 5),
-    (6, 1, 1), (7, 1, 2), (9, 1, 6), (10, 1, 7),
-    (8, 2, 1);
+COMMIT;

@@ -73,6 +73,18 @@ Base conectada: j2f_monitoreo
 Conexión correcta. Las 9 tablas y sus columnas requeridas existen. No se modificaron datos.
 ```
 
+Para registrar las tres secciones, las ocho opciones existentes y sus accesos,
+ejecuta el script idempotente desde la raíz del proyecto:
+
+```powershell
+psql -v ON_ERROR_STOP=1 -f .\j2f_modulo_usuarios.sql
+```
+
+Las cinco rutas operativas se asignan a todos los perfiles existentes y las
+tres rutas administrativas solo al perfil `Administrador`. Si las rutas ya
+están registradas, el script no las duplica; únicamente asegura sus secciones
+padre y permisos.
+
 Si abriste una terminal nueva, antes de esos comandos activa el entorno y
 configura tu contraseña real de PostgreSQL:
 
@@ -161,19 +173,19 @@ conservan en el `package-lock.json` original; este paquete no actualiza Angular.
 existentes.** Las operaciones que realices en la aplicación seguirán guardándose
 en tu base habitual.
 
-El archivo `j2f_modulo_usuarios.sql` recibido se conserva sin cambios como
-referencia histórica. Describe otro esquema, en español, y **no se utiliza para
-instalar esta versión ni debe importarse en tu base existente**.
+`j2f_modulo_usuarios.sql` es el único SQL operativo del proyecto. Trabaja sobre
+las tablas existentes en Neon y no crea otra base de datos ni un esquema alterno.
 
 ## Comprobaciones realizadas
 
-- **35 pruebas de backend aprobadas**. Incluyen autenticación y revocación,
+- **36 pruebas de backend aprobadas**. Incluyen autenticación y revocación,
   permisos, CRUD, perfil único, estados con identificadores distintos de 1/2,
   asignaciones, historial, fechas y los tres tipos de reportes existentes.
 - Comparación de los modelos con la estructura proporcionada: nombres de las
   nueve tablas, columnas, tipos, nulabilidad, claves primarias y claves foráneas.
-- **11 pruebas del frontend aprobadas** para el servicio e interceptor de
-  autenticación, perfil único y sesiones de la versión anterior.
+- **14 pruebas del frontend aprobadas** para autenticación, actualización del
+  menú dinámico, selección excluyente del respaldo y notificaciones del CRUD,
+  perfil único y sesiones de la versión anterior.
 - **Compilación Angular de producción correcta**.
 - Recorrido en Chromium con la compilación de producción y la API sobre una
   base temporal: login, creación/edición de usuario, perfiles y menús, asignación

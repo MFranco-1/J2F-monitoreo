@@ -1,8 +1,10 @@
 .login-page { min-height:100dvh; display:grid; grid-template-columns:1.05fr 1fr; background:#fff; }
 .brand-panel { background:#102d45; color:white; min-height:100dvh; padding:56px clamp(32px,6vw,100px); display:flex; flex-direction:column; position:relative; overflow:hidden; }
 .brand-panel::after { content:''; position:absolute; width:420px; height:420px; border:1px solid #ffffff0c; border-radius:50%; right:-190px; bottom:-100px; box-shadow:0 0 0 70px #ffffff03,0 0 0 140px #ffffff03; pointer-events:none; }
-.brand-wordmark { font-size:34px; font-weight:800; letter-spacing:1px; display:flex; align-items:center; gap:22px; }
-.brand-wordmark span { max-width:160px; border-left:1px solid #648197; padding-left:22px; font-size:12px; font-weight:400; letter-spacing:.3px; color:#c3d1dc; line-height:1.5; }
+.brand-wordmark { display:flex; align-items:center; gap:20px; position:relative; z-index:1; }
+.brand-logo-frame { width:170px; height:96px; padding:7px 10px; display:grid; place-items:center; background:#fff; border-radius:12px; box-shadow:0 10px 28px #071a2940; }
+.brand-logo { display:block; width:100%; height:100%; object-fit:contain; }
+.brand-company { max-width:160px; border-left:1px solid #648197; padding-left:20px; font-size:12px; font-weight:500; letter-spacing:.3px; color:#d5e0e8; line-height:1.5; }
 .brand-message { margin:auto 0; padding:70px 0; position:relative; z-index:1; }
 .brand-overline { font-size:10px; letter-spacing:2px; color:#8ad1d0; font-weight:600; }
 .brand-message h1 { font-size:clamp(34px,3.2vw,52px); line-height:1.2; letter-spacing:-1.5px; font-weight:650; margin:22px 0; }
@@ -20,4 +22,4 @@
 .login-btn { width:100%; padding:13px; justify-content:center; margin-top:8px; }
 .login-footer { margin-top:38px; border-top:1px solid #e4eaf0; padding-top:22px; font-size:11px; color:#708092; }
 .spinner-sm { width:16px; height:16px; border:2px solid #ffffff60; border-top-color:white; border-radius:50%; animation:spin .8s linear infinite; }
-@media(max-width:760px) { .login-page { grid-template-columns:1fr; } .brand-panel { min-height:0; padding:26px; } .brand-message { padding:36px 0 12px; } .brand-message h1 { font-size:30px; } .brand-caption,.brand-message p,.brand-line { display:none; } .login-area { padding:36px 26px; } }
+@media(max-width:760px) { .login-page { grid-template-columns:1fr; } .brand-panel { min-height:0; padding:26px; } .brand-logo-frame { width:140px; height:78px; } .brand-company { font-size:11px; } .brand-message { padding:36px 0 12px; } .brand-message h1 { font-size:30px; } .brand-caption,.brand-message p,.brand-line { display:none; } .login-area { padding:36px 26px; } }

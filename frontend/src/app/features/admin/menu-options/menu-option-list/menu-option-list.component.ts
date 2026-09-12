@@ -41,8 +41,8 @@ export class MenuOptionListComponent implements OnInit {
     this.loading.set(true);
     this.userService.getMenuOptions().subscribe({
       next: ({ menu_options }) => {
-        this.menuOptions.set(menu_options);
-        this.parentOptions.set(menu_options);
+        this.menuOptions.set(menu_options.filter(option => !!option.url?.trim()));
+        this.parentOptions.set(menu_options.filter(option => !option.parent_id && !option.url?.trim()));
         this.loading.set(false);
       },
       error: (err) => { this.loading.set(false); this.errorMsg.set(err?.error?.error || 'No se pudieron cargar las opciones'); },
@@ -55,14 +55,12 @@ export class MenuOptionListComponent implements OnInit {
 
   openNew(): void {
     this.editingOption.set(null);
-    this.parentOptions.set(this.menuOptions());
     this.form = { name: '', url: '', parent_id: null, order: 0, state_id: this.activeStateId(), profile_ids: [] };
     this.showModal.set(true);
   }
 
   openEdit(opt: MenuOption): void {
     this.editingOption.set(opt);
-    this.parentOptions.set(this.menuOptions().filter(o => o.id !== opt.id));
     this.form = {
       name: opt.name, url: opt.url,
       parent_id: opt.parent_id, order: opt.order ?? 0, state_id: opt.state_id,

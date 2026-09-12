@@ -242,6 +242,22 @@ class RegressionTests(unittest.TestCase):
         result = self.client.put(f"/api/menu-options/{parent['id']}", headers=self.admin, json={"parent_id": child["id"]})
         self.assertEqual(result.status_code, 400)
 
+    def test_current_routes_are_registered_for_the_admin_profile(self):
+        response = self.client.get("/api/menu-options/", headers=self.admin)
+        options = response.get_json()["menu_options"]
+        by_url = {option["url"]: option for option in options if option["url"]}
+        expected = {
+            "/dashboard": "MONITOREO", "/alerts": "MONITOREO", "/assignments": "MONITOREO",
+            "/history": "SEGUIMIENTO", "/reports": "SEGUIMIENTO",
+            "/admin/users": "ADMINISTRACIÓN", "/admin/profiles": "ADMINISTRACIÓN",
+            "/admin/menu-options": "ADMINISTRACIÓN",
+        }
+        self.assertEqual(set(by_url), set(expected))
+        self.assertTrue(all(by_url[url]["parent"]["name"] == parent
+                            for url, parent in expected.items()))
+        self.assertTrue(all([profile["name"] for profile in option["profiles"]] == ["Administrador"]
+                            for option in options))
+
     def test_navigation_only_contains_allowed_active_options(self):
         user_id = self.user()
         headers = self.headers(self.login("test1@example.invalid")["access_token"])
@@ -250,6 +266,7 @@ class RegressionTests(unittest.TestCase):
         for name, profile_ids, state_id in [("Permitido", [profile_id], self.active), ("Privado", [], self.active), ("Inactivo", [profile_id], self.inactive)]:
             self.client.post("/api/menu-options/", headers=self.admin, json={"name": name, "url": "/alerts", "profile_ids": profile_ids, "state_id": state_id})
         response = self.client.get("/api/menu-options/?navigation=true", headers=headers)
+        self.assertTrue(response.get_json()["configured"])
         self.assertEqual([o["name"] for o in response.get_json()["menu_options"]], ["Permitido"])
         self.assertEqual(self.client.get("/api/menu-options/", headers=headers).status_code, 403)
 
