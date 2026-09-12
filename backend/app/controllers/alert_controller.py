@@ -9,8 +9,9 @@ from app import db
 from app.models.alert import Alert
 from app.models.state import State
 from app.models.history import History
+from app.models.master_data import Client, Vehicle, GpsDevice, EventType
 from app.validation import text_value, priority_value, integer, date_value, date_range
-from app.security import current_user, may_attend
+from app.security import current_user, may_attend, active_profile_id
 
 
 # Orden válido de transiciones de estado de alerta
@@ -71,15 +72,19 @@ def create_alert(data: dict, current_user_id: int) -> tuple:
     if not open_state:
         return jsonify({"error": "Estado 'Abierto' no configurado en el sistema"}), 500
 
+    vehicle, device, event_type = _validated_relations(data)
     alert = Alert(
         title=text_value(data, "title", required=True, limit=200),
         description=text_value(data, "description"),
-        priority=priority_value(data.get("priority", "medium")),
+        priority=priority_value(data.get("priority", event_type.default_priority if event_type else "medium")),
         service_type=text_value(data, "service_type", limit=100),
         location=text_value(data, "location", limit=200),
         source=text_value(data, "source", limit=100) or "Manual",
         state_id=open_state.id,
         created_by=current_user_id,
+        vehicle=vehicle,
+        gps_device=device,
+        event_type=event_type,
     )
     db.session.add(alert)
     db.session.flush()  # Para obtener el ID
@@ -227,9 +232,47 @@ def _log_history(
     entry = History(
         alert_id=alert_id,
         user_id=user_id,
+        profile_id=active_profile_id(),
         action=action,
         previous_state=previous_state,
         new_state=new_state,
         detail=detail,
     )
     db.session.add(entry)
+
+
+def _validated_relations(data):
+    """Valida en servidor la cadena cliente → vehículo → dispositivo."""
+    client_id = integer(data.get("client_id"), "client_id", optional=True)
+    vehicle_id = integer(data.get("vehicle_id"), "vehicle_id", optional=True)
+    device_id = integer(data.get("gps_device_id"), "gps_device_id", optional=True)
+    event_type_id = integer(data.get("event_type_id"), "event_type_id", optional=True)
+    client = db.session.get(Client, client_id) if client_id else None
+    vehicle = db.session.get(Vehicle, vehicle_id) if vehicle_id else None
+    device = db.session.get(GpsDevice, device_id) if device_id else None
+    event_type = db.session.get(EventType, event_type_id) if event_type_id else None
+    if bool(client_id) != bool(vehicle_id):
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("Selecciona conjuntamente el cliente y su vehículo")
+    if client_id and (not client or not client.is_active):
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("Cliente no encontrado o inactivo")
+    if vehicle_id and (not vehicle or not vehicle.is_active or not vehicle.client.is_active):
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("Vehículo no encontrado, inactivo o perteneciente a un cliente inactivo")
+    if client and vehicle and vehicle.client_id != client.id:
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("El vehículo no pertenece al cliente seleccionado")
+    if device_id and (not device or not device.is_active):
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("Dispositivo GPS no encontrado o inactivo")
+    if device and (not vehicle or device.vehicle_id != vehicle.id):
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("El dispositivo GPS no pertenece al vehículo seleccionado")
+    if event_type_id and (not event_type or not event_type.is_active):
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("Tipo de evento no encontrado o inactivo")
+    if event_type and not event_type.generates_alert:
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("El tipo de evento seleccionado no genera alertas")
+    return vehicle, device, event_type

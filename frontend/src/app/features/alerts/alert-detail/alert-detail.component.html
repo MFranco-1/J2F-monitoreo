@@ -22,6 +22,10 @@
           </span>
         </div>
         <div class="info-grid">
+          <div class="info-item"><span class="info-label">Cliente</span><span>{{ alert()?.client?.business_name || 'No especificado' }}</span></div>
+          <div class="info-item"><span class="info-label">Vehículo</span><span *ngIf="alert()?.vehicle as vehicle">{{ vehicle.plate }} · {{ vehicle.brand || '' }} {{ vehicle.model || '' }}</span><span *ngIf="!alert()?.vehicle">No especificado</span></div>
+          <div class="info-item"><span class="info-label">Dispositivo GPS</span><span>{{ alert()?.gps_device?.imei || 'No especificado' }}</span></div>
+          <div class="info-item"><span class="info-label">Tipo de evento</span><span>{{ alert()?.event_type?.name || 'No especificado' }}</span></div>
           <div class="info-item">
             <span class="info-label">Tipo de Servicio</span>
             <span>{{ alert()?.service_type || '—' }}</span>

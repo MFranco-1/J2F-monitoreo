@@ -7,6 +7,8 @@ import { RouterLink } from '@angular/router';
 import { AlertService } from '../../../core/services/alert.service';
 import { AssignmentService } from '../../../core/services/assignment.service';
 import { Alert, AlertFilters } from '../../../shared/models/alert.model';
+import { MasterDataService } from '../../../core/services/master-data.service';
+import { Client, Vehicle, GpsDevice, EventType } from '../../../shared/models/master-data.model';
 
 @Component({
   selector: 'app-alert-list',
@@ -19,6 +21,7 @@ export class AlertListComponent implements OnInit {
   readonly auth = inject(AuthService);
   private alertService = inject(AlertService);
   private assignmentService = inject(AssignmentService);
+  private masterData = inject(MasterDataService);
 
   alerts = signal<Alert[]>([]);
   loading = signal(true);
@@ -27,15 +30,25 @@ export class AlertListComponent implements OnInit {
   successMsg = signal('');
   errorMsg = signal('');
   totalPages = signal(1);
+  clients = signal<Client[]>([]);
+  vehicles = signal<Vehicle[]>([]);
+  devices = signal<GpsDevice[]>([]);
+  eventTypes = signal<EventType[]>([]);
 
   filters: AlertFilters = { page: 1, per_page: 20 };
 
   newForm: any = {
     title: '', description: '', priority: 'medium',
-    service_type: '', location: '', source: 'Manual',
+    service_type: '', location: '', source: 'Manual', client_id: null,
+    vehicle_id: null, gps_device_id: null, event_type_id: null,
   };
 
-  ngOnInit(): void { this.loadAlerts(); }
+  ngOnInit(): void {
+    this.loadAlerts();
+    this.masterData.clients(true).subscribe(data => this.clients.set(data['clients'] || []));
+    this.masterData.eventTypes(true).subscribe(data => this.eventTypes.set(
+      (data['event_types'] || []).filter(item => item.generates_alert)));
+  }
 
   loadAlerts(): void {
     this.loading.set(true);
@@ -56,7 +69,9 @@ export class AlertListComponent implements OnInit {
   }
 
   openNewModal(): void {
-    this.newForm = { title: '', description: '', priority: 'medium', service_type: '', location: '', source: 'Manual' };
+    this.newForm = { title: '', description: '', priority: 'medium', service_type: '', location: '', source: 'Manual',
+      client_id: null, vehicle_id: null, gps_device_id: null, event_type_id: null };
+    this.vehicles.set([]); this.devices.set([]);
     this.showNewModal.set(true);
   }
 
@@ -76,6 +91,26 @@ export class AlertListComponent implements OnInit {
       },
       error: (err) => { this.saving.set(false); this.errorMsg.set(err?.error?.error || 'Error al crear alerta'); },
     });
+  }
+
+  onClientChange(): void {
+    this.newForm.vehicle_id = null; this.newForm.gps_device_id = null; this.devices.set([]);
+    if (!this.newForm.client_id) { this.vehicles.set([]); return; }
+    this.masterData.vehicles(this.newForm.client_id, true).subscribe(data => this.vehicles.set(data['vehicles'] || []));
+  }
+
+  onVehicleChange(): void {
+    this.newForm.gps_device_id = null;
+    if (!this.newForm.vehicle_id) { this.devices.set([]); return; }
+    this.masterData.devices(this.newForm.vehicle_id, true).subscribe(data => {
+      const devices = data['gps_devices'] || []; this.devices.set(devices);
+      if (devices.length === 1) this.newForm.gps_device_id = devices[0].id;
+    });
+  }
+
+  onEventTypeChange(): void {
+    const event = this.eventTypes().find(item => item.id === this.newForm.event_type_id);
+    if (event) this.newForm.priority = event.default_priority;
   }
 
   autoAssign(alertId: number): void {

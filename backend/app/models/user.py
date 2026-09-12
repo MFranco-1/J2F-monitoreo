@@ -6,6 +6,7 @@ Representa a los operadores y administradores del sistema.
 from app.datetime_utils import utcnow, as_utc_naive, iso_utc
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
+from app.models.profile import user_profile
 
 
 class User(db.Model):
@@ -28,7 +29,11 @@ class User(db.Model):
 
     # Relaciones
     state = db.relationship("State", back_populates="users")
-    profile = db.relationship("Profile", back_populates="users")
+    # Relación histórica de compatibilidad.
+    profile = db.relationship("Profile", back_populates="legacy_users", foreign_keys=[profile_id])
+    profiles = db.relationship(
+        "Profile", secondary=user_profile, back_populates="users", lazy="subquery"
+    )
     assignments = db.relationship("Assignment", back_populates="user", lazy="dynamic")
     history_entries = db.relationship("History", back_populates="user", lazy="dynamic")
 
@@ -52,7 +57,7 @@ class User(db.Model):
             .count()
         )
 
-    def to_dict(self, include_profile: bool = True) -> dict:
+    def to_dict(self, include_profile: bool = True, active_profile=None) -> dict:
         data = {
             "id": self.id,
             "dni": self.dni,
@@ -66,7 +71,9 @@ class User(db.Model):
             "updated_at": iso_utc(self.updated_at),
         }
         if include_profile:
-            data["profile"] = self.profile.to_dict() if self.profile else None
+            selected = active_profile if active_profile is not None else self.profile
+            data["profile"] = selected.to_dict() if selected else None
+            data["profiles"] = [profile.to_dict() for profile in sorted(self.profiles, key=lambda p: p.name)]
         return data
 
     def __repr__(self) -> str:

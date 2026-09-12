@@ -180,6 +180,7 @@ class RegressionTests(unittest.TestCase):
             entry = History.query.filter_by(alert_id=alert_id, action="note_added").one()
             self.assertIn("Servicio recuperado", entry.detail)
             self.assertEqual(entry.user_id, 1)
+            self.assertEqual(entry.profile_id, self.admin_profile)
 
     def test_other_operator_cannot_edit_attention(self):
         a = self.user()
@@ -250,13 +251,13 @@ class RegressionTests(unittest.TestCase):
             "/dashboard": "MONITOREO", "/alerts": "MONITOREO", "/assignments": "MONITOREO",
             "/history": "SEGUIMIENTO", "/reports": "SEGUIMIENTO",
             "/admin/users": "ADMINISTRACIÓN", "/admin/profiles": "ADMINISTRACIÓN",
-            "/admin/menu-options": "ADMINISTRACIÓN",
+            "/admin/menu-options": "ADMINISTRACIÓN", "/admin/master-data": "ADMINISTRACIÓN",
         }
         self.assertEqual(set(by_url), set(expected))
         self.assertTrue(all(by_url[url]["parent"]["name"] == parent
                             for url, parent in expected.items()))
-        self.assertTrue(all([profile["name"] for profile in option["profiles"]] == ["Administrador"]
-                            for option in options))
+        self.assertTrue(all("Administrador" in [profile["name"] for profile in option["profiles"]]
+                            for option in by_url.values()))
 
     def test_navigation_only_contains_allowed_active_options(self):
         user_id = self.user()
@@ -267,7 +268,10 @@ class RegressionTests(unittest.TestCase):
             self.client.post("/api/menu-options/", headers=self.admin, json={"name": name, "url": "/alerts", "profile_ids": profile_ids, "state_id": state_id})
         response = self.client.get("/api/menu-options/?navigation=true", headers=headers)
         self.assertTrue(response.get_json()["configured"])
-        self.assertEqual([o["name"] for o in response.get_json()["menu_options"]], ["Permitido"])
+        names = [o["name"] for o in response.get_json()["menu_options"]]
+        self.assertIn("Permitido", names)
+        self.assertNotIn("Privado", names)
+        self.assertNotIn("Inactivo", names)
         self.assertEqual(self.client.get("/api/menu-options/", headers=headers).status_code, 403)
 
     def test_report_reopens_and_end_date_includes_full_day(self):
@@ -316,22 +320,20 @@ class RegressionTests(unittest.TestCase):
                 self.assertEqual(result.status_code, 200, result.get_json())
                 self.assertEqual(json.loads(result.get_json()["report"]["result_json"])["type"], report_type)
 
-    def test_single_profile_is_changed_removed_and_restored(self):
+    def test_profile_assignments_are_changed_and_at_least_one_is_required(self):
         user_id = self.user()
         tokens = self.login("test1@example.invalid")
         with self.app.app_context():
             initial_profile = db.session.get(User, user_id).profile_id
         url = f"/api/users/{user_id}"
-        result = self.client.put(url, headers=self.admin, json={"profile_id": self.admin_profile})
+        result = self.client.put(url, headers=self.admin, json={"profile_ids": [self.admin_profile]})
         self.assertEqual(result.status_code, 200, result.get_json())
         self.assertEqual(result.get_json()["user"]["profile"]["id"], self.admin_profile)
-        self.assertNotIn("profiles", result.get_json()["user"])
+        self.assertEqual([p["id"] for p in result.get_json()["user"]["profiles"]], [self.admin_profile])
         self.assertEqual(self.client.get("/api/auth/me", headers=self.headers(tokens["access_token"])).status_code, 401)
-        result = self.client.put(url, headers=self.admin, json={"profile_id": None})
-        self.assertEqual(result.status_code, 200, result.get_json())
-        self.assertIsNone(result.get_json()["user"]["profile"])
-        self.assertEqual(self.client.post("/api/auth/login", json={"identifier": "test1@example.invalid", "password": "Test-password-123!"}).status_code, 403)
-        self.assertEqual(self.client.put(url, headers=self.admin, json={"profile_id": initial_profile}).status_code, 200)
+        result = self.client.put(url, headers=self.admin, json={"profile_ids": []})
+        self.assertEqual(result.status_code, 400, result.get_json())
+        self.assertEqual(self.client.put(url, headers=self.admin, json={"profile_ids": [initial_profile]}).status_code, 200)
         self.login("test1@example.invalid")
 
     def test_direct_profile_change_invalidates_both_tokens(self):
@@ -387,15 +389,131 @@ class RegressionTests(unittest.TestCase):
 
     def test_incompatible_user_fields_are_not_silently_discarded(self):
         user_id = self.user()
-        for payload in [{"profile_ids": [self.admin_profile]}, {"first_name": "Nombre"},
+        for payload in [{"profile_ids": [999999]}, {"first_name": "Nombre"},
                         {"profile_id": 999999}, {"full_name": "x" * 151}]:
             with self.subTest(payload=payload):
                 response = self.client.put(f"/api/users/{user_id}", headers=self.admin, json=payload)
                 self.assertEqual(response.status_code, 400, response.get_json())
 
+    def test_multprofile_login_requires_selection_and_temp_token_is_limited(self):
+        user_id = self.user()
+        with self.app.app_context():
+            user = db.session.get(User, user_id)
+            user.profiles = [Profile.query.filter_by(name="Técnico").one(),
+                             db.session.get(Profile, self.admin_profile)]
+            db.session.commit()
+        response = self.client.post("/api/auth/login", json={"identifier": "test1@example.invalid",
+                                                               "password": "Test-password-123!"})
+        body = response.get_json()
+        self.assertTrue(body["requires_profile_selection"])
+        self.assertNotIn("refresh_token", body)
+        temporary = self.headers(body["access_token"])
+        self.assertEqual(self.client.get("/api/alerts/metrics", headers=temporary).status_code, 401)
+        selected = self.client.post("/api/auth/select-profile", headers=temporary,
+                                    json={"profile_id": self.admin_profile})
+        self.assertEqual(selected.status_code, 200, selected.get_json())
+        self.assertEqual(selected.get_json()["user"]["profile"]["name"], "Administrador")
+        from flask_jwt_extended import decode_token
+        with self.app.app_context():
+            payload = decode_token(selected.get_json()["access_token"])
+        self.assertEqual(payload["active_profile_id"], self.admin_profile)
+        self.assertEqual(payload["active_profile_name"], "Administrador")
+
+    def test_profile_selection_rejects_unassigned_and_inactive_profiles(self):
+        user_id = self.user()
+        with self.app.app_context():
+            user = db.session.get(User, user_id)
+            inactive = Profile(name="Perfil inactivo de prueba", state_id=self.inactive)
+            db.session.add(inactive); db.session.flush()
+            user.profiles = [Profile.query.filter_by(name="Técnico").one(),
+                             db.session.get(Profile, self.admin_profile), inactive]
+            db.session.commit(); inactive_id = inactive.id
+        login = self.client.post("/api/auth/login", json={"identifier":"test1@example.invalid",
+            "password":"Test-password-123!"}).get_json()
+        token = self.headers(login["access_token"])
+        self.assertEqual(self.client.post("/api/auth/select-profile", headers=token,
+                                          json={"profile_id": 99999}).status_code, 403)
+        self.assertEqual(self.client.post("/api/auth/select-profile", headers=token,
+                                          json={"profile_id": inactive_id}).status_code, 403)
+
+    def test_switch_and_refresh_preserve_only_active_profile_permissions(self):
+        user_id = self.user()
+        with self.app.app_context():
+            technician_id = Profile.query.filter_by(name="Técnico").one().id
+            user = db.session.get(User, user_id)
+            user.profiles = [db.session.get(Profile, technician_id), db.session.get(Profile, self.admin_profile)]
+            db.session.commit()
+        pending = self.client.post("/api/auth/login", json={"identifier":"test1@example.invalid",
+            "password":"Test-password-123!"}).get_json()
+        admin_session = self.client.post("/api/auth/select-profile", headers=self.headers(pending["access_token"]),
+                                         json={"profile_id":self.admin_profile}).get_json()
+        self.assertEqual(self.client.get("/api/users/", headers=self.headers(admin_session["access_token"])).status_code, 200)
+        switched = self.client.post("/api/auth/select-profile", headers=self.headers(admin_session["access_token"]),
+                                    json={"profile_id":technician_id}).get_json()
+        technician_access = self.headers(switched["access_token"])
+        self.assertEqual(self.client.get("/api/users/", headers=technician_access).status_code, 403)
+        refreshed = self.client.post("/api/auth/refresh", headers=self.headers(switched["refresh_token"])).get_json()
+        self.assertEqual(self.client.get("/api/users/", headers=self.headers(refreshed["access_token"])).status_code, 403)
+
+    def test_user_multprofile_create_and_partial_edit_preserves_assignments(self):
+        with self.app.app_context():
+            technician_id = Profile.query.filter_by(name="Técnico").one().id
+        response = self.client.post("/api/users/", headers=self.admin, json={"dni":"87654321",
+            "full_name":"Usuario Multiperfil", "email":"multi@example.invalid", "password":"Password-123!",
+            "state_id":self.active, "profile_ids":[technician_id,self.admin_profile]})
+        self.assertEqual(response.status_code, 201, response.get_json())
+        user = response.get_json()["user"]
+        self.assertEqual(user["profile_id"], technician_id)
+        self.assertEqual({p["id"] for p in user["profiles"]}, {technician_id,self.admin_profile})
+        edited = self.client.put(f"/api/users/{user['id']}", headers=self.admin,
+                                 json={"full_name":"Nombre actualizado"}).get_json()["user"]
+        self.assertEqual({p["id"] for p in edited["profiles"]}, {technician_id,self.admin_profile})
+
+    def test_master_data_relations_and_alert_compatibility(self):
+        client = self.client.post("/api/master-data/clients/", headers=self.admin, json={
+            "document_type":"RUC", "document_number":"20123456789", "business_name":"Cliente Prueba",
+            "state_id":self.active}).get_json()["record"]
+        edited_client = self.client.put(f"/api/master-data/clients/{client['id']}", headers=self.admin,
+                                        json={"contact_name":"Central de operaciones"})
+        self.assertEqual(edited_client.status_code, 200, edited_client.get_json())
+        self.assertEqual(edited_client.get_json()["record"]["contact_name"], "Central de operaciones")
+        vehicle_response = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+            "client_id":client["id"], "plate":"ABC-123", "brand":"Toyota", "model":"Hilux",
+            "state_id":self.active})
+        self.assertEqual(vehicle_response.status_code, 201, vehicle_response.get_json())
+        vehicle = vehicle_response.get_json()["record"]
+        self.assertEqual(vehicle["client"]["id"], client["id"])
+        self.assertEqual(self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+            "client_id":client["id"], "plate":"abc-123", "state_id":self.active}).status_code, 400)
+        device = self.client.post("/api/master-data/gps-devices/", headers=self.admin, json={
+            "vehicle_id":vehicle["id"], "imei":"123456789012345", "state_id":self.active}).get_json()["record"]
+        self.assertEqual(device["vehicle"]["id"], vehicle["id"])
+        self.assertEqual(self.client.post("/api/master-data/gps-devices/", headers=self.admin, json={
+            "vehicle_id":vehicle["id"], "imei":"123456789012345", "state_id":self.active}).status_code, 400)
+        with self.app.app_context():
+            event_id = db.session.query(__import__('app.models.master_data', fromlist=['EventType']).EventType.id).first()[0]
+        alert = self.client.post("/api/alerts/", headers=self.admin, json={"title":"GPS", "client_id":client["id"],
+            "vehicle_id":vehicle["id"], "gps_device_id":device["id"], "event_type_id":event_id})
+        self.assertEqual(alert.status_code, 201, alert.get_json())
+        self.assertEqual(alert.get_json()["alert"]["client"]["id"], client["id"])
+        self.assertEqual(self.client.post("/api/alerts/", headers=self.admin,
+                                         json={"title":"Alerta anterior"}).status_code, 201)
+
+    def test_alert_rejects_inconsistent_client_vehicle_device(self):
+        def client(number):
+            return self.client.post("/api/master-data/clients/", headers=self.admin, json={
+                "document_type":"RUC", "document_number":number, "business_name":number,
+                "state_id":self.active}).get_json()["record"]
+        first, second = client("20111111111"), client("20222222222")
+        vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+            "client_id":first["id"], "plate":"XYZ-999", "state_id":self.active}).get_json()["record"]
+        result = self.client.post("/api/alerts/", headers=self.admin, json={"title":"Inválida",
+            "client_id":second["id"], "vehicle_id":vehicle["id"]})
+        self.assertEqual(result.status_code, 400)
+
 
 class InstalledSchemaTests(unittest.TestCase):
-    def test_models_match_the_nine_tables_reported_from_postgresql(self):
+    def test_models_match_the_incremental_fourteen_table_schema(self):
         from sqlalchemy.dialects import postgresql
         # Contrato independiente: estructura enviada por el usuario desde su PostgreSQL.
         definitions = {
@@ -403,21 +521,31 @@ class InstalledSchemaTests(unittest.TestCase):
             "profiles": "id INTEGER!; name VARCHAR(100)!; description VARCHAR(255); state_id INTEGER!; created_at TIMESTAMP; updated_at TIMESTAMP",
             "menu_options": "id INTEGER!; name VARCHAR(100)!; url VARCHAR(255); icon VARCHAR(100); parent_id INTEGER; order INTEGER; state_id INTEGER!; created_at TIMESTAMP; updated_at TIMESTAMP",
             "profile_menu_option": "profile_id INTEGER!; menu_option_id INTEGER!",
+            "user_profile": "user_id INTEGER!; profile_id INTEGER!",
             "users": "id INTEGER!; dni VARCHAR(20)!; full_name VARCHAR(150)!; email VARCHAR(150)!; password_hash VARCHAR(256)!; profile_id INTEGER; state_id INTEGER!; last_login TIMESTAMP; created_at TIMESTAMP; updated_at TIMESTAMP",
-            "alerts": "id INTEGER!; title VARCHAR(200)!; description TEXT; priority VARCHAR(20)!; service_type VARCHAR(100); location VARCHAR(200); source VARCHAR(100); state_id INTEGER!; created_by INTEGER; opened_at TIMESTAMP; acknowledged_at TIMESTAMP; resolved_at TIMESTAMP; created_at TIMESTAMP; updated_at TIMESTAMP",
+            "alerts": "id INTEGER!; title VARCHAR(200)!; description TEXT; priority VARCHAR(20)!; service_type VARCHAR(100); location VARCHAR(200); source VARCHAR(100); state_id INTEGER!; vehicle_id INTEGER; gps_device_id INTEGER; event_type_id INTEGER; created_by INTEGER; opened_at TIMESTAMP; acknowledged_at TIMESTAMP; resolved_at TIMESTAMP; created_at TIMESTAMP; updated_at TIMESTAMP",
             "reports": "id INTEGER!; name VARCHAR(200)!; type VARCHAR(50)!; description TEXT; filters_json TEXT; date_range_start TIMESTAMP; date_range_end TIMESTAMP; generated_by INTEGER; result_json TEXT; created_at TIMESTAMP",
             "assignments": "id INTEGER!; alert_id INTEGER!; user_id INTEGER!; notes TEXT; assignment_type VARCHAR(20); assigned_at TIMESTAMP; completed_at TIMESTAMP; response_time_minutes DOUBLE PRECISION",
-            "history": "id INTEGER!; alert_id INTEGER!; user_id INTEGER; action VARCHAR(50)!; previous_state VARCHAR(100); new_state VARCHAR(100); detail TEXT; timestamp TIMESTAMP",
+            "history": "id INTEGER!; alert_id INTEGER!; user_id INTEGER; profile_id INTEGER; action VARCHAR(50)!; previous_state VARCHAR(100); new_state VARCHAR(100); detail TEXT; timestamp TIMESTAMP",
+            "clients": "id INTEGER!; document_type VARCHAR(20)!; document_number VARCHAR(30)!; business_name VARCHAR(180)!; contact_name VARCHAR(150); phone VARCHAR(30); email VARCHAR(150); address VARCHAR(255); state_id INTEGER!; created_at TIMESTAMP; updated_at TIMESTAMP",
+            "vehicles": "id INTEGER!; client_id INTEGER!; plate VARCHAR(20)!; brand VARCHAR(100); model VARCHAR(100); color VARCHAR(50); vehicle_type VARCHAR(80); state_id INTEGER!; created_at TIMESTAMP; updated_at TIMESTAMP",
+            "gps_devices": "id INTEGER!; vehicle_id INTEGER!; imei VARCHAR(40)!; serial_number VARCHAR(80); model VARCHAR(100); provider VARCHAR(100); sim_number VARCHAR(30); state_id INTEGER!; created_at TIMESTAMP; updated_at TIMESTAMP",
+            "event_types": "id INTEGER!; code VARCHAR(50)!; name VARCHAR(150)!; description TEXT; default_priority VARCHAR(20)!; generates_alert BOOLEAN!; expected_action TEXT; state_id INTEGER!; created_at TIMESTAMP; updated_at TIMESTAMP",
         }
         relations = {
             "states": set(), "profiles": {("state_id", "states.id")},
             "menu_options": {("parent_id", "menu_options.id"), ("state_id", "states.id")},
             "profile_menu_option": {("profile_id", "profiles.id"), ("menu_option_id", "menu_options.id")},
+            "user_profile": {("user_id", "users.id"), ("profile_id", "profiles.id")},
             "users": {("profile_id", "profiles.id"), ("state_id", "states.id")},
-            "alerts": {("created_by", "users.id"), ("state_id", "states.id")},
+            "alerts": {("created_by", "users.id"), ("state_id", "states.id"), ("vehicle_id", "vehicles.id"), ("gps_device_id", "gps_devices.id"), ("event_type_id", "event_types.id")},
             "reports": {("generated_by", "users.id")},
             "assignments": {("alert_id", "alerts.id"), ("user_id", "users.id")},
-            "history": {("alert_id", "alerts.id"), ("user_id", "users.id")},
+            "history": {("alert_id", "alerts.id"), ("user_id", "users.id"), ("profile_id", "profiles.id")},
+            "clients": {("state_id", "states.id")},
+            "vehicles": {("client_id", "clients.id"), ("state_id", "states.id")},
+            "gps_devices": {("vehicle_id", "vehicles.id"), ("state_id", "states.id")},
+            "event_types": {("state_id", "states.id")},
         }
         self.assertEqual(set(db.metadata.tables), set(definitions))
         for name, definition in definitions.items():
@@ -435,7 +563,23 @@ class InstalledSchemaTests(unittest.TestCase):
                 self.assertEqual(actual, expected)
                 self.assertEqual({(fk.parent.name, fk.target_fullname) for fk in table.foreign_keys}, relations[name])
                 self.assertEqual([column.name for column in table.primary_key.columns],
-                    ["profile_id", "menu_option_id"] if name == "profile_menu_option" else ["id"])
+                    (["profile_id", "menu_option_id"] if name == "profile_menu_option" else
+                     ["user_id", "profile_id"] if name == "user_profile" else ["id"]))
+
+
+class MigrationScriptTests(unittest.TestCase):
+    def test_migrations_are_separated_safe_and_include_legacy_backfill(self):
+        root = Path(__file__).resolve().parents[2] / "migrations"
+        files = [root / f"00{number}_{name}.sql" for number, name in [
+            (1, "user_profile"), (2, "master_data"), (3, "alert_relationships"),
+            (4, "history_active_profile"), (5, "seed_event_types"), (6, "seed_menu_options")]]
+        self.assertTrue(all(path.exists() for path in files))
+        sql = "\n".join(path.read_text(encoding="utf8") for path in files)
+        executable = "\n".join(line for line in sql.splitlines() if not line.lstrip().startswith("--"))
+        self.assertNotRegex(executable.lower(), r"\b(drop|truncate)\b")
+        first = files[0].read_text(encoding="utf8").lower()
+        self.assertIn("select id, profile_id from users", first)
+        self.assertIn("on conflict (user_id, profile_id) do nothing", first)
 
 
 if __name__ == "__main__":

@@ -52,7 +52,10 @@ const { environment } = load('src/environments/environment.ts');
 function setup() {
   const storage = new Map([
     ['j2f_access_token', 'old-access'], ['j2f_refresh_token', 'actual-refresh'],
-    ['j2f_user', JSON.stringify({ id: 2, email: 'test@example.invalid', full_name: 'Prueba', profile: { id: 2, name: 'Técnico', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } } })]
+    ['j2f_user', JSON.stringify({ id: 2, email: 'test@example.invalid', full_name: 'Prueba',
+      profile: { id: 2, name: 'Técnico', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } },
+      profiles: [{ id: 2, name: 'Técnico', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } }],
+      requires_profile_selection: false })]
   ]);
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
     getItem: key => storage.get(key) ?? null,
@@ -164,6 +167,8 @@ test('login conserva el perfil único sin asumir que Activo tiene id 1', () => {
   const t = setup();
   t.auth.login('prueba', 'clave').subscribe();
   t.success(0, { access_token: 'login-access', refresh_token: 'login-refresh',
+    requires_profile_selection: false,
+    profiles: [{ id: 4, name: 'Administrador', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } }],
     user: { id: 3, email: 'test@example.invalid', full_name: 'Prueba', profile_id: 4,
       profile: { id: 4, name: 'Administrador', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } } } });
   assert.equal(t.auth.currentUser().profile.id, 4);
@@ -176,6 +181,8 @@ test('un perfil inactivo no concede permisos en la interfaz', () => {
   const t = setup();
   t.auth.login('prueba', 'clave').subscribe();
   t.success(0, { access_token: 'login-access', refresh_token: 'login-refresh',
+    requires_profile_selection: false,
+    profiles: [{ id: 1, name: 'Administrador', state_id: 29, state: { id: 29, name: 'Inactivo', type: 'user' } }],
     user: { id: 3, email: 'test@example.invalid', full_name: 'Prueba',
       profile: { id: 1, name: 'Administrador', state_id: 29, state: { id: 29, name: 'Inactivo', type: 'user' } } } });
   assert.equal(t.auth.isAdmin(), false);
@@ -189,7 +196,7 @@ test('el perfil Técnico se reconoce al restaurar una sesión', () => {
   assert.equal(t.auth.isAdmin(), false);
 });
 
-test('el formato multiperfil anterior requiere iniciar sesión de nuevo', () => {
+test('una sesión incompleta anterior requiere iniciar sesión de nuevo', () => {
   setup();
   localStorage.setItem('j2f_user', JSON.stringify({ id: 3, full_name: 'Anterior',
     profiles: [{ id: 1, name: 'Administrador', state_id: 1 }] }));
@@ -217,6 +224,8 @@ test('el sidebar elige el menú configurado o el respaldo, nunca ambos', () => {
   const render = response => {
     injectedAuth = {
       isAdmin: () => true,
+      hasActiveProfile: () => true,
+      profileChanges: new rx.Subject(),
       menuChanges: new rx.Subject(),
       getMenuOptions: () => response,
     };
@@ -238,6 +247,40 @@ test('el sidebar elige el menú configurado o el respaldo, nunca ambos', () => {
   assert.equal(render(rx.of({ configured: false, menu_options: [] })).length, 3);
   assert.equal(render(rx.throwError(() => new Error('API no disponible'))).length, 3);
   assert.deepEqual(render(rx.of({ configured: true, menu_options: [] })), []);
+});
+
+test('login multiperfil conserva solo el token temporal y permite seleccionar en dashboard', () => {
+  const t = setup();
+  t.auth.login('prueba', 'clave').subscribe();
+  const profiles = [{ id: 1, name: 'Administrador', state: { name: 'Activo' } },
+                    { id: 2, name: 'Técnico', state: { name: 'Activo' } }];
+  t.success(0, { access_token: 'temporary', requires_profile_selection: true, profiles,
+    user: { id: 3, email: 'multi@example.invalid', full_name: 'Usuario Multi', profiles } });
+  assert.equal(t.auth.requiresProfileSelection(), true);
+  assert.equal(t.auth.hasActiveProfile(), false);
+  assert.equal(localStorage.getItem('j2f_refresh_token'), null);
+  t.auth.selectProfile(2).subscribe();
+  assert.ok(t.pending[1].request.url.endsWith('/auth/select-profile'));
+  t.success(1, { access_token: 'final', refresh_token: 'refresh-final', requires_profile_selection: false,
+    profiles, user: { id: 3, email: 'multi@example.invalid', full_name: 'Usuario Multi', profile: profiles[1], profiles } });
+  assert.equal(t.auth.currentUser().profile.id, 2);
+  assert.equal(t.auth.isOperator(), true);
+});
+
+test('la interfaz requerida está integrada sin pantalla ni modal de selección adicional', () => {
+  const dashboard = fs.readFileSync(path.join(root, 'src/app/features/dashboard/dashboard.component.html'), 'utf8');
+  const dashboardTs = fs.readFileSync(path.join(root, 'src/app/features/dashboard/dashboard.component.ts'), 'utf8');
+  const users = fs.readFileSync(path.join(root, 'src/app/features/admin/users/user-list/user-list.component.html'), 'utf8');
+  const alerts = fs.readFileSync(path.join(root, 'src/app/features/alerts/alert-list/alert-list.component.html'), 'utf8');
+  const routes = fs.readFileSync(path.join(root, 'src/app/app.routes.ts'), 'utf8');
+  assert.match(dashboard, /Bienvenido, \{\{ auth\.currentUser\(\)\?\.full_name \}\}/);
+  assert.match(dashboard, /profile-selector/);
+  assert.doesNotMatch(dashboard, /Acciones Rápidas|btn-goto-alerts/);
+  assert.match(dashboardTs, /if \(this\.auth\.hasActiveProfile\(\)\) this\.startMetrics/);
+  assert.match(users, /type="checkbox"/);
+  assert.match(alerts, /onClientChange|gps_device_id|event_type_id/);
+  assert.match(routes, /admin\/master-data/);
+  assert.doesNotMatch(routes, /select-profile/);
 });
 
 test('el CRUD muestra rutas y conserva las secciones solo como menús padre', () => {

@@ -21,6 +21,10 @@ class State(db.Model):
     users = db.relationship("User", back_populates="state", lazy="dynamic")
     profiles = db.relationship("Profile", back_populates="state", lazy="dynamic")
     alerts = db.relationship("Alert", back_populates="state", lazy="dynamic")
+    clients = db.relationship("Client", back_populates="state", lazy="dynamic")
+    vehicles = db.relationship("Vehicle", back_populates="state", lazy="dynamic")
+    gps_devices = db.relationship("GpsDevice", back_populates="state", lazy="dynamic")
+    event_types = db.relationship("EventType", back_populates="state", lazy="dynamic")
 
     def to_dict(self) -> dict:
         return {

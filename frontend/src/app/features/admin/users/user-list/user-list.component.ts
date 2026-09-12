@@ -30,7 +30,7 @@ export class UserListComponent implements OnInit {
 
   form: any = {
     dni: '', full_name: '', email: '',
-    password: '', profile_id: null as number | null, state_id: this.activeStateId(),
+    password: '', profile_ids: [] as number[], state_id: this.activeStateId(),
   };
 
   ngOnInit(): void {
@@ -52,7 +52,7 @@ export class UserListComponent implements OnInit {
 
   openNew(): void {
     this.editingUser.set(null);
-    this.form = { dni: '', full_name: '', email: '', password: '', profile_id: null as number | null, state_id: this.activeStateId() };
+    this.form = { dni: '', full_name: '', email: '', password: '', profile_ids: [] as number[], state_id: this.activeStateId() };
     this.showModal.set(true);
   }
 
@@ -60,7 +60,7 @@ export class UserListComponent implements OnInit {
     this.editingUser.set(user);
     this.form = {
       dni: user.dni, full_name: user.full_name, email: user.email,
-      password: '', profile_id: user.profile_id ?? null, state_id: user.state_id,
+      password: '', profile_ids: (user.profiles || (user.profile ? [user.profile] : [])).map(p => p.id), state_id: user.state_id,
     };
     this.showModal.set(true);
   }
@@ -101,6 +101,12 @@ export class UserListComponent implements OnInit {
   }
 
   onSearch(): void { this.loadUsers(); }
+  profileChecked(profileId: number): boolean { return this.form.profile_ids.includes(profileId); }
+  toggleProfile(profileId: number, checked: boolean): void {
+    this.form.profile_ids = checked
+      ? Array.from(new Set([...this.form.profile_ids, profileId]))
+      : this.form.profile_ids.filter((id: number) => id !== profileId);
+  }
   getStateBadge(user: User): string {
     return user.state?.name === 'Activo' ? 'badge-active' : 'badge-inactive';
   }

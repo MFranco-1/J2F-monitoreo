@@ -1,12 +1,28 @@
 <!-- features/dashboard/dashboard.component.html -->
 <div class="dashboard">
   <!-- Header -->
-  <div class="page-header">
-    <h1>Panel de control</h1>
-    <p *ngIf="!loading()">
+  <div class="page-header dashboard-header">
+    <div class="welcome-block">
+      <h1>Bienvenido, {{ auth.currentUser()?.full_name }}</h1>
+      <p>Panel de control del centro de monitoreo</p>
+      <p *ngIf="auth.hasActiveProfile() && !loading()">
       Última actualización: {{ lastUpdate() | date:'HH:mm:ss' }}
       <span class="live-badge">{{ connectionError() ? "SIN CONEXIÓN" : "ACTUALIZA CADA 30 S" }}</span>
-    </p>
+      </p>
+    </div>
+    <div class="profile-selector" *ngIf="auth.availableProfiles().length > 1">
+      <label for="active-profile">Perfil activo</label>
+      <select id="active-profile" class="form-control" [(ngModel)]="selectedProfileId"
+              (change)="onProfileChange()" [disabled]="selectingProfile()">
+        <option [ngValue]="null" disabled>Seleccione un perfil</option>
+        <option *ngFor="let profile of auth.availableProfiles()" [ngValue]="profile.id">{{ profile.name }}</option>
+      </select>
+    </div>
+  </div>
+
+  <p class="alert-banner alert-error" role="alert" *ngIf="selectionError()">{{ selectionError() }}</p>
+  <div class="profile-pending card" *ngIf="auth.requiresProfileSelection()">
+    Selecciona un perfil para cargar la información correspondiente
   </div>
 
   <p class="alert-banner alert-error" role="alert" *ngIf="connectionError()">No se pudo actualizar. Se reintentará automáticamente.</p>
@@ -128,23 +144,5 @@
       </div>
     </div>
 
-    <!-- Quick Actions -->
-    <div class="card quick-actions">
-      <h3>Acciones Rápidas</h3>
-      <div class="actions-row">
-        <a routerLink="/alerts" id="btn-goto-alerts" class="action-btn">
-           Ver todas las alertas
-        </a>
-        <a routerLink="/assignments" id="btn-goto-assignments" class="action-btn">
-           Ver asignaciones
-        </a>
-        <a routerLink="/reports" id="btn-goto-reports" class="action-btn">
-           Generar reporte
-        </a>
-        <a routerLink="/history" id="btn-goto-history" class="action-btn">
-           Ver historial
-        </a>
-      </div>
-    </div>
   </ng-container>
 </div>

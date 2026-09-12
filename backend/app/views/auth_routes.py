@@ -19,6 +19,13 @@ def login():
     return auth_controller.login(data)
 
 
+@auth_bp.post("/select-profile")
+@jwt_required()
+def select_profile():
+    """POST /api/auth/select-profile — selecciona o cambia el perfil activo."""
+    return auth_controller.select_profile(request.get_json(silent=True) or {})
+
+
 @auth_bp.post("/logout")
 @jwt_required(verify_type=False)
 def logout():

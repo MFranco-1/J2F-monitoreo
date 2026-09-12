@@ -8,6 +8,7 @@ from app.models.alert import Alert
 from app.models.assignment import Assignment
 from app.models.history import History
 from app.models.report import Report
+from app.models.master_data import Client, Vehicle, GpsDevice, EventType
 
 __all__ = [
     "State",
@@ -18,4 +19,8 @@ __all__ = [
     "Assignment",
     "History",
     "Report",
+    "Client",
+    "Vehicle",
+    "GpsDevice",
+    "EventType",
 ]

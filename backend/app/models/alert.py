@@ -22,6 +22,9 @@ class Alert(db.Model):
     # Fuente de la alerta (ej: SNMP, Manual, API externa)
     source = db.Column(db.String(100), nullable=True, default="Manual")
     state_id = db.Column(db.Integer, db.ForeignKey("states.id"), nullable=False, index=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey("vehicles.id"), nullable=True, index=True)
+    gps_device_id = db.Column(db.Integer, db.ForeignKey("gps_devices.id"), nullable=True, index=True)
+    event_type_id = db.Column(db.Integer, db.ForeignKey("event_types.id"), nullable=True, index=True)
     # Usuario que creó la alerta
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     # Tiempos de respuesta
@@ -38,6 +41,9 @@ class Alert(db.Model):
     # Relaciones
     state = db.relationship("State", back_populates="alerts")
     creator = db.relationship("User", foreign_keys=[created_by])
+    vehicle = db.relationship("Vehicle", back_populates="alerts")
+    gps_device = db.relationship("GpsDevice", back_populates="alerts")
+    event_type = db.relationship("EventType", back_populates="alerts")
     assignments = db.relationship("Assignment", back_populates="alert", lazy="dynamic", cascade="all, delete-orphan")
     history = db.relationship("History", back_populates="alert", lazy="dynamic", cascade="all, delete-orphan")
 
@@ -69,6 +75,13 @@ class Alert(db.Model):
             "state_id": self.state_id,
             "state": self.state.to_dict() if self.state else None,
             "created_by": self.created_by,
+            "vehicle_id": self.vehicle_id,
+            "gps_device_id": self.gps_device_id,
+            "event_type_id": self.event_type_id,
+            "vehicle": self.vehicle.to_dict(include_client=True) if self.vehicle else None,
+            "client": self.vehicle.client.to_dict() if self.vehicle and self.vehicle.client else None,
+            "gps_device": self.gps_device.to_dict() if self.gps_device else None,
+            "event_type": self.event_type.to_dict() if self.event_type else None,
             "opened_at": iso_utc(self.opened_at),
             "acknowledged_at": iso_utc(self.acknowledged_at),
             "resolved_at": iso_utc(self.resolved_at),

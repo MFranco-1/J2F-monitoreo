@@ -6,7 +6,7 @@ from app.models.assignment import Assignment
 from app.models.alert import Alert
 from app.models.user import User
 from app.models.history import History
-from app.security import current_user, is_admin, is_operator
+from app.security import current_user, is_admin, is_operator, active_profile_id
 from app.validation import integer, text_value
 
 
@@ -104,4 +104,5 @@ def _transition_to_in_progress(alert, user_id):
 
 
 def _log(alert_id, user_id, action, detail):
-    db.session.add(History(alert_id=alert_id, user_id=user_id, action=action, detail=detail))
+    db.session.add(History(alert_id=alert_id, user_id=user_id,
+                           profile_id=active_profile_id(), action=action, detail=detail))

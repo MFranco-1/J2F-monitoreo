@@ -20,6 +20,13 @@ export interface Alert {
   state_id: number;
   state?: AlertState;
   created_by?: number;
+  vehicle_id?: number | null;
+  gps_device_id?: number | null;
+  event_type_id?: number | null;
+  client?: import('./master-data.model').Client | null;
+  vehicle?: import('./master-data.model').Vehicle | null;
+  gps_device?: import('./master-data.model').GpsDevice | null;
+  event_type?: import('./master-data.model').EventType | null;
   opened_at?: string;
   acknowledged_at?: string;
   resolved_at?: string;

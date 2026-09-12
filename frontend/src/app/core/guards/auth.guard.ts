@@ -18,3 +18,8 @@ export const adminGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   return auth.isAdmin() ? true : inject(Router).createUrlTree(['/dashboard']);
 };
+
+export const activeProfileGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  return auth.hasActiveProfile() ? true : inject(Router).createUrlTree(['/dashboard']);
+};

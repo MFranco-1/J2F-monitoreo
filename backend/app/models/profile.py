@@ -13,6 +13,14 @@ profile_menu_option = db.Table(
     db.Column("menu_option_id", db.Integer, db.ForeignKey("menu_options.id"), primary_key=True),
 )
 
+# Fuente principal de perfiles asignados a cada usuario. ``users.profile_id`` se
+# conserva como respaldo temporal para instalaciones todavía no migradas.
+user_profile = db.Table(
+    "user_profile",
+    db.Column("user_id", db.Integer, db.ForeignKey("users.id"), primary_key=True),
+    db.Column("profile_id", db.Integer, db.ForeignKey("profiles.id"), primary_key=True),
+)
+
 
 class Profile(db.Model):
     __tablename__ = "profiles"
@@ -30,7 +38,12 @@ class Profile(db.Model):
 
     # Relaciones
     state = db.relationship("State", back_populates="profiles")
-    users = db.relationship("User", back_populates="profile", lazy="dynamic")
+    users = db.relationship(
+        "User", secondary=user_profile, back_populates="profiles", lazy="dynamic"
+    )
+    legacy_users = db.relationship(
+        "User", back_populates="profile", foreign_keys="User.profile_id", lazy="dynamic"
+    )
     menu_options = db.relationship(
         "MenuOption",
         secondary=profile_menu_option,

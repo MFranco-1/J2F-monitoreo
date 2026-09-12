@@ -5,17 +5,18 @@ from app import db
 from app.models.menu_option import MenuOption
 from app.models.profile import Profile
 from app.validation import text_value, integer, ids_list, user_state
-from app.security import current_user, is_admin
+from app.security import current_user, current_profile, is_admin
 
 
 def get_all_menu_options(filters):
     actor = current_user()
     options = MenuOption.query.order_by(MenuOption.order, MenuOption.id).all()
     if filters.get("navigation"):
+        selected_profile = current_profile(actor)
         active = {o.id: o for o in options if o.state and o.state.name == "Activo"}
         keep = set()
         for option in active.values():
-            if not is_admin(actor) and actor.profile_id not in [p.id for p in option.profiles]:
+            if not selected_profile or selected_profile.id not in [p.id for p in option.profiles]:
                 continue
             chain, node = set(), option
             while node and node.id not in chain:

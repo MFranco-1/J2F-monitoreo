@@ -56,9 +56,16 @@ def update_profile(profile_id, data):
     if role_name(profile.name) == "administrador" and profile.users.count() and (
             role_name(name) != "administrador" or state.name != "Activo"):
         return jsonify({"error": "El perfil Administrador en uso debe permanecer activo"}), 409
+    if state.name != "Activo" and profile.state.name == "Activo":
+        for user in profile.users.all():
+            if not any(other.id != profile.id and other.state and other.state.name == "Activo"
+                       for other in user.profiles):
+                return jsonify({"error": "El perfil no puede desactivarse: dejaría usuarios sin perfil activo"}), 409
     access_changed = name != profile.name or state.id != profile.state_id
     if "menu_option_ids" in data:
+        previous_ids = {menu.id for menu in profile.menu_options}
         profile.menu_options = _menus(data["menu_option_ids"])
+        access_changed = access_changed or previous_ids != {menu.id for menu in profile.menu_options}
     if access_changed:
         for user in profile.users.all():
             invalidate_sessions(user)

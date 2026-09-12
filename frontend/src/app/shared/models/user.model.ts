@@ -24,6 +24,7 @@ export interface User {
   email: string;
   profile_id?: number | null;
   profile?: Profile | null;
+  profiles?: Profile[];
   state_id: number;
   state?: State;
   last_login?: string;
@@ -49,7 +50,9 @@ export interface MenuOption {
 
 export interface AuthResponse {
   access_token: string;
-  refresh_token: string;
+  refresh_token?: string;
+  requires_profile_selection: boolean;
+  profiles: Profile[];
   user: User;
 }
 
@@ -58,4 +61,6 @@ export interface CurrentUser {
   email: string;
   full_name: string;
   profile: Profile | null;
+  profiles: Profile[];
+  requires_profile_selection: boolean;
 }

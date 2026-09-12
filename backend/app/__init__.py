@@ -85,6 +85,7 @@ def _register_blueprints(app: Flask) -> None:
     from app.views.alert_routes import alert_bp
     from app.views.assignment_routes import assignment_bp
     from app.views.report_routes import report_bp
+    from app.views.master_data_routes import master_data_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(user_bp, url_prefix="/api/users")
@@ -93,6 +94,7 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(alert_bp, url_prefix="/api/alerts")
     app.register_blueprint(assignment_bp, url_prefix="/api/assignments")
     app.register_blueprint(report_bp, url_prefix="/api/reports")
+    app.register_blueprint(master_data_bp, url_prefix="/api/master-data")
 
 
 def _seed_initial_data() -> None:
@@ -101,6 +103,7 @@ def _seed_initial_data() -> None:
     from app.models.profile import Profile
     from app.models.user import User
     from app.models.menu_option import MenuOption
+    from app.models.master_data import EventType
 
     # Solo insertar si no existen datos
     if State.query.first():
@@ -127,6 +130,12 @@ def _seed_initial_data() -> None:
     db.session.add(admin_profile)
     db.session.flush()
 
+    technician_profile = Profile(
+        name="Técnico", description="Atención operativa de alertas", state_id=states[0].id
+    )
+    db.session.add(technician_profile)
+    db.session.flush()
+
     # Usuario administrador por defecto
     admin_user = User(
         dni="00000000",
@@ -136,6 +145,7 @@ def _seed_initial_data() -> None:
         state_id=states[0].id,
     )
     admin_user.set_password("Admin@J2F2024")
+    admin_user.profiles = [admin_profile]
     db.session.add(admin_user)
 
     # El entorno de pruebas refleja las secciones y opciones registradas en Neon
@@ -162,8 +172,32 @@ def _seed_initial_data() -> None:
                    state_id=states[0].id, parent=sections["ADMINISTRACIÓN"]),
         MenuOption(name="Opciones de menú", url="/admin/menu-options", icon="menu", order=80,
                    state_id=states[0].id, parent=sections["ADMINISTRACIÓN"]),
+        MenuOption(name="Datos maestros", url="/admin/master-data", icon="database", order=90,
+                   state_id=states[0].id, parent=sections["ADMINISTRACIÓN"]),
     ]
     for option in [*sections.values(), *menu_options]:
         option.profiles = [admin_profile]
     db.session.add_all([*sections.values(), *menu_options])
+    for option in menu_options:
+        if option.url in {"/dashboard", "/alerts", "/assignments", "/history"}:
+            option.profiles.append(technician_profile)
+            option.parent.profiles.append(technician_profile) if technician_profile not in option.parent.profiles else None
+    event_seed = [
+        ("SOS", "Botón de pánico o SOS", "critical", True),
+        ("SPEEDING", "Exceso de velocidad", "high", True),
+        ("GEOFENCE_EXIT", "Salida de geocerca", "high", True),
+        ("GEOFENCE_ENTRY", "Ingreso a geocerca", "low", False),
+        ("GPS_SIGNAL_LOSS", "Pérdida de señal GPS", "high", True),
+        ("POWER_CUT", "Corte de alimentación del dispositivo", "critical", True),
+        ("LOW_BATTERY", "Batería baja", "medium", True),
+        ("DEVICE_TAMPER", "Manipulación o desconexión del dispositivo", "critical", True),
+        ("UNAUTHORIZED_MOVEMENT", "Movimiento no autorizado", "critical", True),
+        ("OUT_OF_HOURS_IGNITION", "Encendido fuera del horario permitido", "high", True),
+        ("PROLONGED_STOP", "Parada o inactividad prolongada", "medium", False),
+        ("COMMUNICATION_FAILURE", "Falla de comunicación del dispositivo", "high", True),
+    ]
+    db.session.add_all([EventType(code=code, name=name, description=name,
+                    default_priority=priority, generates_alert=generates,
+                    expected_action="Aplicar el protocolo operativo vigente", state_id=states[0].id)
+                    for code, name, priority, generates in event_seed])
     db.session.commit()

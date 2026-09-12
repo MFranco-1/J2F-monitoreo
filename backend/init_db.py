@@ -11,11 +11,16 @@ EXPECTED_TABLES = {
     "profiles",
     "menu_options",
     "profile_menu_option",
+    "user_profile",
     "users",
     "alerts",
     "assignments",
     "history",
     "reports",
+    "clients",
+    "vehicles",
+    "gps_devices",
+    "event_types",
 }
 
 
@@ -34,7 +39,7 @@ def main():
             if set(model_tables) != EXPECTED_TABLES:
                 print(
                     "La configuracion interna de modelos no contiene exactamente "
-                    "las 9 tablas esperadas.",
+                    "las 14 tablas esperadas.",
                     file=sys.stderr,
                 )
                 return 1
@@ -53,7 +58,7 @@ def main():
                     print(item, file=sys.stderr)
                 print("No se ha modificado la base de datos.", file=sys.stderr)
                 return 1
-        print("Conexión correcta. Las 9 tablas y sus columnas requeridas existen. No se modificaron datos.")
+        print("Conexión correcta. Las 14 tablas y sus columnas requeridas existen. No se modificaron datos.")
         return 0
     except (SQLAlchemyError, RuntimeError, ValueError):
         print("No se pudo verificar PostgreSQL. Revisa el servicio, la base y las variables de conexión.", file=sys.stderr)

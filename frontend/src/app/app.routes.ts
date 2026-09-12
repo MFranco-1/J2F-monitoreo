@@ -1,6 +1,6 @@
 // app.routes.ts
 import { Routes } from '@angular/router';
-import { authGuard, adminGuard } from './core/guards/auth.guard';
+import { authGuard, adminGuard, activeProfileGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -22,26 +22,31 @@ export const routes: Routes = [
       },
       {
         path: 'alerts',
+        canActivate: [activeProfileGuard],
         loadComponent: () =>
           import('./features/alerts/alert-list/alert-list.component').then((m) => m.AlertListComponent),
       },
       {
         path: 'alerts/:id',
+        canActivate: [activeProfileGuard],
         loadComponent: () =>
           import('./features/alerts/alert-detail/alert-detail.component').then((m) => m.AlertDetailComponent),
       },
       {
         path: 'assignments',
+        canActivate: [activeProfileGuard],
         loadComponent: () =>
           import('./features/assignments/assignment-list/assignment-list.component').then((m) => m.AssignmentListComponent),
       },
       {
         path: 'history',
+        canActivate: [activeProfileGuard],
         loadComponent: () =>
           import('./features/history/history-list/history-list.component').then((m) => m.HistoryListComponent),
       },
       {
         path: 'reports',
+        canActivate: [activeProfileGuard],
         loadComponent: () =>
           import('./features/reports/report-list/report-list.component').then((m) => m.ReportListComponent),
       },
@@ -56,6 +61,12 @@ export const routes: Routes = [
         canActivate: [adminGuard],
         loadComponent: () =>
           import('./features/admin/profiles/profile-list/profile-list.component').then((m) => m.ProfileListComponent),
+      },
+      {
+        path: 'admin/master-data',
+        canActivate: [adminGuard],
+        loadComponent: () =>
+          import('./features/admin/master-data/master-data.component').then((m) => m.MasterDataComponent),
       },
       {
         path: 'admin/menu-options',

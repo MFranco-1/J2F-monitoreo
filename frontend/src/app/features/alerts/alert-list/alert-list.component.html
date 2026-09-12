@@ -39,7 +39,9 @@
           <th>Título</th>
           <th>Prioridad</th>
           <th>Estado</th>
-          <th>Servicio</th>
+          <th>Servicio / Ubicación</th>
+          <th>Cliente / Vehículo</th>
+          <th>Evento / GPS</th>
           <th>Asignado a</th>
           <th>Fecha Apertura</th>
           <th>Acciones</th>
@@ -63,7 +65,15 @@
               {{ alert.state?.name || '—' }}
             </span>
           </td>
-          <td class="text-muted">{{ alert.service_type || '—' }}</td>
+          <td class="text-muted">{{ alert.service_type || 'No especificado' }}<br><small>{{ alert.location || 'No especificado' }}</small></td>
+          <td>
+            <span>{{ alert.client?.business_name || 'No especificado' }}</span><br>
+            <small class="text-muted">{{ alert.vehicle?.plate || 'No especificado' }}<ng-container *ngIf="alert.vehicle"> · {{ alert.vehicle.brand || '' }} {{ alert.vehicle.model || '' }}</ng-container></small>
+          </td>
+          <td>
+            <span>{{ alert.event_type?.name || 'No especificado' }}</span><br>
+            <small class="text-muted">{{ alert.gps_device?.imei || 'No especificado' }}</small>
+          </td>
           <td>
             <span *ngIf="alert.current_assignee">{{ alert.current_assignee.full_name }}</span>
             <button
@@ -83,7 +93,7 @@
           </td>
         </tr>
         <tr *ngIf="alerts().length === 0">
-          <td colspan="8">
+          <td colspan="10">
             <div class="empty-state"><p>No hay alertas con los filtros aplicados</p></div>
           </td>
         </tr>
@@ -108,6 +118,14 @@
     </div>
     <div class="modal-body">
       <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()"> {{ errorMsg() }}</div>
+      <div class="form-row">
+        <div class="form-group"><label for="a-client">Cliente</label><select id="a-client" class="form-control" [(ngModel)]="newForm.client_id" (change)="onClientChange()"><option [ngValue]="null">No especificado</option><option *ngFor="let item of clients()" [ngValue]="item.id">{{item.business_name}}</option></select></div>
+        <div class="form-group"><label for="a-vehicle">Vehículo</label><select id="a-vehicle" class="form-control" [(ngModel)]="newForm.vehicle_id" (change)="onVehicleChange()" [disabled]="!newForm.client_id"><option [ngValue]="null">No especificado</option><option *ngFor="let item of vehicles()" [ngValue]="item.id">{{item.plate}} · {{item.brand}} {{item.model}}</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label for="a-device">Dispositivo GPS</label><select id="a-device" class="form-control" [(ngModel)]="newForm.gps_device_id" [disabled]="!newForm.vehicle_id"><option [ngValue]="null">No especificado</option><option *ngFor="let item of devices()" [ngValue]="item.id">{{item.imei}} · {{item.model}}</option></select></div>
+        <div class="form-group"><label for="a-event">Tipo de evento</label><select id="a-event" class="form-control" [(ngModel)]="newForm.event_type_id" (change)="onEventTypeChange()"><option [ngValue]="null">No especificado</option><option *ngFor="let item of eventTypes()" [ngValue]="item.id">{{item.name}}</option></select></div>
+      </div>
       <div class="form-group">
         <label for="a-title">Título *</label>
         <input id="a-title" class="form-control" [(ngModel)]="newForm.title" placeholder="Descripción breve de la alerta" />
