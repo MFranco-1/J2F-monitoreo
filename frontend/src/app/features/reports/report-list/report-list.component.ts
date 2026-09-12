@@ -31,7 +31,7 @@ export class ReportListComponent implements OnInit {
 
   readonly reportTypes = [
     { value: 'alerts_summary', label: ' Resumen de Alertas' },
-    { value: 'operator_performance', label: ' Rendimiento por Operador' },
+    { value: 'operator_performance', label: ' Rendimiento por Técnico' },
     { value: 'response_times', label: ' Tiempos de Respuesta' },
   ];
 

@@ -24,8 +24,14 @@ export class AssignmentService {
     });
   }
 
-  autoAssign(alertId: number): Observable<{ assignment: Assignment; operator: any; message: string }> {
-    return this.http.post<{ assignment: Assignment; operator: any; message: string }>(
+  getTechnicians(): Observable<{ technicians: { id: number; full_name: string; active_assignments_count: number }[] }> {
+    return this.http.get<{ technicians: { id: number; full_name: string; active_assignments_count: number }[] }>(
+      `${this.BASE}/assignments/technicians`
+    );
+  }
+
+  autoAssign(alertId: number): Observable<{ assignment: Assignment; technician: any; message: string }> {
+    return this.http.post<{ assignment: Assignment; technician: any; message: string }>(
       `${this.BASE}/assignments/auto-assign`, { alert_id: alertId }
     );
   }

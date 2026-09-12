@@ -60,11 +60,11 @@
         <!-- Auto-asignar -->
         <button
           class="btn-primary"
-          (click)="autoAssign()" [disabled]="!auth.isAdmin() || !!alert()!.current_assignee"
+          (click)="autoAssign()" [disabled]="!auth.canAssign() || !!alert()!.current_assignee"
           *ngIf="!alert()?.current_assignee && alert()?.state?.name !== 'Cerrado'"
           id="btn-auto-assign-detail"
         >
-           Auto-asignar Operador
+           Auto-asignar Técnico
         </button>
       </div>
 

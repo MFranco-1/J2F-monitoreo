@@ -173,7 +173,9 @@ test('login conserva el perfil único sin asumir que Activo tiene id 1', () => {
       profile: { id: 4, name: 'Administrador', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } } } });
   assert.equal(t.auth.currentUser().profile.id, 4);
   assert.equal(t.auth.isAdmin(), true);
+  assert.equal(t.auth.isTechnician(), false);
   assert.equal(t.auth.isOperator(), false);
+  assert.equal(t.auth.canAssign(), true);
   assert.equal(t.auth.roleNames(), 'Administrador');
 });
 
@@ -186,14 +188,43 @@ test('un perfil inactivo no concede permisos en la interfaz', () => {
     user: { id: 3, email: 'test@example.invalid', full_name: 'Prueba',
       profile: { id: 1, name: 'Administrador', state_id: 29, state: { id: 29, name: 'Inactivo', type: 'user' } } } });
   assert.equal(t.auth.isAdmin(), false);
+  assert.equal(t.auth.isTechnician(), false);
   assert.equal(t.auth.isOperator(), false);
+  assert.equal(t.auth.canAssign(), false);
 });
 
 test('el perfil Técnico se reconoce al restaurar una sesión', () => {
   const t = setup();
   assert.equal(t.auth.isAuthenticated(), true);
-  assert.equal(t.auth.isOperator(), true);
+  assert.equal(t.auth.isTechnician(), true);
+  assert.equal(t.auth.isOperator(), false);
+  assert.equal(t.auth.canAssign(), false);
   assert.equal(t.auth.isAdmin(), false);
+});
+
+test('el perfil Operador asigna alertas pero no actúa como Técnico', () => {
+  const t = setup();
+  t.auth.login('operador', 'clave').subscribe();
+  const profile = { id: 3, name: 'Operador', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } };
+  t.success(0, { access_token: 'operator-access', refresh_token: 'operator-refresh',
+    requires_profile_selection: false, profiles: [profile],
+    user: { id: 4, email: 'operator@example.invalid', full_name: 'Operador Prueba', profile, profiles: [profile] } });
+  assert.equal(t.auth.isOperator(), true);
+  assert.equal(t.auth.isTechnician(), false);
+  assert.equal(t.auth.canAssign(), true);
+});
+
+test('el perfil Supervisor puede asignar sin actuar como Técnico', () => {
+  const t = setup();
+  t.auth.login('supervisor', 'clave').subscribe();
+  const profile = { id: 4, name: 'Supervisor', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } };
+  t.success(0, { access_token: 'supervisor-access', refresh_token: 'supervisor-refresh',
+    requires_profile_selection: false, profiles: [profile],
+    user: { id: 5, email: 'supervisor@example.invalid', full_name: 'Supervisor Prueba', profile, profiles: [profile] } });
+  assert.equal(t.auth.isSupervisor(), true);
+  assert.equal(t.auth.isOperator(), false);
+  assert.equal(t.auth.isTechnician(), false);
+  assert.equal(t.auth.canAssign(), true);
 });
 
 test('una sesión incompleta anterior requiere iniciar sesión de nuevo', () => {
@@ -264,7 +295,9 @@ test('login multiperfil conserva solo el token temporal y permite seleccionar en
   t.success(1, { access_token: 'final', refresh_token: 'refresh-final', requires_profile_selection: false,
     profiles, user: { id: 3, email: 'multi@example.invalid', full_name: 'Usuario Multi', profile: profiles[1], profiles } });
   assert.equal(t.auth.currentUser().profile.id, 2);
-  assert.equal(t.auth.isOperator(), true);
+  assert.equal(t.auth.isTechnician(), true);
+  assert.equal(t.auth.isOperator(), false);
+  assert.equal(t.auth.canAssign(), false);
 });
 
 test('la interfaz requerida está integrada sin pantalla ni modal de selección adicional', () => {
@@ -280,6 +313,7 @@ test('la interfaz requerida está integrada sin pantalla ni modal de selección 
   assert.match(users, /type="checkbox"/);
   assert.match(alerts, /onClientChange|gps_device_id|event_type_id/);
   assert.match(alerts, /Todos los clientes|filter-client|filter-vehicle/);
+  assert.match(alerts, /auth\.canAssign\(\)|assignment-technician|Reasignar/);
   assert.match(routes, /path: 'master-data'[\s\S]*activeProfileGuard/);
   const masters = fs.readFileSync(path.join(root, 'src/app/features/admin/master-data/master-data.component.html'), 'utf8');
   assert.match(masters, /\*ngIf="auth\.isAdmin\(\)"/);

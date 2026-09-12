@@ -124,12 +124,12 @@ class RegressionTests(unittest.TestCase):
         self.login("test1@example.invalid", "Changed-password!")
 
     def test_auto_assignment_selects_technician_once(self):
-        operator = self.user()
+        technician = self.user()
         self.user(2, active=False)
         alert_id = self.alert()
         first = self.client.post("/api/assignments/auto-assign", headers=self.admin, json={"alert_id": alert_id})
         self.assertEqual(first.status_code, 201, first.get_json())
-        self.assertEqual(first.get_json()["operator"]["id"], operator)
+        self.assertEqual(first.get_json()["technician"]["id"], technician)
         second = self.client.post("/api/assignments/auto-assign", headers=self.admin, json={"alert_id": alert_id})
         self.assertEqual(second.status_code, 409)
         with self.app.app_context():
@@ -138,6 +138,46 @@ class RegressionTests(unittest.TestCase):
     def test_auto_assignment_does_not_fall_back_to_admin(self):
         response = self.client.post("/api/assignments/auto-assign", headers=self.admin, json={"alert_id": self.alert()})
         self.assertEqual(response.status_code, 409)
+
+    def test_operator_assigns_alerts_only_to_technicians(self):
+        technician_id = self.user()
+        operator_id = self.user(2, role="Operador")
+        operator_headers = self.headers(self.login("test2@example.invalid")["access_token"])
+
+        available = self.client.get("/api/assignments/technicians", headers=operator_headers)
+        self.assertEqual(available.status_code, 200, available.get_json())
+        self.assertEqual([item["id"] for item in available.get_json()["technicians"]], [technician_id])
+
+        manual = self.client.post("/api/assignments/", headers=operator_headers,
+                                  json={"alert_id": self.alert(), "user_id": technician_id})
+        self.assertEqual(manual.status_code, 201, manual.get_json())
+
+        invalid_target = self.client.post("/api/assignments/", headers=operator_headers,
+                                          json={"alert_id": self.alert(), "user_id": operator_id})
+        self.assertEqual(invalid_target.status_code, 400, invalid_target.get_json())
+
+        automatic = self.client.post("/api/assignments/auto-assign", headers=operator_headers,
+                                     json={"alert_id": self.alert()})
+        self.assertEqual(automatic.status_code, 201, automatic.get_json())
+        self.assertEqual(automatic.get_json()["technician"]["id"], technician_id)
+
+        technician_headers = self.headers(self.login("test1@example.invalid")["access_token"])
+        forbidden = self.client.post("/api/assignments/auto-assign", headers=technician_headers,
+                                     json={"alert_id": self.alert()})
+        self.assertEqual(forbidden.status_code, 403, forbidden.get_json())
+
+    def test_supervisor_can_assign_but_cannot_attend_as_technician(self):
+        technician_id = self.user()
+        self.user(2, role="Supervisor")
+        supervisor_headers = self.headers(self.login("test2@example.invalid")["access_token"])
+        alert_id = self.alert()
+
+        assigned = self.client.post("/api/assignments/", headers=supervisor_headers,
+                                    json={"alert_id": alert_id, "user_id": technician_id})
+        self.assertEqual(assigned.status_code, 201, assigned.get_json())
+        forbidden = self.client.put(f"/api/alerts/{alert_id}", headers=supervisor_headers,
+                                    json={"state_name": "Cerrado"})
+        self.assertEqual(forbidden.status_code, 403, forbidden.get_json())
 
     def test_reassignment_finishes_previous_assignment(self):
         a, b = self.user(), self.user(2)
@@ -182,7 +222,7 @@ class RegressionTests(unittest.TestCase):
             self.assertEqual(entry.user_id, 1)
             self.assertEqual(entry.profile_id, self.admin_profile)
 
-    def test_other_operator_cannot_edit_attention(self):
+    def test_other_technician_cannot_edit_attention(self):
         a = self.user()
         self.user(2)
         headers = self.headers(self.login("test2@example.invalid")["access_token"])
@@ -191,7 +231,7 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(self.client.put(f"/api/assignments/{assignment}", headers=headers, json={"notes": "Cambio"}).status_code, 403)
         self.assertEqual(self.client.put(f"/api/alerts/{alert_id}", headers=headers, json={"state_name": "Cerrado"}).status_code, 403)
 
-    def test_assigned_operator_can_close_own_alert(self):
+    def test_assigned_technician_can_close_own_alert(self):
         user_id = self.user()
         headers = self.headers(self.login("test1@example.invalid")["access_token"])
         alert_id = self.alert()

@@ -56,7 +56,7 @@ export class AlertDetailComponent implements OnInit {
   }
 
   get canAttend(): boolean {
-    return this.auth.isAdmin() || (this.auth.isOperator()
+    return this.auth.isAdmin() || (this.auth.isTechnician()
       && this.alert()?.current_assignee?.id === this.auth.currentUser()?.id);
   }
 

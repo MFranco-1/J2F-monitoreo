@@ -60,6 +60,11 @@ La pantalla de alertas muestra todo por defecto. El filtro de cliente carga sus
 vehículos y limita las alertas; el filtro de vehículo limita el resultado a esa unidad.
 Seleccionar `Todos los clientes` restaura la consulta general.
 
+El Supervisor y el Operador revisan las alertas y las asignan o reasignan a los
+Técnicos, de forma manual o automática. El Técnico atiende únicamente sus alertas
+asignadas, registra notas y cambia su estado. El Administrador conserva esas
+capacidades para casos excepcionales.
+
 ## Pruebas
 
 ```powershell

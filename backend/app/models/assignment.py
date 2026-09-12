@@ -1,6 +1,6 @@
 """
 models/assignment.py - Modelo Asignación (Assignment)
-Registra qué operador atiende qué alerta y sus notas de atención.
+Registra qué técnico atiende qué alerta y sus notas de atención.
 """
 
 from app.datetime_utils import utcnow, as_utc_naive, iso_utc

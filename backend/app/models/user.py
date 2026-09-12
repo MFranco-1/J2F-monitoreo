@@ -1,6 +1,6 @@
 """
 models/user.py - Modelo Usuario (User)
-Representa a los operadores y administradores del sistema.
+Representa a los usuarios y sus perfiles dentro del sistema.
 """
 
 from app.datetime_utils import utcnow, as_utc_naive, iso_utc
@@ -48,7 +48,7 @@ class User(db.Model):
 
     @property
     def active_assignments_count(self) -> int:
-        """Número de alertas activas asignadas a este operador."""
+        """Número de alertas activas asignadas a este técnico."""
         from app.models.assignment import Assignment
         from app.models.alert import Alert
         return (

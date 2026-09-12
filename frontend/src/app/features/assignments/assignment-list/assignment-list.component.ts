@@ -75,7 +75,7 @@ export class AssignmentListComponent implements OnInit {
   }
 
   canEdit(a: Assignment): boolean {
-    return this.auth.isAdmin() || (this.auth.isOperator() && a.user_id === this.auth.currentUser()?.id);
+    return this.auth.isAdmin() || (this.auth.isTechnician() && a.user_id === this.auth.currentUser()?.id);
   }
 
   completeAssignment(a: Assignment): void {

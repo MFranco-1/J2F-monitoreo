@@ -3,7 +3,7 @@ views/assignment_routes.py - Endpoints REST para Asignaciones
 """
 
 from flask import Blueprint, request
-from app.security import admin_required
+from app.security import assignment_manager_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers import assignment_controller
 
@@ -27,9 +27,9 @@ def get_assignments():
 
 @assignment_bp.post("/")
 @jwt_required()
-@admin_required
+@assignment_manager_required
 def create_assignment():
-    """POST /api/assignments — Asignación manual de alerta a operador."""
+    """POST /api/assignments - Asignación manual de alerta a técnico."""
     data = request.get_json(silent=True) or {}
     current_user_id = int(get_jwt_identity())
     return assignment_controller.create_assignment(data, current_user_id)
@@ -37,16 +37,24 @@ def create_assignment():
 
 @assignment_bp.post("/auto-assign")
 @jwt_required()
-@admin_required
+@assignment_manager_required
 def auto_assign():
     """
     POST /api/assignments/auto-assign
     Body: { "alert_id": <int> }
-    Asigna automáticamente al operador con menor carga.
+    Asigna automáticamente al técnico con menor carga.
     """
     data = request.get_json(silent=True) or {}
     current_user_id = int(get_jwt_identity())
     return assignment_controller.auto_assign(data, current_user_id)
+
+
+@assignment_bp.get("/technicians")
+@jwt_required()
+@assignment_manager_required
+def get_technicians():
+    """GET /api/assignments/technicians - Técnicos activos disponibles."""
+    return assignment_controller.get_available_technicians()
 
 
 @assignment_bp.put("/<int:assignment_id>")

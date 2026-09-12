@@ -125,7 +125,7 @@ def update_alert(alert_id: int, data: dict, current_user_id: int) -> tuple:
     from app.controllers.assignment_controller import locked_alert
     alert = locked_alert(alert_id)
     if not may_attend(alert, current_user()):
-        return jsonify({"error": "Solo el operador asignado o un administrador puede modificar la alerta"}), 403
+        return jsonify({"error": "Solo el técnico asignado o un administrador puede modificar la alerta"}), 403
     changes = {}
     for field, limit in [("title", 200), ("description", None), ("service_type", 100), ("location", 200)]:
         if field in data:

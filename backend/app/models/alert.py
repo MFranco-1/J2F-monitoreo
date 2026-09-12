@@ -57,7 +57,7 @@ class Alert(db.Model):
 
     @property
     def current_assignee(self):
-        """Retorna el operador actualmente asignado a esta alerta."""
+        """Retorna el técnico actualmente asignado a esta alerta."""
         latest = self.assignments.filter_by(completed_at=None).order_by(
             db.desc("assigned_at"), db.desc("id")
         ).first()

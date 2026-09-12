@@ -27,6 +27,7 @@ export class AlertListComponent implements OnInit {
   loading = signal(true);
   saving = signal(false);
   showNewModal = signal(false);
+  showAssignmentModal = signal(false);
   successMsg = signal('');
   errorMsg = signal('');
   totalPages = signal(1);
@@ -35,6 +36,9 @@ export class AlertListComponent implements OnInit {
   formVehicles = signal<Vehicle[]>([]);
   devices = signal<GpsDevice[]>([]);
   eventTypes = signal<EventType[]>([]);
+  technicians = signal<{ id: number; full_name: string; active_assignments_count: number }[]>([]);
+  assignmentAlert = signal<Alert | null>(null);
+  assignmentForm = { user_id: null as number | null, notes: '' };
 
   filters: AlertFilters = { page: 1, per_page: 20 };
 
@@ -49,6 +53,12 @@ export class AlertListComponent implements OnInit {
     this.masterData.clients(true).subscribe(data => this.clients.set(data['clients'] || []));
     this.masterData.eventTypes(true).subscribe(data => this.eventTypes.set(
       (data['event_types'] || []).filter(item => item.generates_alert)));
+    if (this.auth.canAssign()) {
+      this.assignmentService.getTechnicians().subscribe({
+        next: data => this.technicians.set(data.technicians || []),
+        error: () => this.technicians.set([]),
+      });
+    }
   }
 
   loadAlerts(): void {
@@ -141,6 +151,42 @@ export class AlertListComponent implements OnInit {
         setTimeout(() => this.successMsg.set(''), 4000);
       },
       error: (err) => this.errorMsg.set(err?.error?.error || 'Error en asignación'),
+    });
+  }
+
+  openAssignmentModal(alert: Alert): void {
+    this.assignmentAlert.set(alert);
+    this.assignmentForm = { user_id: alert.current_assignee?.id ?? null, notes: '' };
+    this.errorMsg.set('');
+    this.showAssignmentModal.set(true);
+  }
+
+  closeAssignmentModal(): void {
+    if (this.saving()) return;
+    this.showAssignmentModal.set(false);
+    this.assignmentAlert.set(null);
+    this.errorMsg.set('');
+  }
+
+  assignTechnician(): void {
+    const alert = this.assignmentAlert();
+    if (!alert || !this.assignmentForm.user_id || this.saving()) {
+      this.errorMsg.set('Selecciona un técnico');
+      return;
+    }
+    this.saving.set(true);
+    this.assignmentService.createAssignment(alert.id, this.assignmentForm.user_id, this.assignmentForm.notes).subscribe({
+      next: ({ message }) => {
+        this.saving.set(false);
+        this.successMsg.set(message);
+        this.closeAssignmentModal();
+        this.loadAlerts();
+        setTimeout(() => this.successMsg.set(''), 4000);
+      },
+      error: err => {
+        this.saving.set(false);
+        this.errorMsg.set(err?.error?.error || 'Error al asignar la alerta');
+      },
     });
   }
 

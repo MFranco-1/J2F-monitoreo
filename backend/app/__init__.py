@@ -136,6 +136,18 @@ def _seed_initial_data() -> None:
     db.session.add(technician_profile)
     db.session.flush()
 
+    operator_profile = Profile(
+        name="Operador", description="Revisión y asignación de alertas", state_id=states[0].id
+    )
+    db.session.add(operator_profile)
+    db.session.flush()
+
+    supervisor_profile = Profile(
+        name="Supervisor", description="Supervisión y asignación de alertas", state_id=states[0].id
+    )
+    db.session.add(supervisor_profile)
+    db.session.flush()
+
     # Usuario administrador por defecto
     admin_user = User(
         dni="00000000",
@@ -182,6 +194,11 @@ def _seed_initial_data() -> None:
         if option.url in {"/dashboard", "/alerts", "/assignments", "/history"}:
             option.profiles.append(technician_profile)
             option.parent.profiles.append(technician_profile) if technician_profile not in option.parent.profiles else None
+            option.profiles.append(operator_profile)
+            option.parent.profiles.append(operator_profile) if operator_profile not in option.parent.profiles else None
+        if option.url in {"/dashboard", "/alerts", "/assignments", "/history", "/reports", "/master-data"}:
+            option.profiles.append(supervisor_profile)
+            option.parent.profiles.append(supervisor_profile) if supervisor_profile not in option.parent.profiles else None
     event_seed = [
         ("SOS", "Botón de pánico o SOS", "critical", True),
         ("SPEEDING", "Exceso de velocidad", "high", True),

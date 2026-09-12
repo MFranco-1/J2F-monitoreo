@@ -44,18 +44,34 @@ def is_admin(user):
     return bool(account_is_active(user) and profile and role_name(profile.name) == "administrador")
 
 
-def is_operator(user, profile=None):
+def _has_role(user, accepted_roles, profile=None):
     if not account_is_active(user):
         return False
     if profile is not None:
-        return profile in active_profiles(user) and role_name(profile.name) in {"tecnico", "operador"}
+        return profile in active_profiles(user) and role_name(profile.name) in accepted_roles
     actor = current_user()
     if not actor or actor.id != user.id:
-        return any(role_name(item.name) in {"tecnico", "operador"} for item in active_profiles(user))
+        return any(role_name(item.name) in accepted_roles for item in active_profiles(user))
     selected = current_profile(user)
     if selected:
-        return role_name(selected.name) in {"tecnico", "operador"}
-    return any(role_name(item.name) in {"tecnico", "operador"} for item in active_profiles(user))
+        return role_name(selected.name) in accepted_roles
+    return any(role_name(item.name) in accepted_roles for item in active_profiles(user))
+
+
+def is_technician(user, profile=None):
+    return _has_role(user, {"tecnico"}, profile)
+
+
+def is_operator(user, profile=None):
+    return _has_role(user, {"operador"}, profile)
+
+
+def is_supervisor(user, profile=None):
+    return _has_role(user, {"supervisor"}, profile)
+
+
+def can_assign(user):
+    return bool(is_admin(user) or is_supervisor(user) or is_operator(user))
 
 
 def current_user():
@@ -79,8 +95,17 @@ def admin_required(fn):
     return wrapped
 
 
+def assignment_manager_required(fn):
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        if not can_assign(current_user()):
+            return jsonify({"error": "Esta operación requiere el perfil Supervisor, Operador o Administrador"}), 403
+        return fn(*args, **kwargs)
+    return wrapped
+
+
 def may_attend(alert, user):
     if is_admin(user):
         return True
     assignee = alert.current_assignee
-    return bool(is_operator(user) and assignee and assignee.id == user.id)
+    return bool(is_technician(user) and assignee and assignee.id == user.id)

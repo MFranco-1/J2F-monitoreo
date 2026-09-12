@@ -6,7 +6,7 @@
   </div>
 
   <div class="alert-banner alert-success" *ngIf="successMsg()"> {{ successMsg() }}</div>
-  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg() && !showNewModal()"> {{ errorMsg() }}</div>
+  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg() && !showNewModal() && !showAssignmentModal()"> {{ errorMsg() }}</div>
 
   <!-- Toolbar y Filtros -->
   <div class="toolbar">
@@ -85,14 +85,15 @@
           </td>
           <td>
             <span *ngIf="alert.current_assignee">{{ alert.current_assignee.full_name }}</span>
-            <button
-              *ngIf="!alert.current_assignee && alert.state?.name !== 'Cerrado'"
-              class="btn-secondary btn-sm"
-              [id]="'btn-auto-assign-' + alert.id"
-              (click)="autoAssign(alert.id)" [disabled]="!auth.isAdmin() || !!alert.current_assignee"
-            >
-               Auto-asignar
-            </button>
+            <div class="action-buttons" *ngIf="auth.canAssign() && alert.state?.name !== 'Cerrado'">
+              <button class="btn-secondary btn-sm" [id]="'btn-assign-' + alert.id" (click)="openAssignmentModal(alert)">
+                {{ alert.current_assignee ? 'Reasignar' : 'Asignar' }}
+              </button>
+              <button *ngIf="!alert.current_assignee" class="btn-secondary btn-sm"
+                [id]="'btn-auto-assign-' + alert.id" (click)="autoAssign(alert.id)">
+                Auto-asignar
+              </button>
+            </div>
           </td>
           <td class="text-muted">{{ alert.opened_at | date:'dd/MM/yy HH:mm' }}</td>
           <td>
@@ -115,6 +116,39 @@
     <button class="btn-secondary btn-sm" (click)="prevPage()" [disabled]="filters.page === 1">← Anterior</button>
     <span>Página {{ filters.page }} / {{ totalPages() }}</span>
     <button class="btn-secondary btn-sm" (click)="nextPage()" [disabled]="filters.page === totalPages()">Siguiente →</button>
+  </div>
+</div>
+
+<!-- Modal Asignar Técnico -->
+<div class="modal-backdrop" *ngIf="showAssignmentModal()" (click)="closeAssignmentModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="assignment-modal-title" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2 id="assignment-modal-title">Asignar alerta a un Técnico</h2>
+      <button class="modal-close" aria-label="Cerrar" (click)="closeAssignmentModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()">{{ errorMsg() }}</div>
+      <div class="form-group">
+        <label for="assignment-technician">Técnico *</label>
+        <select id="assignment-technician" class="form-control" [(ngModel)]="assignmentForm.user_id">
+          <option [ngValue]="null">Seleccionar técnico</option>
+          <option *ngFor="let technician of technicians()" [ngValue]="technician.id">
+            {{ technician.full_name }} · {{ technician.active_assignments_count }} activas
+          </option>
+        </select>
+        <small class="text-muted" *ngIf="technicians().length === 0">No hay técnicos activos disponibles.</small>
+      </div>
+      <div class="form-group">
+        <label for="assignment-notes">Notas (opcional)</label>
+        <textarea id="assignment-notes" class="form-control" [(ngModel)]="assignmentForm.notes" rows="3"
+          placeholder="Indicaciones para la atención..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closeAssignmentModal()">Cancelar</button>
+      <button id="btn-confirm-assignment" class="btn-primary" (click)="assignTechnician()"
+        [disabled]="saving() || !assignmentForm.user_id">Guardar asignación</button>
+    </div>
   </div>
 </div>
 

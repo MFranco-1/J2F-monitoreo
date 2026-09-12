@@ -184,15 +184,27 @@ UPDATE menu_options child SET parent_id=parent.id,updated_at=CURRENT_TIMESTAMP
 FROM mapping x JOIN menu_options parent ON parent.url IS NULL AND LOWER(parent.name)=LOWER(x.parent_name)
 WHERE child.url=x.url AND child.parent_id IS DISTINCT FROM parent.id;
 
+WITH active_state AS (
+ SELECT id FROM states WHERE LOWER(BTRIM(name))='activo' AND type='user' ORDER BY id LIMIT 1
+)
+INSERT INTO profiles(name,description,state_id,created_at,updated_at)
+SELECT 'Operador','Revisión y asignación de alertas',id,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
+FROM active_state
+WHERE NOT EXISTS (SELECT 1 FROM profiles WHERE LOWER(BTRIM(name))='operador');
+
 WITH access(url,role) AS (VALUES
  ('/dashboard','administrador'),('/alerts','administrador'),('/assignments','administrador'),('/history','administrador'),('/reports','administrador'),
  ('/admin/users','administrador'),('/admin/profiles','administrador'),('/admin/menu-options','administrador'),('/master-data','administrador'),
- ('/dashboard','tecnico'),('/alerts','tecnico'),('/assignments','tecnico'),('/history','tecnico')
+ ('/dashboard','tecnico'),('/alerts','tecnico'),('/assignments','tecnico'),('/history','tecnico'),
+ ('/dashboard','operador'),('/alerts','operador'),('/assignments','operador'),('/history','operador'),
+ ('/dashboard','supervisor'),('/alerts','supervisor'),('/assignments','supervisor'),('/history','supervisor'),('/reports','supervisor'),('/master-data','supervisor')
 )
 INSERT INTO profile_menu_option(profile_id,menu_option_id)
 SELECT p.id,m.id FROM access a JOIN profiles p ON
  ((a.role='administrador' AND LOWER(BTRIM(p.name))='administrador') OR
-  (a.role='tecnico' AND LOWER(BTRIM(p.name)) IN ('tecnico','técnico')))
+  (a.role='tecnico' AND LOWER(BTRIM(p.name)) IN ('tecnico','técnico')) OR
+  (a.role='operador' AND LOWER(BTRIM(p.name))='operador') OR
+  (a.role='supervisor' AND LOWER(BTRIM(p.name))='supervisor'))
 JOIN menu_options m ON m.url=a.url
 ON CONFLICT (profile_id,menu_option_id) DO NOTHING;
 

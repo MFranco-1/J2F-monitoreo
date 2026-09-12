@@ -19,7 +19,10 @@ export class AuthService {
   readonly hasActiveProfile = computed(() => !!this._currentUser()?.profile && !this.requiresProfileSelection());
   readonly availableProfiles = computed(() => this._currentUser()?.profiles || []);
   readonly isAdmin = computed(() => this.hasRole('administrador'));
-  readonly isOperator = computed(() => this.hasRole('tecnico') || this.hasRole('operador'));
+  readonly isTechnician = computed(() => this.hasRole('tecnico'));
+  readonly isOperator = computed(() => this.hasRole('operador'));
+  readonly isSupervisor = computed(() => this.hasRole('supervisor'));
+  readonly canAssign = computed(() => this.isAdmin() || this.isSupervisor() || this.isOperator());
   readonly roleNames = computed(() => this._currentUser()?.profile?.name || 'Perfil pendiente');
 
   constructor(private http: HttpClient, private router: Router) {}
