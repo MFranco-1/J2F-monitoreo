@@ -204,7 +204,7 @@ def get_dashboard_metrics() -> tuple:
     }), 200
 
 
-MAP_EVENT_CODES = {"SPEEDING", "GPS_SIGNAL_LOSS", "SOS", "LOW_FUEL"}
+SIMULATED_EVENT_CODES = {"SPEEDING", "GPS_SIGNAL_LOSS", "SOS", "LOW_FUEL"}
 
 
 def get_map_vehicles(client_id_value=None) -> tuple:
@@ -227,9 +227,7 @@ def get_map_vehicles(client_id_value=None) -> tuple:
         device = vehicle.gps_devices.join(State).filter(State.name == "Activo").order_by(GpsDevice.id).first()
         open_events_query = (
             Alert.query.join(State, Alert.state_id == State.id)
-            .join(EventType, Alert.event_type_id == EventType.id)
-            .filter(Alert.vehicle_id == vehicle.id, State.name != "Cerrado",
-                    EventType.code.in_(MAP_EVENT_CODES))
+            .filter(Alert.vehicle_id == vehicle.id, State.name != "Cerrado")
         )
         if is_technician(actor) and not can_view_all_operations(actor):
             open_events_query = open_events_query.filter(
@@ -257,21 +255,32 @@ def get_map_vehicles(client_id_value=None) -> tuple:
                 "alert_id": last_fuel_confirmation.alert_id,
                 "timestamp": last_fuel_confirmation.to_dict()["timestamp"],
             } if last_fuel_confirmation else None),
-            "open_events": [{"alert_id": item.id, "code": item.event_type.code,
-                             "name": item.event_type.name, "priority": item.priority,
-                             "can_coordinate": may_attend(item, actor),
-                             "fuel_status": _fuel_status(item),
-                             "fuel_workflow": _fuel_workflow(item)}
-                            for item in open_events],
+            "open_events": [_map_open_event(item, actor) for item in open_events],
         })
     return jsonify({"vehicles": vehicles}), 200
+
+
+def _map_open_event(alert, actor):
+    """Serializa cualquier alerta abierta sin tratarla como evento simulable."""
+    code = alert.event_type.code if alert.event_type else None
+    is_low_fuel = code == "LOW_FUEL"
+    return {
+        "alert_id": alert.id,
+        "code": code,
+        "name": alert.event_type.name if alert.event_type else alert.title,
+        "priority": alert.priority,
+        "can_coordinate": may_attend(alert, actor),
+        "fuel_status": _fuel_status(alert) if is_low_fuel else "pending",
+        "fuel_workflow": (_fuel_workflow(alert) if is_low_fuel else
+                          {"coordination": None, "confirmation": None}),
+    }
 
 
 def create_map_event(data: dict, current_user_id: int) -> tuple:
     """Convierte un evento cartográfico simulado en una alerta persistente."""
     vehicle_id = integer(data.get("vehicle_id"), "vehicle_id")
     event_code = text_value(data, "event_code", required=True, limit=50)
-    if event_code not in MAP_EVENT_CODES:
+    if event_code not in SIMULATED_EVENT_CODES:
         return jsonify({"error": "Evento de mapa no soportado"}), 400
     try:
         latitude = float(data.get("latitude"))
@@ -639,4 +648,7 @@ def _validated_relations(data):
     if event_type and not event_type.generates_alert:
         from werkzeug.exceptions import BadRequest
         raise BadRequest("El tipo de evento seleccionado no genera alertas")
+    if event_type and event_type.code == "LOW_FUEL" and (not client or not vehicle):
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("Combustible bajo requiere seleccionar un cliente y su vehículo")
     return vehicle, device, event_type

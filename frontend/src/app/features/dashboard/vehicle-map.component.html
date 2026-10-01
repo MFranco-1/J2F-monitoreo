@@ -14,7 +14,7 @@
     <div class="fleet-map-shell"><div id="fleet-map" aria-label="Mapa interactivo de vehículos"></div><div class="map-status" *ngIf="loading()">Cargando vehículos...</div><div class="map-legend"><span></span> Vehículo con alerta abierta · trazos discontinuos: recorrido simulado</div></div>
     <aside class="vehicle-panel">
       <ng-container *ngIf="selectedVehicle() as vehicle; else noVehicle">
-        <div class="vehicle-panel-heading"><div><span class="panel-label">Vehículo</span><strong class="vehicle-plate">{{ vehicle.plate }}</strong></div><span class="status-pill" [class.alert]="vehicle.open_events.length">{{ vehicle.open_events.length ? 'Con alerta' : 'Operativo' }}</span></div>
+        <div class="vehicle-panel-heading"><div><span class="panel-label">Vehículo</span><strong class="vehicle-plate">{{ vehicle.plate }}</strong></div><span class="status-pill" [class.alert]="vehicle.open_events.length">{{ vehicleStatus(vehicle) }}</span></div>
         <div class="telemetry-grid">
           <div><span>Velocidad</span><strong>{{ positionFor(vehicle)?.speed | number:'1.0-0' }} km/h</strong></div>
           <div><span>Combustible</span><strong [class.fuel-low]="(positionFor(vehicle)?.fuel || 0) <= 10">{{ positionFor(vehicle)?.fuel | number:'1.0-0' }} %</strong></div>

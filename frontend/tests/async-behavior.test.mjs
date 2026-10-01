@@ -216,3 +216,66 @@ test('una confirmación persistida nueva corrige combustible local desactualizad
   assert.equal(component.positions.get(vehicle.id).fuelConfirmationAt,
                vehicle.fuel_confirmation.timestamp);
 });
+
+test('el formulario exige cliente y vehículo coherentes solo para LOW_FUEL', () => {
+  const payloads = [];
+  const alertService = {
+    createAlert: payload => { payloads.push({ ...payload }); return rx.of({ message: 'Creada' }); },
+    getAlerts: () => rx.of({ alerts: [], pages: 1 }),
+  };
+  injections = [auth(true), alertService, {}, {}];
+  const component = new AlertListComponent();
+  component.eventTypes.set([
+    { id: 1, code: 'LOW_FUEL', default_priority: 'high' },
+    { id: 2, code: 'POWER_CUT', default_priority: 'high' },
+  ]);
+  component.newForm = { title: 'Combustible', event_type_id: 1,
+    client_id: null, vehicle_id: null };
+  component.createAlert();
+  assert.equal(payloads.length, 0);
+  assert.match(component.errorMsg(), /cliente y un vehículo válido/i);
+
+  component.newForm.client_id = 10;
+  component.newForm.vehicle_id = 20;
+  component.formVehicles.set([{ id: 20, client_id: 11 }]);
+  component.createAlert();
+  assert.equal(payloads.length, 0);
+
+  component.formVehicles.set([{ id: 20, client_id: 10 }]);
+  component.createAlert();
+  assert.equal(payloads.length, 1);
+
+  component.newForm = { title: 'Corte general', event_type_id: 2,
+    client_id: null, vehicle_id: null };
+  component.createAlert();
+  assert.equal(payloads.length, 2);
+});
+
+test('Datos Maestros conserva el mensaje del backend al bloquear una desactivación', () => {
+  const message = 'Completa primero el abastecimiento de la alerta #25 antes de desactivar el vehículo';
+  const service = { update: () => rx.throwError(() => ({ error: { error: message } })) };
+  injections = [service, {}, auth(true)];
+  const component = new MasterDataComponent();
+  component.kind = 'vehicles';
+  component.editing.set({ id: 5 });
+  component.form = { state_id: 2 };
+  component.showModal.set(true);
+  component.save();
+  assert.equal(component.error(), message);
+  assert.equal(component.showModal(), true);
+});
+
+test('una alerta manual marca el vehículo y Gestionar navega a su detalle', () => {
+  const navigations = [];
+  injections = [auth(true), {}, { navigate: value => navigations.push(value) }, {
+    snapshot: { queryParamMap: { get: () => null } },
+  }];
+  const component = new VehicleMapComponent();
+  const vehicle = { id: 8, plate: 'MAN-008', client: { id: 1, business_name: 'Uno' },
+    open_events: [{ alert_id: 88, code: null, name: 'Revisión manual', priority: 'medium',
+      can_coordinate: false, fuel_status: 'pending', fuel_workflow: {} }] };
+  assert.equal(component.vehicleStatus(vehicle), 'Con alerta');
+  component.manageAlert(88);
+  assert.deepEqual(navigations, [['/alerts', 88]]);
+  assert.equal(component.vehicleStatus({ ...vehicle, open_events: [] }), 'Operativo');
+});

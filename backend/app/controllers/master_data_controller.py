@@ -156,6 +156,20 @@ def create_record(kind, data):
 
 def update_record(kind, record_id, data):
     record = MODELS[kind].query.get_or_404(record_id, description="Registro no encontrado")
+    if kind == "vehicles" and "state_id" in data:
+        requested_state = _state(data["state_id"])
+        if requested_state.name == "Inactivo" and record.state.name != "Inactivo":
+            pending_fuel = (
+                record.alerts.join(State, Alert.state_id == State.id)
+                .join(EventType, Alert.event_type_id == EventType.id)
+                .filter(State.name != "Cerrado", EventType.code == "LOW_FUEL")
+                .first()
+            )
+            if pending_fuel:
+                return jsonify({
+                    "error": ("Completa primero el abastecimiento de la alerta "
+                              f"#{pending_fuel.id} antes de desactivar el vehículo")
+                }), 409
     if (kind == "vehicles" and "client_id" in data
             and integer(data.get("client_id"), "client_id") != record.client_id
             and record.alerts.count()):

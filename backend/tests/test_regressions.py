@@ -601,6 +601,147 @@ class RegressionTests(unittest.TestCase):
             self.assertEqual(History.query.filter_by(alert_id=fuel_alert_id, action="fuel_coordinated").count(), 1)
             self.assertEqual(History.query.filter_by(alert_id=fuel_alert_id, action="fuel_confirmed").count(), 1)
 
+    def test_manual_low_fuel_requires_matching_client_and_vehicle(self):
+        with self.app.app_context():
+            from app.models.master_data import EventType
+            low_fuel_id = EventType.query.filter_by(code="LOW_FUEL").one().id
+        customers = []
+        vehicles = []
+        for index in range(2):
+            customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
+                "document_type": "RUC", "document_number": f"2070000000{index}",
+                "business_name": f"Cliente combustible manual {index}", "state_id": self.active,
+            }).get_json()["record"]
+            customers.append(customer)
+            vehicles.append(self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+                "client_id": customer["id"], "plate": f"LFM-00{index}", "state_id": self.active,
+            }).get_json()["record"])
+
+        missing = self.client.post("/api/alerts/", headers=self.admin, json={
+            "title": "Combustible sin unidad", "event_type_id": low_fuel_id,
+        })
+        mismatched = self.client.post("/api/alerts/", headers=self.admin, json={
+            "title": "Combustible mal relacionado", "event_type_id": low_fuel_id,
+            "client_id": customers[0]["id"], "vehicle_id": vehicles[1]["id"],
+        })
+        valid = self.client.post("/api/alerts/", headers=self.admin, json={
+            "title": "Combustible relacionado", "event_type_id": low_fuel_id,
+            "client_id": customers[0]["id"], "vehicle_id": vehicles[0]["id"],
+        })
+        compatible_manual = self.client.post("/api/alerts/", headers=self.admin, json={
+            "title": "Alerta general sin vehículo",
+        })
+        self.assertEqual(missing.status_code, 400, missing.get_json())
+        self.assertIn("cliente", missing.get_json()["error"].lower())
+        self.assertEqual(mismatched.status_code, 400, mismatched.get_json())
+        self.assertEqual(valid.status_code, 201, valid.get_json())
+        self.assertEqual(compatible_manual.status_code, 201, compatible_manual.get_json())
+
+        # Una alerta histórica inconsistente sigue siendo consultable; la regla
+        # nueva se aplica solo a escrituras futuras.
+        with self.app.app_context():
+            from app.models.master_data import EventType
+            open_state = State.query.filter_by(name="Abierto", type="alert").one()
+            legacy = Alert(title="Combustible histórico", priority="high", state=open_state,
+                           event_type=EventType.query.filter_by(code="LOW_FUEL").one(), created_by=1)
+            db.session.add(legacy)
+            db.session.commit()
+            legacy_id = legacy.id
+        legacy_response = self.client.get(f"/api/alerts/{legacy_id}", headers=self.admin)
+        self.assertEqual(legacy_response.status_code, 200, legacy_response.get_json())
+        self.assertIsNone(legacy_response.get_json()["alert"]["vehicle"])
+
+    def test_vehicle_with_pending_low_fuel_cannot_be_disabled_until_confirmation(self):
+        customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
+            "document_type": "RUC", "document_number": "20700000010",
+            "business_name": "Cliente baja vehículo", "state_id": self.active,
+        }).get_json()["record"]
+        vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+            "client_id": customer["id"], "plate": "OFF-001", "state_id": self.active,
+        }).get_json()["record"]
+        with self.app.app_context():
+            from app.models.master_data import EventType
+            low_fuel_id = EventType.query.filter_by(code="LOW_FUEL").one().id
+        alert_id = self.client.post("/api/alerts/", headers=self.admin, json={
+            "title": "Combustible pendiente", "event_type_id": low_fuel_id,
+            "client_id": customer["id"], "vehicle_id": vehicle["id"],
+        }).get_json()["alert"]["id"]
+
+        blocked = self.client.put(f"/api/master-data/vehicles/{vehicle['id']}", headers=self.admin,
+                                  json={"state_id": self.inactive})
+        self.assertEqual(blocked.status_code, 409, blocked.get_json())
+        self.assertIn("completa primero el abastecimiento", blocked.get_json()["error"].lower())
+        self.user(111)
+        technician = self.headers(self.login("test111@example.invalid")["access_token"])
+        self.assertEqual(self.client.put(f"/api/master-data/vehicles/{vehicle['id']}",
+            headers=technician, json={"state_id": self.inactive}).status_code, 403)
+
+        self.assertEqual(self.client.post(f"/api/alerts/{alert_id}/fuel-actions", headers=self.admin,
+            json={"action": "coordinate", "observation": "Conductor coordinado"}).status_code, 200)
+        self.assertEqual(self.client.post(f"/api/alerts/{alert_id}/fuel-actions", headers=self.admin,
+            json={"action": "confirm", "observation": "Abastecimiento comprobado"}).status_code, 200)
+        allowed = self.client.put(f"/api/master-data/vehicles/{vehicle['id']}", headers=self.admin,
+                                  json={"state_id": self.inactive})
+        self.assertEqual(allowed.status_code, 200, allowed.get_json())
+
+        other_vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+            "client_id": customer["id"], "plate": "OFF-002", "state_id": self.active,
+        }).get_json()["record"]
+        with self.app.app_context():
+            from app.models.master_data import EventType
+            power_cut_id = EventType.query.filter_by(code="POWER_CUT").one().id
+        self.assertEqual(self.client.post("/api/alerts/", headers=self.admin, json={
+            "title": "Corte pendiente", "event_type_id": power_cut_id,
+            "client_id": customer["id"], "vehicle_id": other_vehicle["id"],
+        }).status_code, 201)
+        non_fuel_allowed = self.client.put(f"/api/master-data/vehicles/{other_vehicle['id']}",
+            headers=self.admin, json={"state_id": self.inactive})
+        self.assertEqual(non_fuel_allowed.status_code, 200, non_fuel_allowed.get_json())
+
+    def test_map_returns_all_authorized_open_alerts_but_simulation_codes_stay_limited(self):
+        customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
+            "document_type": "RUC", "document_number": "20700000020",
+            "business_name": "Cliente mapa completo", "state_id": self.active,
+        }).get_json()["record"]
+        vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+            "client_id": customer["id"], "plate": "ALL-001", "state_id": self.active,
+        }).get_json()["record"]
+        with self.app.app_context():
+            from app.models.master_data import EventType
+            power_cut_id = EventType.query.filter_by(code="POWER_CUT").one().id
+        power = self.client.post("/api/alerts/", headers=self.admin, json={
+            "title": "Corte de alimentación", "event_type_id": power_cut_id,
+            "client_id": customer["id"], "vehicle_id": vehicle["id"],
+        }).get_json()["alert"]
+        manual = self.client.post("/api/alerts/", headers=self.admin, json={
+            "title": "Revisión manual de unidad", "client_id": customer["id"],
+            "vehicle_id": vehicle["id"],
+        }).get_json()["alert"]
+
+        map_vehicle = next(item for item in self.client.get(
+            "/api/alerts/map/vehicles", headers=self.admin).get_json()["vehicles"]
+            if item["id"] == vehicle["id"])
+        by_id = {item["alert_id"]: item for item in map_vehicle["open_events"]}
+        self.assertEqual(by_id[power["id"]]["code"], "POWER_CUT")
+        self.assertIsNone(by_id[manual["id"]]["code"])
+        self.assertEqual(by_id[manual["id"]]["name"], "Revisión manual de unidad")
+
+        unsupported_simulation = self.client.post("/api/alerts/map/events", headers=self.admin, json={
+            "vehicle_id": vehicle["id"], "event_code": "POWER_CUT",
+            "latitude": -12.08, "longitude": -77.05, "speed": 20,
+        })
+        self.assertEqual(unsupported_simulation.status_code, 400, unsupported_simulation.get_json())
+
+        own_id = self.user(121)
+        self.user(122)
+        self.assign(power["id"], own_id)
+        own = self.headers(self.login("test121@example.invalid")["access_token"])
+        other = self.headers(self.login("test122@example.invalid")["access_token"])
+        own_map = self.client.get("/api/alerts/map/vehicles", headers=own).get_json()["vehicles"]
+        self.assertEqual([event["alert_id"] for event in own_map[0]["open_events"]], [power["id"]])
+        self.assertEqual(self.client.get("/api/alerts/map/vehicles", headers=other)
+                         .get_json()["vehicles"], [])
+
     def test_fuel_workflow_permissions_persistence_and_duplicates(self):
         customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
             "document_type": "RUC", "document_number": "20999999993",

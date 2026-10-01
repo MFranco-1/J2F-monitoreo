@@ -70,7 +70,7 @@ export interface AlertFilters {
 
 export interface MapOpenEvent {
   alert_id: number;
-  code: 'SPEEDING' | 'GPS_SIGNAL_LOSS' | 'SOS' | 'LOW_FUEL';
+  code: string | null;
   name: string;
   priority: AlertPriority;
   can_coordinate: boolean;

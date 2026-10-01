@@ -233,6 +233,9 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   lowFuelEvent(vehicle: MapVehicle): MapOpenEvent | undefined {
     return vehicle.open_events.find(event => event.code === 'LOW_FUEL');
   }
+  vehicleStatus(vehicle: MapVehicle): 'Con alerta' | 'Operativo' {
+    return vehicle.open_events.length ? 'Con alerta' : 'Operativo';
+  }
   arrivedAtStation(vehicle: MapVehicle): boolean { return !!this.stationTrips.get(vehicle.id)?.arrived; }
   needsRouteRecovery(vehicle: MapVehicle): boolean { return this.routeRecovery.has(vehicle.id); }
   recoverUsualRoute(vehicle: MapVehicle): void {

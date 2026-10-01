@@ -101,6 +101,13 @@ export class AlertListComponent implements OnInit {
   createAlert(): void {
     if (this.saving()) return;
     if (!this.newForm.title) { this.errorMsg.set('El título es requerido'); return; }
+    if (this.isLowFuelSelected()) {
+      const vehicle = this.formVehicles().find(item => item.id === this.newForm.vehicle_id);
+      if (!this.newForm.client_id || !vehicle || vehicle.client_id !== this.newForm.client_id) {
+        this.errorMsg.set('Combustible bajo requiere seleccionar un cliente y un vehículo válido de ese cliente');
+        return;
+      }
+    }
     this.saving.set(true);
     this.alertService.createAlert(this.newForm).subscribe({
       next: ({ message }) => {
@@ -178,6 +185,10 @@ export class AlertListComponent implements OnInit {
   onEventTypeChange(): void {
     const event = this.eventTypes().find(item => item.id === this.newForm.event_type_id);
     if (event) this.newForm.priority = event.default_priority;
+  }
+
+  isLowFuelSelected(): boolean {
+    return this.eventTypes().find(item => item.id === this.newForm.event_type_id)?.code === 'LOW_FUEL';
   }
 
   autoAssign(alertId: number): void {
