@@ -20,21 +20,28 @@ export class HistoryListComponent implements OnInit {
   errorMsg = signal('');
   total = signal(0);
   totalPages = signal(1);
+  private historyRequestId = 0;
 
   filters: any = { page: 1, per_page: 30 };
 
   ngOnInit(): void { this.loadHistory(); }
 
   loadHistory(): void {
+    const requestId = ++this.historyRequestId;
     this.loading.set(true);
     this.assignmentService.getGlobalHistory(this.filters).subscribe({
       next: ({ history, total, pages }) => {
+        if (requestId !== this.historyRequestId) return;
         this.history.set(history);
         this.total.set(total);
         this.totalPages.set(pages);
         this.loading.set(false);
       },
-      error: (err) => { this.loading.set(false); this.errorMsg.set(err?.error?.error || 'No se pudo cargar el historial'); },
+      error: (err) => {
+        if (requestId !== this.historyRequestId) return;
+        this.loading.set(false);
+        this.errorMsg.set(err?.error?.error || 'No se pudo cargar el historial');
+      },
     });
   }
 

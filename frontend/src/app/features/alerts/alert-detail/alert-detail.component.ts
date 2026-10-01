@@ -62,8 +62,11 @@ export class AlertDetailComponent implements OnInit {
 
   get transitions(): string[] {
     const current = this.alert()?.state?.name ?? 'Abierto';
-    return this.availableTransitions[current] ?? [];
+    const transitions = this.availableTransitions[current] ?? [];
+    return this.isFuelAlert ? transitions.filter(state => state !== 'Cerrado') : transitions;
   }
+
+  get isFuelAlert(): boolean { return this.alert()?.event_type?.code === 'LOW_FUEL'; }
 
   changeState(): void {
     if (!this.newStateName) { this.errorMsg.set('Selecciona un estado'); return; }

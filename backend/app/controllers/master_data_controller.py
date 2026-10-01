@@ -5,11 +5,15 @@ from sqlalchemy import func
 from app import db
 from app.models.state import State
 from app.models.master_data import Client, Vehicle, GpsDevice, EventType
+from app.models.alert import Alert
+from app.models.assignment import Assignment
+from app.security import current_user, can_view_all_operations, is_technician
 from app.validation import text_value, integer, user_state, priority_value, validate_email
 
 
 MODELS = {"clients": Client, "vehicles": Vehicle, "gps-devices": GpsDevice,
           "event-types": EventType}
+PROTECTED_EVENT_CODES = {"LOW_FUEL", "SOS", "SPEEDING", "GPS_SIGNAL_LOSS"}
 
 
 def _dict(kind, record):
@@ -29,6 +33,9 @@ def _state(value):
 def list_records(kind, filters):
     model = MODELS[kind]
     query = model.query
+    query, error = _scoped_query(kind, query)
+    if error:
+        return error
     if filters.get("active") == "true":
         query = query.join(State).filter(State.name == "Activo")
     if kind == "vehicles" and filters.get("client_id"):
@@ -40,8 +47,28 @@ def list_records(kind, filters):
 
 
 def get_record(kind, record_id):
-    record = MODELS[kind].query.get_or_404(record_id, description="Registro no encontrado")
+    query, error = _scoped_query(kind, MODELS[kind].query)
+    if error:
+        return error
+    record = query.filter_by(id=record_id).first_or_404(description="Registro no encontrado")
     return jsonify({kind.rstrip("s").replace("-", "_"): _dict(kind, record)}), 200
+
+
+def _scoped_query(kind, query):
+    actor = current_user()
+    if can_view_all_operations(actor):
+        return query, None
+    if not is_technician(actor):
+        return query, (jsonify({"error": "El perfil activo no puede consultar datos maestros"}), 403)
+    assigned = Alert.assignments.any(Assignment.user_id == actor.id)
+    if kind == "clients":
+        query = query.filter(Client.vehicles.any(Vehicle.alerts.any(assigned)))
+    elif kind == "vehicles":
+        query = query.filter(Vehicle.alerts.any(assigned))
+    elif kind == "gps-devices":
+        query = query.filter(GpsDevice.vehicle.has(Vehicle.alerts.any(assigned)))
+    # Los tipos de evento son un catálogo necesario para interpretar sus alertas.
+    return query, None
 
 
 def _unique(model, field, value, record_id=None):
@@ -95,6 +122,8 @@ def _apply(kind, record, data, creating=False):
                                        ("sim_number", 30, False)]:
             if creating or field in data:
                 value = text_value(data, field, required=required, limit=limit)
+                if field == "serial_number":
+                    value = value or None
                 if field in {"imei", "serial_number"}:
                     _unique(GpsDevice, field, value, record.id)
                 setattr(record, field, value)
@@ -127,6 +156,21 @@ def create_record(kind, data):
 
 def update_record(kind, record_id, data):
     record = MODELS[kind].query.get_or_404(record_id, description="Registro no encontrado")
+    if (kind == "vehicles" and "client_id" in data
+            and integer(data.get("client_id"), "client_id") != record.client_id
+            and record.alerts.count()):
+        return jsonify({"error": "No se puede cambiar el cliente: el vehículo tiene alertas históricas"}), 409
+    if (kind == "gps-devices" and "vehicle_id" in data
+            and integer(data.get("vehicle_id"), "vehicle_id") != record.vehicle_id
+            and record.alerts.count()):
+        return jsonify({"error": "No se puede cambiar el vehículo: el GPS tiene alertas históricas"}), 409
+    if kind == "event-types" and record.code in PROTECTED_EVENT_CODES:
+        requested_code = str(data.get("code", record.code)).strip().upper()
+        requested_state = _state(data["state_id"]) if "state_id" in data else record.state
+        requested_generates = data.get("generates_alert", record.generates_alert)
+        if (requested_code != record.code or requested_state.name != "Activo"
+                or requested_generates is not True):
+            return jsonify({"error": "El código interno, estado activo y generación de alerta de este evento están protegidos"}), 409
     _apply(kind, record, data)
     db.session.commit()
     return jsonify({"message": "Registro actualizado", "record": _dict(kind, record)}), 200
@@ -134,6 +178,8 @@ def update_record(kind, record_id, data):
 
 def delete_record(kind, record_id):
     record = MODELS[kind].query.get_or_404(record_id, description="Registro no encontrado")
+    if kind == "event-types" and record.code in PROTECTED_EVENT_CODES:
+        return jsonify({"error": "Este tipo de evento interno no puede eliminarse"}), 409
     related = ((kind == "clients" and record.vehicles.count())
                or (kind == "vehicles" and (record.gps_devices.count() or record.alerts.count()))
                or (kind == "gps-devices" and record.alerts.count())

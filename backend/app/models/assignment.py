@@ -46,6 +46,8 @@ class Assignment(db.Model):
             "assigned_at": iso_utc(self.assigned_at),
             "completed_at": iso_utc(self.completed_at),
             "response_time_minutes": self.response_time_minutes,
+            "event_type_code": (self.alert.event_type.code
+                                if self.alert and self.alert.event_type else None),
         }
 
     def __repr__(self) -> str:

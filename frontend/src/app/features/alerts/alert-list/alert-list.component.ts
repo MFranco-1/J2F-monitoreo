@@ -39,6 +39,10 @@ export class AlertListComponent implements OnInit {
   technicians = signal<{ id: number; full_name: string; active_assignments_count: number }[]>([]);
   assignmentAlert = signal<Alert | null>(null);
   assignmentForm = { user_id: null as number | null, notes: '' };
+  private alertRequestId = 0;
+  private formVehicleRequestId = 0;
+  private filterVehicleRequestId = 0;
+  private deviceRequestId = 0;
 
   filters: AlertFilters = { page: 1, per_page: 20 };
 
@@ -62,14 +66,20 @@ export class AlertListComponent implements OnInit {
   }
 
   loadAlerts(): void {
+    const requestId = ++this.alertRequestId;
     this.loading.set(true);
     this.alertService.getAlerts(this.filters).subscribe({
       next: ({ alerts, pages }) => {
+        if (requestId !== this.alertRequestId) return;
         this.alerts.set(alerts);
         this.totalPages.set(pages);
         this.loading.set(false);
       },
-      error: (err) => { this.loading.set(false); this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los datos. Comprueba la conexión con el servidor.'); },
+      error: (err) => {
+        if (requestId !== this.alertRequestId) return;
+        this.loading.set(false);
+        this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los datos. Comprueba la conexión con el servidor.');
+      },
     });
   }
 
@@ -105,20 +115,41 @@ export class AlertListComponent implements OnInit {
   }
 
   onClientChange(): void {
+    const requestId = ++this.formVehicleRequestId;
+    ++this.deviceRequestId;
     this.newForm.vehicle_id = null; this.newForm.gps_device_id = null; this.devices.set([]);
     if (!this.newForm.client_id) { this.formVehicles.set([]); return; }
-    this.masterData.vehicles(this.newForm.client_id, true).subscribe(data => this.formVehicles.set(data['vehicles'] || []));
+    const clientId = this.newForm.client_id;
+    this.masterData.vehicles(clientId, true).subscribe({
+      next: data => {
+        if (requestId !== this.formVehicleRequestId || this.newForm.client_id !== clientId) return;
+        this.formVehicles.set(data['vehicles'] || []);
+      },
+      error: err => {
+        if (requestId !== this.formVehicleRequestId || this.newForm.client_id !== clientId) return;
+        this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los vehículos del cliente');
+      },
+    });
   }
 
   onFilterClientChange(value: number | null): void {
+    const requestId = ++this.filterVehicleRequestId;
     const clientId = value || undefined;
     this.filters.client_id = clientId;
     this.filters.vehicle_id = undefined;
     this.filters.page = 1;
     this.filterVehicles.set([]);
     if (clientId) {
-      this.masterData.vehicles(clientId, true).subscribe(data =>
-        this.filterVehicles.set(data['vehicles'] || []));
+      this.masterData.vehicles(clientId, true).subscribe({
+        next: data => {
+          if (requestId !== this.filterVehicleRequestId || this.filters.client_id !== clientId) return;
+          this.filterVehicles.set(data['vehicles'] || []);
+        },
+        error: err => {
+          if (requestId !== this.filterVehicleRequestId || this.filters.client_id !== clientId) return;
+          this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los vehículos del filtro');
+        },
+      });
     }
     this.loadAlerts();
   }
@@ -130,12 +161,18 @@ export class AlertListComponent implements OnInit {
   }
 
   onVehicleChange(): void {
+    const requestId = ++this.deviceRequestId;
     this.newForm.gps_device_id = null;
     if (!this.newForm.vehicle_id) { this.devices.set([]); return; }
-    this.masterData.devices(this.newForm.vehicle_id, true).subscribe(data => {
+    const vehicleId = this.newForm.vehicle_id;
+    this.masterData.devices(vehicleId, true).subscribe({ next: data => {
+      if (requestId !== this.deviceRequestId || this.newForm.vehicle_id !== vehicleId) return;
       const devices = data['gps_devices'] || []; this.devices.set(devices);
       if (devices.length === 1) this.newForm.gps_device_id = devices[0].id;
-    });
+    }, error: err => {
+      if (requestId !== this.deviceRequestId || this.newForm.vehicle_id !== vehicleId) return;
+      this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los dispositivos del vehículo');
+    } });
   }
 
   onEventTypeChange(): void {

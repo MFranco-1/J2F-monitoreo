@@ -110,5 +110,6 @@ export interface MapVehicle {
   model?: string;
   client: import('./master-data.model').Client;
   gps_device?: import('./master-data.model').GpsDevice | null;
+  fuel_confirmation?: { alert_id: number; timestamp: string } | null;
   open_events: MapOpenEvent[];
 }

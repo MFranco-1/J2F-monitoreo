@@ -13,6 +13,7 @@ export interface Assignment {
   assigned_at?: string;
   completed_at?: string;
   response_time_minutes?: number;
+  event_type_code?: string | null;
 }
 
 export interface HistoryEntry {

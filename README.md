@@ -49,9 +49,10 @@ npm ci
 npm start
 ```
 
-Abrir `http://localhost:4200`. Las rutas administrativas, incluidos los maestros,
-requieren el perfil activo Administrador. El Técnico puede consultar maestros desde
-una alerta, pero no modificarlos.
+Abrir `http://localhost:4200`. Las rutas de usuarios, perfiles y menús requieren el
+perfil activo Administrador. En Datos maestros, Administrador conserva el CRUD;
+Operador y Supervisor consultan el catálogo operativo, y Técnico solo los registros
+vinculados a sus alertas autorizadas y los catálogos necesarios.
 
 La pantalla de Datos maestros utiliza `/master-data`: los perfiles con esa opción
 asignada pueden consultarla, mientras que solo Administrador puede modificarla.

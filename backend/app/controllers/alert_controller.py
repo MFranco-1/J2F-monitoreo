@@ -235,6 +235,15 @@ def get_map_vehicles(client_id_value=None) -> tuple:
             open_events_query = open_events_query.filter(
                 Alert.assignments.any(Assignment.user_id == actor.id))
         open_events = open_events_query.order_by(Alert.opened_at.desc()).all()
+        last_fuel_confirmation = (
+            History.query.join(Alert, History.alert_id == Alert.id)
+            .filter(Alert.vehicle_id == vehicle.id, History.action == "fuel_confirmed")
+        )
+        if is_technician(actor) and not can_view_all_operations(actor):
+            last_fuel_confirmation = last_fuel_confirmation.filter(
+                Alert.assignments.any(Assignment.user_id == actor.id))
+        last_fuel_confirmation = last_fuel_confirmation.order_by(
+            History.timestamp.desc(), History.id.desc()).first()
         vehicles.append({
             "id": vehicle.id,
             "plate": vehicle.plate,
@@ -242,6 +251,12 @@ def get_map_vehicles(client_id_value=None) -> tuple:
             "model": vehicle.model,
             "client": vehicle.client.to_dict() if vehicle.client else None,
             "gps_device": device.to_dict() if device else None,
+            # La confirmación persistida permite que otro navegador reconozca una
+            # recarga explícita. Cerrar una alerta por sí solo no produce este dato.
+            "fuel_confirmation": ({
+                "alert_id": last_fuel_confirmation.alert_id,
+                "timestamp": last_fuel_confirmation.to_dict()["timestamp"],
+            } if last_fuel_confirmation else None),
             "open_events": [{"alert_id": item.id, "code": item.event_type.code,
                              "name": item.event_type.name, "priority": item.priority,
                              "can_coordinate": may_attend(item, actor),

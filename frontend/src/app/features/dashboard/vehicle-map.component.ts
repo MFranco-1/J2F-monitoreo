@@ -1,7 +1,7 @@
 import { AfterViewInit, Component, EventEmitter, OnDestroy, OnInit, Output, ViewEncapsulation, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe, NgFor, NgIf } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subject, catchError, forkJoin, map, of, takeUntil } from 'rxjs';
 import * as L from 'leaflet';
 import { AlertService } from '../../core/services/alert.service';
@@ -13,6 +13,7 @@ type Point = { lat: number; lng: number };
 type Position = {
   segment: number; progress: number; lat: number; lng: number;
   speed: number; fuel: number; bearing: number; updatedAt: Date;
+  fuelConfirmationAt?: string;
 };
 type StationOption = FuelStation & { roadDistance?: number; route?: StreetRoute };
 type StationTrip = {
@@ -31,6 +32,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly auth = inject(AuthService);
   private readonly alerts = inject(AlertService);
   private readonly router = inject(Router);
+  private readonly activatedRoute = inject(ActivatedRoute);
   private map?: L.Map;
   private markers = L.layerGroup();
   private simulatedRoutes = L.layerGroup();
@@ -42,11 +44,14 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly positions = new Map<number, Position>();
   private readonly roadRoutes = new Map<number, Point[]>();
   private readonly stationTrips = new Map<number, StationTrip>();
+  private readonly routeRecovery = new Set<number>();
   private readonly fuelRequests = new Set<number>();
   private readonly stationQueryCancel = new Subject<void>();
   private readonly destroy$ = new Subject<void>();
   private vehicleRequestId = 0;
   private pendingTrip?: { vehicleId: number; mode: 'station' | 'return' };
+  private requestedFuelAlertId?: number;
+  private destroyed = false;
 
   vehicles = signal<MapVehicle[]>([]);
   loading = signal(true);
@@ -79,6 +84,8 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   ];
 
   ngOnInit(): void {
+    const requestedAlert = Number(this.activatedRoute.snapshot.queryParamMap.get('fuel_alert'));
+    this.requestedFuelAlertId = Number.isInteger(requestedAlert) && requestedAlert > 0 ? requestedAlert : undefined;
     this.loadRoadRoutes();
     this.loadVehicles(true);
     this.movementTimer = setInterval(() => this.advance(), 2000);
@@ -108,6 +115,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     if (this.movementTimer) clearInterval(this.movementTimer);
     if (this.eventsTimer) clearInterval(this.eventsTimer);
     this.cancelStationRequests();
@@ -125,8 +133,12 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
       next: routes => {
         routes.forEach((route, index) => {
           if (!route) return;
-          const points = route.coordinates.map(([lat, lng]) => ({ lat, lng }));
-          if (points.length >= 2) this.roadRoutes.set(index, points);
+          const forward = route.coordinates.map(([lat, lng]) => ({ lat, lng }));
+          // Ida y vuelta por la misma geometría vial: el reinicio coincide con
+          // el último punto y evita teletransportes al cerrar el recorrido.
+          if (forward.length >= 2) {
+            this.roadRoutes.set(index, [...forward, ...forward.slice(0, -1).reverse()]);
+          }
         });
         this.loadingRoutes.set(false);
         if (routes.some(route => !route)) this.error.set('Algunas rutas por calles no están disponibles. Esos vehículos permanecerán sin movimiento hasta recargar.');
@@ -148,8 +160,25 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
         if (requestId !== this.vehicleRequestId) return;
         const selectedId = this.selectedVehicle()?.id;
         this.vehicles.set(vehicles);
-        for (const vehicle of vehicles) this.ensurePosition(vehicle);
+        for (const vehicle of vehicles) {
+          const position = this.ensurePosition(vehicle);
+          const confirmationAt = vehicle.fuel_confirmation?.timestamp;
+          const hasLowFuel = !!this.lowFuelEvent(vehicle);
+          if (position && confirmationAt && position.fuelConfirmationAt !== confirmationAt) {
+            if (!hasLowFuel) position.fuel = 70;
+            position.fuelConfirmationAt = confirmationAt;
+            position.updatedAt = new Date();
+          }
+        }
         if (selectedId) this.selectedVehicle.set(vehicles.find(vehicle => vehicle.id === selectedId) ?? null);
+        if (this.requestedFuelAlertId) {
+          const requested = vehicles.find(vehicle =>
+            vehicle.open_events.some(event => event.alert_id === this.requestedFuelAlertId));
+          if (requested) {
+            this.selectedVehicle.set(requested);
+            this.requestedFuelAlertId = undefined;
+          }
+        }
         this.loading.set(false);
         this.renderMap(initial);
       },
@@ -205,6 +234,11 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     return vehicle.open_events.find(event => event.code === 'LOW_FUEL');
   }
   arrivedAtStation(vehicle: MapVehicle): boolean { return !!this.stationTrips.get(vehicle.id)?.arrived; }
+  needsRouteRecovery(vehicle: MapVehicle): boolean { return this.routeRecovery.has(vehicle.id); }
+  recoverUsualRoute(vehicle: MapVehicle): void {
+    this.error.set('');
+    this.returnToUsualRoute(vehicle);
+  }
   tripInProgress(vehicle: MapVehicle): boolean {
     const trip = this.stationTrips.get(vehicle.id);
     return !!trip && !trip.arrived;
@@ -244,14 +278,18 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
           priority: response.alert.priority, can_coordinate: this.auth.isAdmin(), fuel_status: 'pending',
           fuel_workflow: { coordination: null, confirmation: null },
         };
-        vehicle.open_events = [event, ...vehicle.open_events.filter(item => item.code !== code)];
+        const originalVehicle = this.vehicles().find(item => item.id === vehicle.id) || vehicle;
+        originalVehicle.open_events = [event, ...originalVehicle.open_events.filter(item => item.code !== code)];
         this.vehicles.update(items => [...items]);
-        if (this.selectedVehicle()?.id === vehicle.id) this.selectedVehicle.set({ ...vehicle });
-        this.message.set(response.message);
+        if (this.selectedVehicle()?.id === vehicle.id) {
+          this.selectedVehicle.set({ ...originalVehicle });
+          this.message.set(response.message);
+        }
         this.generatingCode.set(null);
         this.fuelRequests.delete(vehicle.id);
         this.renderMap();
         this.eventCreated.emit();
+        this.loadVehicles();
         setTimeout(() => this.message.set(''), 4500);
       },
       error: err => {
@@ -346,6 +384,8 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!vehicle || !event) return;
     const station = this.selectedStation();
     const observation = this.fuelObservation.trim();
+    const vehicleId = vehicle.id;
+    const alertId = event.alert_id;
     if (!observation) {
       this.error.set(`La observación es obligatoria para ${action === 'confirm' ? 'confirmar' : 'coordinar'} el abastecimiento.`);
       return;
@@ -354,27 +394,45 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.alerts.recordFuelAction(event.alert_id, action, observation,
       action === 'coordinate' ? station || undefined : undefined).subscribe({
       next: response => {
-        event.fuel_status = response.fuel_status;
-        event.fuel_workflow = response.fuel_workflow;
-        this.fuelObservation = '';
-        if (action === 'coordinate' && station) this.startTripToStation(vehicle, event, station);
+        if (this.destroyed) return;
+        const originalVehicle = this.vehicles().find(item => item.id === vehicleId) || vehicle;
+        const originalEvent = originalVehicle.open_events.find(item => item.alert_id === alertId) || event;
+        originalEvent.fuel_status = response.fuel_status;
+        originalEvent.fuel_workflow = response.fuel_workflow;
+        const stillSelected = this.isCurrentFuelSelection(vehicleId, alertId);
+        if (stillSelected && this.fuelObservation.trim() === observation) this.fuelObservation = '';
+        if (action === 'coordinate' && station && stillSelected) {
+          this.startTripToStation(originalVehicle, originalEvent, station);
+        }
         else {
-          const position = this.positions.get(vehicle.id);
+          const position = this.positions.get(vehicleId);
           if (action === 'confirm') {
             if (position) position.fuel = 70;
-            this.returnToUsualRoute(vehicle);
-            vehicle.open_events = vehicle.open_events.filter(item => item.alert_id !== event.alert_id);
+            if (stillSelected) this.returnToUsualRoute(originalVehicle);
+            else if (position) {
+              this.stationTrips.set(vehicleId, {
+                points: [{ lat: position.lat, lng: position.lng }, { lat: position.lat, lng: position.lng }],
+                segment: 1, progress: 0, arrived: true, mode: 'return',
+              });
+              this.routeRecovery.add(vehicleId);
+              position.speed = 0;
+            }
+            originalVehicle.open_events = originalVehicle.open_events.filter(item => item.alert_id !== alertId);
             this.eventCreated.emit();
           }
         }
-        this.selectedVehicle.set({ ...vehicle });
+        this.vehicles.update(items => [...items]);
+        if (stillSelected) this.selectedVehicle.set({ ...originalVehicle });
         this.fuelAction.set(null);
-        this.message.set(response.message);
+        if (stillSelected) this.message.set(response.message);
         this.loadVehicles();
       },
       error: err => {
+        if (this.destroyed) return;
         this.fuelAction.set(null);
-        this.error.set(err?.error?.error || 'No se pudo registrar el abastecimiento');
+        if (this.isCurrentFuelSelection(vehicleId, alertId)) {
+          this.error.set(err?.error?.error || 'No se pudo registrar el abastecimiento');
+        }
       },
     });
   }
@@ -416,7 +474,9 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     const position = this.positions.get(vehicle.id);
     const usualRoute = this.routeFor(vehicle);
     if (!position || !usualRoute?.length) {
-      this.stationTrips.delete(vehicle.id);
+      this.routeRecovery.add(vehicle.id);
+      if (position) position.speed = 0;
+      this.error.set('No hay una ruta habitual disponible. El vehículo queda detenido en su última posición simulada hasta reintentar.');
       return;
     }
     this.cancelStationRequests();
@@ -431,19 +491,19 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.alerts.getStreetRoute(current.lat, current.lng, destination.lat, destination.lng)
       .pipe(takeUntil(this.stationQueryCancel)).subscribe({
         next: route => {
-          if (this.selectedVehicle()?.id !== vehicle.id) return;
           this.pendingTrip = undefined;
           const points = [current, ...route.coordinates.map(([lat, lng]) => ({ lat, lng }))];
           this.stationTrips.set(vehicle.id, {
             points, segment: 0, progress: 0, arrived: false, mode: 'return', resumeSegment,
           });
+          this.routeRecovery.delete(vehicle.id);
           this.message.set('Abastecimiento confirmado. Nivel local simulado actualizado; retorno visual en curso.');
         },
         error: () => {
           this.pendingTrip = undefined;
-          if (this.selectedVehicle()?.id === vehicle.id) {
-            this.error.set('Abastecimiento confirmado. No se pudo calcular el retorno por calles; el vehículo permanecerá en su posición local simulada.');
-          }
+          this.routeRecovery.add(vehicle.id);
+          position.speed = 0;
+          this.error.set('Abastecimiento confirmado. No se pudo calcular el retorno por calles; el vehículo queda detenido en su posición simulada y puedes reintentar.');
         },
       });
   }
@@ -457,6 +517,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   private cancelStationRequests(): void {
     this.stationQueryCancel.next();
     if (this.pendingTrip?.mode === 'station') this.stationTrips.delete(this.pendingTrip.vehicleId);
+    if (this.pendingTrip?.mode === 'return') this.routeRecovery.add(this.pendingTrip.vehicleId);
     this.pendingTrip = undefined;
     this.loadingStations.set(false);
   }
@@ -465,14 +526,16 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     const existing = this.positions.get(vehicle.id);
     if (existing) return existing;
     const route = this.routeFor(vehicle);
-    const segment = route?.length ? (vehicle.id * 37) % (route.length - 1) : 0;
-    const point = route?.[segment] || this.routeEndpoints[vehicle.id % this.routeEndpoints.length][0];
+    if (!route || route.length < 2) return undefined;
+    const segment = (vehicle.id * 37) % (route.length - 1);
+    const point = route[segment];
     const lowFuel = this.lowFuelEvent(vehicle);
     const position: Position = {
       segment, progress: 0, lat: point.lat, lng: point.lng,
       speed: 38 + (vehicle.id * 7) % 42,
       fuel: lowFuel && lowFuel.fuel_status !== 'confirmed' ? 8 : 58 + (vehicle.id * 7) % 30,
-      bearing: route?.[segment + 1] ? this.bearing(point, route[segment + 1]) : 0, updatedAt: new Date(),
+      bearing: this.bearing(point, route[segment + 1]), updatedAt: new Date(),
+      fuelConfirmationAt: vehicle.fuel_confirmation?.timestamp,
     };
     this.positions.set(vehicle.id, position);
     return position;
@@ -494,6 +557,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
       position.lng = motion.lng;
       position.bearing = motion.bearing;
       if (trip) {
+        position.speed = speed;
         if (trip.segment >= points.length - 1) {
           trip.arrived = true;
           position.speed = 0;
@@ -501,6 +565,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
             position.segment = trip.resumeSegment || 0;
             position.progress = 0;
             this.stationTrips.delete(vehicle.id);
+            this.routeRecovery.delete(vehicle.id);
             this.message.set(`${vehicle.plate} volvió visualmente a su recorrido habitual`);
           } else this.message.set(`${vehicle.plate} llegó visualmente a la estación seleccionada`);
         }

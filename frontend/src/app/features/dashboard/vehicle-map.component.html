@@ -47,6 +47,7 @@
             <span class="empty-inline" *ngIf="fuelEvent.fuel_status === 'coordinated'">La confirmación documentada no depende del recorrido visual.</span>
           </div>
         </section>
+        <button type="button" class="btn-secondary btn-sm" *ngIf="needsRouteRecovery(vehicle)" (click)="recoverUsualRoute(vehicle)">Reintentar retorno por calles</button>
         <div class="event-controls" *ngIf="auth.canAssign()"><p>Generar evento operativo</p><button type="button" class="btn-secondary btn-sm" (click)="generateEvent('SPEEDING')" [disabled]="!!generatingCode() || hasOpenEvent('SPEEDING')">Exceso de velocidad</button><button type="button" class="btn-secondary btn-sm" (click)="generateEvent('GPS_SIGNAL_LOSS')" [disabled]="!!generatingCode() || hasOpenEvent('GPS_SIGNAL_LOSS')">Pérdida de señal</button><button type="button" class="btn-secondary btn-sm" (click)="simulateLowFuel()" [disabled]="!!generatingCode() || hasOpenEvent('LOW_FUEL')">Combustible al 9 %</button><button type="button" class="btn-danger btn-sm" (click)="generateEvent('SOS')" [disabled]="!!generatingCode() || hasOpenEvent('SOS')">SOS</button></div>
       </ng-container>
       <ng-template #noVehicle><div class="vehicle-empty"><strong>Selecciona un vehículo</strong><p>Consulta su telemetría simulada y las alertas que tu perfil puede gestionar.</p></div></ng-template>

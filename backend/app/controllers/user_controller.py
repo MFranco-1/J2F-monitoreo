@@ -5,7 +5,7 @@ from sqlalchemy import func
 from app import db
 from app.models.user import User
 from app.models.state import State
-from app.security import current_user
+from app.security import current_user, has_active_role, active_admin_count, role_name
 from app.validation import text_value, validate_dni, validate_email, user_state, ids_list
 from app.models.profile import Profile
 from app.controllers.auth_controller import invalidate_sessions
@@ -92,6 +92,14 @@ def update_user(user_id, data):
         return jsonify({"error": "La contraseña debe ser texto"}), 400
     if current_user().id == user.id and state.name != "Activo":
         return jsonify({"error": "No puedes desactivar tu propia cuenta"}), 409
+    proposed_roles = {role_name(profile.name) for profile in profiles}
+    if (has_active_role(user, "administrador")
+            and (state.name != "Activo" or "administrador" not in proposed_roles)
+            and active_admin_count(excluded_user_id=user.id) == 0):
+        return jsonify({"error": "El sistema debe conservar al menos un Administrador activo"}), 409
+    if (user.active_assignments_count
+            and (state.name != "Activo" or "tecnico" not in proposed_roles)):
+        return jsonify({"error": "Reasigna primero las atenciones vigentes del Técnico"}), 409
     if User.query.filter(User.dni == dni, User.id != user_id).first():
         return jsonify({"error": "DNI ya registrado"}), 409
     if User.query.filter(func.lower(User.email) == email, User.id != user_id).first():
@@ -113,6 +121,10 @@ def delete_user(user_id):
     user = User.query.get_or_404(user_id)
     if current_user().id == user.id:
         return jsonify({"error": "No puedes desactivar tu propia cuenta"}), 409
+    if has_active_role(user, "administrador") and active_admin_count(excluded_user_id=user.id) == 0:
+        return jsonify({"error": "El sistema debe conservar al menos un Administrador activo"}), 409
+    if user.active_assignments_count:
+        return jsonify({"error": "Reasigna primero las atenciones vigentes del Técnico"}), 409
     inactive = State.query.filter_by(name="Inactivo", type="user").first()
     if not inactive:
         return jsonify({"error": "No está configurado el estado Inactivo"}), 409

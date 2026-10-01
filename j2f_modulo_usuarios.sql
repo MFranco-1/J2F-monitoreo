@@ -196,8 +196,8 @@ WHERE NOT EXISTS (SELECT 1 FROM profiles WHERE LOWER(BTRIM(name))='operador');
 WITH access(url,role) AS (VALUES
  ('/dashboard','administrador'),('/alerts','administrador'),('/assignments','administrador'),('/history','administrador'),('/reports','administrador'),
  ('/admin/users','administrador'),('/admin/profiles','administrador'),('/admin/menu-options','administrador'),('/master-data','administrador'),
- ('/dashboard','tecnico'),('/alerts','tecnico'),('/assignments','tecnico'),('/history','tecnico'),
- ('/dashboard','operador'),('/alerts','operador'),('/assignments','operador'),('/history','operador'),
+ ('/dashboard','tecnico'),('/alerts','tecnico'),('/assignments','tecnico'),('/history','tecnico'),('/master-data','tecnico'),
+ ('/dashboard','operador'),('/alerts','operador'),('/assignments','operador'),('/history','operador'),('/master-data','operador'),
  ('/dashboard','supervisor'),('/alerts','supervisor'),('/assignments','supervisor'),('/history','supervisor'),('/reports','supervisor'),('/master-data','supervisor')
 )
 INSERT INTO profile_menu_option(profile_id,menu_option_id)

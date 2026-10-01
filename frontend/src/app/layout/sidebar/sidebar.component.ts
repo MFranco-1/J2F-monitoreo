@@ -76,8 +76,10 @@ export class SidebarComponent implements OnInit, OnDestroy {
 
   private fallbackSections(): { title: string; items: NavItem[] }[] {
     return this.defaultSections
-      .filter(section => this.auth.isAdmin() || section.title !== 'ADMINISTRACIÓN')
-      .map(section => ({ ...section, items: section.items.map(item => ({ ...item })) }));
+      .map(section => ({ ...section, items: section.items
+        .filter(item => this.auth.isAdmin() || !item.route?.startsWith('/admin/'))
+        .map(item => ({ ...item })) }))
+      .filter(section => section.items.length > 0);
   }
 
   private configuredSections(options: MenuOption[]): { title: string; items: NavItem[] }[] {

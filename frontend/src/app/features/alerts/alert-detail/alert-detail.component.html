@@ -68,6 +68,12 @@
         </button>
       </div>
 
+      <div class="card state-change-card" *ngIf="isFuelAlert && alert()?.state?.name !== 'Cerrado'">
+        <h3>Abastecimiento</h3>
+        <p>La alerta se cierra únicamente al confirmar el abastecimiento documentado.</p>
+        <a class="btn-primary" [routerLink]="['/dashboard']" [queryParams]="{fuel_alert: alert()?.id}">Gestionar abastecimiento en el mapa</a>
+      </div>
+
       <!-- Cambio de Estado -->
       <div class="card state-change-card" *ngIf="transitions.length > 0 && canAttend">
         <h3> Cambiar Estado</h3>

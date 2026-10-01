@@ -237,6 +237,8 @@ def _filtered_alert_query(report: Report, date_field=None):
     if report.date_range_end:
         query = query.filter(date_field <= report.date_range_end)
     filters = _report_filters(report)
+    if filters.get("user_id"):
+        query = query.filter(Alert.assignments.any(Assignment.user_id == filters["user_id"]))
     if filters.get("client_id"):
         query = query.join(Vehicle, Alert.vehicle_id == Vehicle.id).filter(
             Vehicle.client_id == filters["client_id"])

@@ -244,7 +244,8 @@ class RegressionTests(unittest.TestCase):
         user_id = self.user()
         alert_id = self.alert()
         self.assign(alert_id, user_id)
-        self.client.put(f"/api/alerts/{alert_id}", headers=self.admin, json={"state_name": "Cerrado"})
+        self.client.put(f"/api/alerts/{alert_id}", headers=self.admin,
+                        json={"state_name": "Cerrado", "notes": "Caso resuelto"})
         with self.app.app_context():
             count = History.query.filter_by(alert_id=alert_id).count()
         self.assertEqual(self.client.delete(f"/api/alerts/{alert_id}", headers=self.admin).status_code, 409)
@@ -592,6 +593,10 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(confirmed.get_json()["fuel_status"], "confirmed")
         self.assertEqual(self.client.get(f"/api/alerts/{fuel_alert_id}", headers=self.admin)
                          .get_json()["alert"]["state"]["name"], "Cerrado")
+        map_vehicle = next(item for item in self.client.get(
+            "/api/alerts/map/vehicles", headers=self.admin).get_json()["vehicles"]
+            if item["id"] == vehicle["id"])
+        self.assertEqual(map_vehicle["fuel_confirmation"]["alert_id"], fuel_alert_id)
         with self.app.app_context():
             self.assertEqual(History.query.filter_by(alert_id=fuel_alert_id, action="fuel_coordinated").count(), 1)
             self.assertEqual(History.query.filter_by(alert_id=fuel_alert_id, action="fuel_confirmed").count(), 1)
@@ -649,6 +654,8 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(confirmed.status_code, 200, confirmed.get_json())
         self.assertEqual(self.client.post(f"/api/alerts/{alert_id}/fuel-actions", headers=technician,
             json={"action": "confirm", "observation": "Duplicada"}).status_code, 409)
+        self.assertEqual(self.client.post(f"/api/alerts/{alert_id}/fuel-actions", headers=self.admin,
+            json={"action": "confirm", "observation": "Duplicada desde otra sesión"}).status_code, 409)
         with self.app.app_context():
             coordination = History.query.filter_by(alert_id=alert_id, action="fuel_coordinated").one()
             confirmation = History.query.filter_by(alert_id=alert_id, action="fuel_confirmed").one()
@@ -790,6 +797,148 @@ class RegressionTests(unittest.TestCase):
         )
         self.assertEqual(inconsistent.status_code, 400)
 
+    def test_last_admin_cannot_lose_role_through_user_or_profile_edit(self):
+        with self.app.app_context():
+            technician = Profile.query.filter_by(name="Técnico").one().id
+        remove_role = self.client.put("/api/users/1", headers=self.admin,
+                                      json={"profile_ids": [technician]})
+        rename_profile = self.client.put(f"/api/profiles/{self.admin_profile}", headers=self.admin,
+                                         json={"name": "Administración anterior"})
+        self.assertEqual(remove_role.status_code, 409, remove_role.get_json())
+        self.assertEqual(rename_profile.status_code, 409, rename_profile.get_json())
+
+    def test_active_technician_cannot_be_disabled_or_lose_role_before_reassignment(self):
+        first = self.user(71)
+        second = self.user(72)
+        alert_id = self.alert()
+        self.assign(alert_id, first)
+        with self.app.app_context():
+            operator = Profile.query.filter_by(name="Operador").one().id
+            technician = Profile.query.filter_by(name="Técnico").one().id
+        self.assertEqual(self.client.put(f"/api/users/{first}", headers=self.admin,
+                                        json={"state_id": self.inactive}).status_code, 409)
+        self.assertEqual(self.client.put(f"/api/users/{first}", headers=self.admin,
+                                        json={"profile_ids": [operator]}).status_code, 409)
+        self.assertEqual(self.client.delete(f"/api/users/{first}", headers=self.admin).status_code, 409)
+        self.assertEqual(self.client.put(f"/api/profiles/{technician}", headers=self.admin,
+                                        json={"name": "Soporte de campo"}).status_code, 409)
+        self.assign(alert_id, second)
+        self.assertEqual(self.client.delete(f"/api/users/{first}", headers=self.admin).status_code, 200)
+
+    def test_optional_gps_serial_is_null_and_allows_multiple_empty_values(self):
+        customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
+            "document_type": "RUC", "document_number": "20600000001",
+            "business_name": "Cliente serial opcional", "state_id": self.active,
+        }).get_json()["record"]
+        vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+            "client_id": customer["id"], "plate": "SER-001", "state_id": self.active,
+        }).get_json()["record"]
+        for imei, serial in (("860000000000001", ""), ("860000000000002", "   ")):
+            response = self.client.post("/api/master-data/gps-devices/", headers=self.admin, json={
+                "vehicle_id": vehicle["id"], "imei": imei,
+                "serial_number": serial, "state_id": self.active,
+            })
+            self.assertEqual(response.status_code, 201, response.get_json())
+            self.assertIsNone(response.get_json()["record"]["serial_number"])
+
+    def test_historical_alerts_lock_vehicle_and_gps_relations(self):
+        clients = []
+        vehicles = []
+        for index in range(2):
+            customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
+                "document_type": "RUC", "document_number": f"2060000001{index}",
+                "business_name": f"Cliente relación {index}", "state_id": self.active,
+            }).get_json()["record"]
+            clients.append(customer)
+            vehicles.append(self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+                "client_id": customer["id"], "plate": f"REL-00{index}", "state_id": self.active,
+            }).get_json()["record"])
+        device = self.client.post("/api/master-data/gps-devices/", headers=self.admin, json={
+            "vehicle_id": vehicles[0]["id"], "imei": "860000000000011", "state_id": self.active,
+        }).get_json()["record"]
+        created = self.client.post("/api/alerts/", headers=self.admin, json={
+            "title": "Historial vinculado", "client_id": clients[0]["id"],
+            "vehicle_id": vehicles[0]["id"], "gps_device_id": device["id"],
+        })
+        self.assertEqual(created.status_code, 201, created.get_json())
+        self.assertEqual(self.client.put(f"/api/master-data/vehicles/{vehicles[0]['id']}",
+            headers=self.admin, json={"client_id": clients[1]["id"]}).status_code, 409)
+        self.assertEqual(self.client.put(f"/api/master-data/gps-devices/{device['id']}",
+            headers=self.admin, json={"vehicle_id": vehicles[1]["id"]}).status_code, 409)
+
+    def test_internal_event_types_keep_operational_fields_but_allow_descriptions(self):
+        events = self.client.get("/api/master-data/event-types/", headers=self.admin).get_json()["event_types"]
+        event = next(item for item in events if item["code"] == "LOW_FUEL")
+        editable = self.client.put(f"/api/master-data/event-types/{event['id']}", headers=self.admin,
+                                   json={"description": "Nivel igual o menor al diez por ciento"})
+        self.assertEqual(editable.status_code, 200, editable.get_json())
+        for payload in ({"code": "FUEL"}, {"state_id": self.inactive}, {"generates_alert": False}):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.client.put(f"/api/master-data/event-types/{event['id']}",
+                    headers=self.admin, json=payload).status_code, 409)
+        self.assertEqual(self.client.delete(f"/api/master-data/event-types/{event['id']}",
+                                            headers=self.admin).status_code, 409)
+
+    def test_master_data_read_scope_matches_active_role(self):
+        technician_id = self.user(81)
+        self.user(82, role="Operador")
+        self.user(83, role="Supervisor")
+        created = []
+        for index in range(2):
+            customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
+                "document_type": "RUC", "document_number": f"2060000002{index}",
+                "business_name": f"Cliente alcance {index}", "state_id": self.active,
+            }).get_json()["record"]
+            vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+                "client_id": customer["id"], "plate": f"SCP-00{index}", "state_id": self.active,
+            }).get_json()["record"]
+            device = self.client.post("/api/master-data/gps-devices/", headers=self.admin, json={
+                "vehicle_id": vehicle["id"], "imei": f"86000000000002{index}", "state_id": self.active,
+            }).get_json()["record"]
+            alert = self.client.post("/api/alerts/", headers=self.admin, json={
+                "title": f"Alcance {index}", "client_id": customer["id"],
+                "vehicle_id": vehicle["id"], "gps_device_id": device["id"],
+            }).get_json()["alert"]
+            created.append((customer, vehicle, device, alert))
+        self.assign(created[0][3]["id"], technician_id)
+        technician = self.headers(self.login("test81@example.invalid")["access_token"])
+        operator = self.headers(self.login("test82@example.invalid")["access_token"])
+        supervisor = self.headers(self.login("test83@example.invalid")["access_token"])
+        for kind, key, expected_id in (("clients", "clients", created[0][0]["id"]),
+                                       ("vehicles", "vehicles", created[0][1]["id"]),
+                                       ("gps-devices", "gps_devices", created[0][2]["id"])):
+            values = self.client.get(f"/api/master-data/{kind}/", headers=technician).get_json()[key]
+            self.assertEqual([item["id"] for item in values], [expected_id])
+        self.assertTrue(self.client.get("/api/master-data/event-types/", headers=technician)
+                        .get_json()["event_types"])
+        self.assertEqual(len(self.client.get("/api/master-data/clients/", headers=operator)
+                             .get_json()["clients"]), 2)
+        self.assertEqual(len(self.client.get("/api/master-data/clients/", headers=supervisor)
+                             .get_json()["clients"]), 2)
+        self.assertEqual(self.client.post("/api/master-data/clients/", headers=operator,
+                                          json={}).status_code, 403)
+
+    def test_user_filter_is_consistent_in_summary_and_response_time_reports(self):
+        first, second = self.user(91), self.user(92)
+        alerts = [self.alert(), self.alert()]
+        self.assign(alerts[0], first)
+        self.assign(alerts[1], second)
+        for alert_id in alerts:
+            response = self.client.put(f"/api/alerts/{alert_id}", headers=self.admin,
+                                       json={"state_name": "Cerrado", "notes": "Resuelto"})
+            self.assertEqual(response.status_code, 200, response.get_json())
+        for report_type in ("alerts_summary", "response_times"):
+            report = self.client.post("/api/reports/", headers=self.admin, json={
+                "name": f"Filtro {report_type}", "type": report_type,
+                "filters": {"user_id": first},
+            }).get_json()["report"]
+            generated = self.client.post(f"/api/reports/{report['id']}/generate",
+                                         headers=self.admin).get_json()["report"]
+            result = json.loads(generated["result_json"])
+            count = result["total_alerts"] if report_type == "alerts_summary" else sum(
+                item["count"] for item in result["by_priority"].values())
+            self.assertEqual(count, 1)
+
 
 class InstalledSchemaTests(unittest.TestCase):
     def test_models_match_the_incremental_fourteen_table_schema(self):
@@ -858,6 +1007,8 @@ class MigrationScriptTests(unittest.TestCase):
         self.assertIn("on conflict (user_id, profile_id) do nothing", lowered)
         self.assertIn("j2f-003", lowered)
         self.assertIn("carga inicial j2f", lowered)
+        self.assertIn("('/master-data','tecnico')", lowered)
+        self.assertIn("('/master-data','operador')", lowered)
         self.assertGreaterEqual(lowered.count("where not exists"), 4)
         self.assertGreaterEqual(lowered.count("on conflict"), 3)
 

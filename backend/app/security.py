@@ -70,6 +70,22 @@ def is_supervisor(user, profile=None):
     return _has_role(user, {"supervisor"}, profile)
 
 
+def has_active_role(user, role, *, excluded_profile_id=None):
+    """Comprueba un rol activo sin depender del perfil seleccionado en el JWT."""
+    return bool(account_is_active(user) and any(
+        profile.id != excluded_profile_id and role_name(profile.name) == role
+        for profile in active_profiles(user)
+    ))
+
+
+def active_admin_count(*, excluded_user_id=None, excluded_profile_id=None):
+    return sum(
+        1 for user in User.query.all()
+        if user.id != excluded_user_id
+        and has_active_role(user, "administrador", excluded_profile_id=excluded_profile_id)
+    )
+
+
 def can_assign(user):
     return bool(is_admin(user) or is_supervisor(user) or is_operator(user))
 

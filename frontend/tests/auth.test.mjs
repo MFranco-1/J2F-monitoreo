@@ -252,9 +252,9 @@ test('las mutaciones de menú notifican al sidebar después de completarse', () 
 });
 
 test('el sidebar elige el menú configurado o el respaldo, nunca ambos', () => {
-  const render = response => {
+  const render = (response, admin = true) => {
     injectedAuth = {
-      isAdmin: () => true,
+      isAdmin: () => admin,
       hasActiveProfile: () => true,
       profileChanges: new rx.Subject(),
       menuChanges: new rx.Subject(),
@@ -278,6 +278,11 @@ test('el sidebar elige el menú configurado o el respaldo, nunca ambos', () => {
   assert.equal(render(rx.of({ configured: false, menu_options: [] })).length, 3);
   assert.equal(render(rx.throwError(() => new Error('API no disponible'))).length, 3);
   assert.deepEqual(render(rx.of({ configured: true, menu_options: [] })), []);
+  const nonAdminFallback = render(rx.of({ configured: false, menu_options: [] }), false);
+  assert.equal(nonAdminFallback.flatMap(section => section.items)
+    .some(item => item.route === '/master-data'), true);
+  assert.equal(nonAdminFallback.flatMap(section => section.items)
+    .some(item => item.route?.startsWith('/admin/')), false);
 });
 
 test('login multiperfil conserva solo el token temporal y permite seleccionar en dashboard', () => {

@@ -59,11 +59,18 @@
               <button class="btn-secondary btn-sm" [id]="'btn-note-assignment-' + a.id" (click)="openNoteModal(a)" [disabled]="!canEdit(a)">
                  Nota
               </button>
+              <a
+                class="btn-primary btn-sm"
+                [routerLink]="['/dashboard']" [queryParams]="{fuel_alert: a.alert_id}"
+                *ngIf="!a.completed_at && a.event_type_code === 'LOW_FUEL'"
+              >
+                Gestionar abastecimiento
+              </a>
               <button
                 class="btn-success btn-sm"
                 [id]="'btn-complete-assignment-' + a.id"
                 (click)="openCloseModal(a)" [disabled]="!canEdit(a)"
-                *ngIf="!a.completed_at"
+                *ngIf="!a.completed_at && a.event_type_code !== 'LOW_FUEL'"
               >
                  Cerrar atención
               </button>
