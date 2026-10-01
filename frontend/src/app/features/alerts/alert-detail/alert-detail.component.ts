@@ -102,6 +102,8 @@ export class AlertDetailComponent implements OnInit {
       assigned: ' Asignada', note_added: ' Nota añadida',
       escalated: ' Escalada', closed: ' Cerrada', updated: ' Actualizada',
       reassigned: ' Reasignada',
+      fuel_coordinated: ' Coordinación de abastecimiento',
+      fuel_confirmed: ' Abastecimiento confirmado',
     };
     return labels[action] ?? action;
   }

@@ -245,7 +245,8 @@ def get_map_vehicles(client_id_value=None) -> tuple:
             "open_events": [{"alert_id": item.id, "code": item.event_type.code,
                              "name": item.event_type.name, "priority": item.priority,
                              "can_coordinate": may_attend(item, actor),
-                             "fuel_status": _fuel_status(item)}
+                             "fuel_status": _fuel_status(item),
+                             "fuel_workflow": _fuel_workflow(item)}
                             for item in open_events],
         })
     return jsonify({"vehicles": vehicles}), 200
@@ -320,8 +321,12 @@ def create_map_event(data: dict, current_user_id: int) -> tuple:
                     "created": True, "alert": alert.to_dict()}), 201
 
 
-def get_nearby_fuel_stations(latitude_value, longitude_value, radius_value=None) -> tuple:
+def get_nearby_fuel_stations(latitude_value, longitude_value, radius_value=None,
+                             alert_id_value=None) -> tuple:
     """Consulta estaciones reales registradas en OpenStreetMap mediante Overpass."""
+    permission_error = _validate_fuel_service_access(alert_id_value)
+    if permission_error:
+        return permission_error
     latitude, longitude = _coordinates(latitude_value, longitude_value)
     radius = integer(radius_value or 3000, "radius", minimum=100, maximum=10000)
     endpoint = current_app.config.get("OVERPASS_API_URL")
@@ -346,8 +351,13 @@ def get_nearby_fuel_stations(latitude_value, longitude_value, radius_value=None)
         return jsonify({"error": "No se pudo consultar el servicio de estaciones cercanas"}), 502
 
 
-def get_street_route(origin_lat, origin_lng, destination_lat, destination_lng) -> tuple:
+def get_street_route(origin_lat, origin_lng, destination_lat, destination_lng,
+                     alert_id_value=None) -> tuple:
     """Obtiene una geometría vial real; nunca fabrica una línea de respaldo."""
+    if alert_id_value is not None:
+        permission_error = _validate_fuel_service_access(alert_id_value)
+        if permission_error:
+            return permission_error
     start_lat, start_lng = _coordinates(origin_lat, origin_lng)
     end_lat, end_lng = _coordinates(destination_lat, destination_lng)
     endpoint = (current_app.config.get("ROUTING_API_URL") or "").rstrip("/")
@@ -372,30 +382,42 @@ def get_street_route(origin_lat, origin_lng, destination_lat, destination_lng) -
 
 
 def record_fuel_action(alert_id: int, data: dict, user_id: int) -> tuple:
-    alert = Alert.query.get_or_404(alert_id, description="Alerta no encontrada")
-    if not may_attend(alert, current_user()):
-        return jsonify({"error": "Solo el técnico asignado o un administrador puede registrar el abastecimiento"}), 403
+    alert = Alert.query.filter_by(id=alert_id).with_for_update().first_or_404(
+        description="Alerta no encontrada")
     if not alert.event_type or alert.event_type.code != "LOW_FUEL":
         return jsonify({"error": "La alerta no corresponde a combustible bajo"}), 400
     if alert.state.name == "Cerrado":
+        if not may_view_alert(alert, current_user()):
+            return jsonify({"error": "No tienes acceso a esta alerta"}), 403
         return jsonify({"error": "La alerta de combustible ya está cerrada"}), 409
+    if not may_attend(alert, current_user()):
+        return jsonify({"error": "Solo el técnico asignado o un administrador puede registrar el abastecimiento"}), 403
     action = text_value(data, "action", required=True, limit=30)
-    detail = text_value(data, "detail", required=True, limit=500)
+    observation = text_value(data, "observation", required=True, limit=500)
     actions = {"coordinate": ("fuel_coordinated", "Coordinación de abastecimiento"),
                "confirm": ("fuel_confirmed", "Abastecimiento confirmado")}
     if action not in actions:
         return jsonify({"error": "Acción de abastecimiento inválida"}), 400
     history_action, label = actions[action]
+    if alert.history.filter_by(action=history_action).first():
+        return jsonify({"error": f"{label} ya fue registrada"}), 409
     if action == "confirm" and not alert.history.filter_by(action="fuel_coordinated").first():
         return jsonify({"error": "Primero registra la coordinación del abastecimiento"}), 409
-    _log_history(alert.id, user_id, history_action, detail=f"{label}: {detail}")
+    station = _validated_station(data.get("station")) if action == "coordinate" else None
+    detail = json.dumps({
+        "observacion": observation,
+        "modalidad": "estacion" if station else "manual",
+        "estacion": station,
+    }, ensure_ascii=False, separators=(",", ":"))
+    _log_history(alert.id, user_id, history_action, detail=detail)
     if action == "confirm":
-        result = _change_state(alert, user_id, "Cerrado", f"Abastecimiento confirmado: {detail}")
+        result = _change_state(alert, user_id, "Cerrado", f"Abastecimiento confirmado: {observation}")
         if result is not None:
             db.session.rollback()
             return result
     db.session.commit()
-    return jsonify({"message": f"{label} registrada", "fuel_status": _fuel_status(alert)}), 200
+    return jsonify({"message": f"{label} registrada", "fuel_status": _fuel_status(alert),
+                    "fuel_workflow": _fuel_workflow(alert)}), 200
 
 
 def _fuel_status(alert):
@@ -404,6 +426,76 @@ def _fuel_status(alert):
     if alert.history.filter_by(action="fuel_coordinated").first():
         return "coordinated"
     return "pending"
+
+
+def _fuel_workflow(alert):
+    """Reconstruye el avance persistido sin depender de la animación del navegador."""
+    return {
+        "coordination": _fuel_history_data(
+            alert.history.filter_by(action="fuel_coordinated").order_by(History.id.desc()).first()),
+        "confirmation": _fuel_history_data(
+            alert.history.filter_by(action="fuel_confirmed").order_by(History.id.desc()).first()),
+    }
+
+
+def _fuel_history_data(entry):
+    if not entry:
+        return None
+    try:
+        payload = json.loads(entry.detail or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        payload = {"observacion": entry.detail, "modalidad": "manual", "estacion": None}
+    return {
+        "user": ({"id": entry.user.id, "full_name": entry.user.full_name}
+                 if entry.user else None),
+        "profile": ({"id": entry.profile.id, "name": entry.profile.name}
+                    if entry.profile else None),
+        "timestamp": entry.to_dict()["timestamp"],
+        "observation": payload.get("observacion"),
+        "mode": payload.get("modalidad", "manual"),
+        "station": payload.get("estacion"),
+    }
+
+
+def _validated_station(value):
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("La estación seleccionada no es válida")
+    name = text_value(value, "name", required=True, limit=160)
+    latitude, longitude = _coordinates(value.get("latitude"), value.get("longitude"))
+    station = {
+        "id": text_value(value, "id", limit=100),
+        "name": name,
+        "latitude": latitude,
+        "longitude": longitude,
+    }
+    if value.get("road_distance") is not None:
+        try:
+            road_distance = float(value["road_distance"])
+        except (TypeError, ValueError):
+            from werkzeug.exceptions import BadRequest
+            raise BadRequest("La distancia vial de la estación no es válida")
+        if road_distance < 0:
+            from werkzeug.exceptions import BadRequest
+            raise BadRequest("La distancia vial de la estación no es válida")
+        station["road_distance"] = road_distance
+    return station
+
+
+def _validate_fuel_service_access(alert_id_value):
+    alert_id = integer(alert_id_value, "alert_id")
+    alert = db.session.get(Alert, alert_id)
+    if not alert:
+        return jsonify({"error": "Alerta no encontrada"}), 404
+    if not alert.event_type or alert.event_type.code != "LOW_FUEL":
+        return jsonify({"error": "La alerta no corresponde a combustible bajo"}), 400
+    if alert.state.name == "Cerrado":
+        return jsonify({"error": "La alerta de combustible ya está cerrada"}), 409
+    if not may_attend(alert, current_user()):
+        return jsonify({"error": "Solo el técnico asignado o un administrador puede consultar el abastecimiento"}), 403
+    return None
 
 
 def _coordinates(latitude_value, longitude_value):
@@ -443,6 +535,10 @@ def _change_state(alert: Alert, user_id: int, new_state_name: str, notes: str = 
 
     if new_state_name == "Cerrado" and not notes:
         return jsonify({"error": "Registra la solución aplicada antes de cerrar la alerta"}), 400
+    if (new_state_name == "Cerrado" and alert.event_type
+            and alert.event_type.code == "LOW_FUEL"
+            and not alert.history.filter_by(action="fuel_confirmed").first()):
+        return jsonify({"error": "Confirma y documenta el abastecimiento antes de cerrar la alerta"}), 409
 
     new_state = State.query.filter_by(name=new_state_name, type="alert").first()
     if not new_state:

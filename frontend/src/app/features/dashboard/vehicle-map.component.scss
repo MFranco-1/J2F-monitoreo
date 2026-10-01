@@ -77,6 +77,12 @@
 .station-list strong, .station-list span { display: block; font-size: 10px; }
 .station-list span { color: var(--text-muted); margin-top: 2px; }
 .fuel-actions { margin-top: 9px; }
+.role-guidance { margin: 0 0 8px; color: var(--text-secondary); font-size: 11px; line-height: 1.4; }
+.coordination-record { display: flex; flex-direction: column; gap: 3px; margin-top: 9px; padding: 8px; border: 1px solid var(--border-muted); border-radius: var(--radius-md); color: var(--text-secondary); font-size: 10px; }
+.coordination-record strong { color: var(--text-primary); font-size: 11px; }
+.fuel-observation { display: flex; flex-direction: column; gap: 5px; width: 100%; margin-bottom: 8px; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+.fuel-observation textarea { width: 100%; resize: vertical; padding: 7px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text-primary); font: inherit; font-weight: 400; }
+.fuel-actions button { margin: 0 5px 5px 0; }
 .confirmed { color: var(--accent-green); font-size: 11px; font-weight: 600; }
 .event-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--border-default); }
 .event-controls p { width: 100%; color: var(--text-secondary); font-size: 11px; font-weight: 600; }

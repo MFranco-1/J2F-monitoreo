@@ -3,7 +3,8 @@ models/history.py - Modelo Historial (History)
 Registro inmutable de trazabilidad: cada acción sobre una alerta queda registrada.
 """
 
-from app.datetime_utils import utcnow, as_utc_naive, iso_utc
+import json
+from app.datetime_utils import utcnow, iso_utc
 from app import db
 
 
@@ -28,6 +29,24 @@ class History(db.Model):
     profile = db.relationship("Profile")
 
     def to_dict(self) -> dict:
+        detail = self.detail
+        metadata = None
+        if self.action in {"fuel_coordinated", "fuel_confirmed"} and detail:
+            try:
+                metadata = json.loads(detail)
+                station = metadata.get("estacion") or {}
+                parts = []
+                if station.get("name"):
+                    parts.append(f"Estación: {station['name']}")
+                elif self.action == "fuel_confirmed":
+                    parts.append("Confirmación documentada")
+                elif metadata.get("modalidad") == "manual":
+                    parts.append("Coordinación manual")
+                if metadata.get("observacion"):
+                    parts.append(f"Observación: {metadata['observacion']}")
+                detail = ". ".join(parts)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                metadata = None
         return {
             "id": self.id,
             "alert_id": self.alert_id,
@@ -42,7 +61,8 @@ class History(db.Model):
             "action": self.action,
             "previous_state": self.previous_state,
             "new_state": self.new_state,
-            "detail": self.detail,
+            "detail": detail,
+            "metadata": metadata,
             "timestamp": iso_utc(self.timestamp),
         }
 

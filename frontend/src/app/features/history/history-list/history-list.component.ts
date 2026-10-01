@@ -52,6 +52,8 @@ export class HistoryListComponent implements OnInit {
       created: ' Creada', state_changed: ' Estado cambiado',
       assigned: ' Asignada', escalated: ' Escalada',
       closed: ' Cerrada', updated: ' Actualizada', note_added: ' Nota',
+      reassigned: ' Reasignada', fuel_coordinated: ' Coordinación de abastecimiento',
+      fuel_confirmed: ' Abastecimiento confirmado',
     };
     return map[action] ?? action;
   }

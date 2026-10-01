@@ -1,6 +1,6 @@
 <section class="fleet-map-card card" aria-labelledby="fleet-map-title">
   <header class="fleet-map-header">
-    <div><h2 id="fleet-map-title">Monitoreo de flota</h2><p>Posiciones, velocidades y combustible simulados</p></div>
+    <div><h2 id="fleet-map-title">Monitoreo de flota</h2><p>Telemetría simulada local en este navegador; alertas y atención persistidas</p></div>
     <div class="fleet-map-controls">
       <select class="filter-select" [(ngModel)]="selectedClientId" (change)="applyClientFilter()" aria-label="Filtrar vehículos por cliente">
         <option [ngValue]="null">Todos los clientes autorizados</option><option *ngFor="let client of clients()" [ngValue]="client.id">{{ client.business_name }}</option>
@@ -27,15 +27,24 @@
           <article class="event-row" *ngFor="let event of vehicle.open_events"><div><strong>{{ event.name }}</strong><span>{{ priorityLabel(event.priority) }}</span></div><button type="button" class="btn-link" (click)="manageAlert(event.alert_id)">Gestionar</button></article>
         </section>
         <section class="fuel-section" *ngIf="lowFuelEvent(vehicle) as fuelEvent">
-          <h3>Abastecimiento</h3><button type="button" class="btn-secondary btn-sm" (click)="consultFuelStations()" [disabled]="loadingStations()">{{ loadingStations() ? 'Consultando...' : 'Estaciones cercanas' }}</button>
-          <div class="station-list" *ngIf="stations().length"><button type="button" *ngFor="let station of stations()" (click)="chooseStation(station)" [class.selected]="selectedStation()?.id === station.id"><strong>{{ station.name }}</strong><span>{{ station.roadDistance / 1000 | number:'1.1-1' }} km por calles</span></button></div>
+          <h3>Abastecimiento</h3>
+          <p class="role-guidance">{{ fuelGuidance(fuelEvent) }}</p>
+          <ng-container *ngIf="fuelEvent.can_coordinate">
+            <button type="button" class="btn-secondary btn-sm" (click)="consultFuelStations()" [disabled]="loadingStations()">{{ loadingStations() ? 'Consultando...' : 'Consultar estaciones cercanas' }}</button>
+            <div class="station-list" *ngIf="stations().length"><button type="button" *ngFor="let station of stations()" (click)="chooseStation(station)" [class.selected]="selectedStation()?.id === station.id"><strong>{{ station.name }}</strong><span *ngIf="station.roadDistance !== undefined">{{ station.roadDistance! / 1000 | number:'1.1-1' }} km por calles</span><span *ngIf="station.roadDistance === undefined">Ruta vial no disponible</span></button></div>
+          </ng-container>
+          <div class="coordination-record" *ngIf="fuelEvent.fuel_workflow.coordination as coordination">
+            <strong>Coordinación registrada</strong>
+            <span>{{ coordination.station?.name || 'Coordinación manual' }}</span>
+            <span>{{ coordination.user?.full_name || 'Usuario no disponible' }} · {{ coordination.timestamp | date:'dd/MM/yyyy HH:mm' }}</span>
+            <span>{{ coordination.observation }}</span>
+          </div>
           <div class="fuel-actions" *ngIf="fuelEvent.can_coordinate">
-            <button type="button" class="btn-primary btn-sm" *ngIf="fuelEvent.fuel_status === 'pending'" (click)="recordFuel('coordinate')" [disabled]="fuelAction() !== null">Registrar coordinación</button>
-            <button type="button" class="btn-secondary btn-sm" *ngIf="fuelEvent.fuel_status === 'coordinated' && !arrivedAtStation(vehicle) && !tripInProgress(vehicle) && !selectedStation()" (click)="consultFuelStations()" [disabled]="loadingStations()">Retomar ruta a estación</button>
-            <button type="button" class="btn-secondary btn-sm" *ngIf="fuelEvent.fuel_status === 'coordinated' && !arrivedAtStation(vehicle) && !tripInProgress(vehicle) && selectedStation()" (click)="resumeStationTrip()">Iniciar recorrido</button>
-            <button type="button" class="btn-success btn-sm" *ngIf="fuelEvent.fuel_status === 'coordinated'" (click)="recordFuel('confirm')" [disabled]="fuelAction() !== null || !arrivedAtStation(vehicle)">Confirmar abastecimiento</button>
-            <span class="empty-inline" *ngIf="fuelEvent.fuel_status === 'coordinated' && !arrivedAtStation(vehicle)">El vehículo debe llegar a la estación.</span>
-            <span class="confirmed" *ngIf="fuelEvent.fuel_status === 'confirmed'">Abastecimiento confirmado</span>
+            <label class="fuel-observation">Observación obligatoria<textarea [(ngModel)]="fuelObservation" maxlength="500" rows="2" placeholder="Describe la coordinación o el abastecimiento realizado"></textarea></label>
+            <button type="button" class="btn-primary btn-sm" *ngIf="fuelEvent.fuel_status === 'pending'" (click)="recordFuel('coordinate')" [disabled]="fuelAction() !== null || !fuelObservation.trim()">{{ selectedStation() ? 'Registrar coordinación con estación' : 'Registrar coordinación manual' }}</button>
+            <button type="button" class="btn-secondary btn-sm" *ngIf="fuelEvent.fuel_status === 'coordinated' && fuelEvent.fuel_workflow.coordination?.station && !tripInProgress(vehicle)" (click)="startPersistedStationTrip(fuelEvent)" [disabled]="loadingStations()">Calcular recorrido visual desde posición actual</button>
+            <button type="button" class="btn-success btn-sm" *ngIf="fuelEvent.fuel_status === 'coordinated'" (click)="recordFuel('confirm')" [disabled]="fuelAction() !== null || !fuelObservation.trim()">Confirmar abastecimiento</button>
+            <span class="empty-inline" *ngIf="fuelEvent.fuel_status === 'coordinated'">La confirmación documentada no depende del recorrido visual.</span>
           </div>
         </section>
         <div class="event-controls" *ngIf="auth.canAssign()"><p>Generar evento operativo</p><button type="button" class="btn-secondary btn-sm" (click)="generateEvent('SPEEDING')" [disabled]="!!generatingCode() || hasOpenEvent('SPEEDING')">Exceso de velocidad</button><button type="button" class="btn-secondary btn-sm" (click)="generateEvent('GPS_SIGNAL_LOSS')" [disabled]="!!generatingCode() || hasOpenEvent('GPS_SIGNAL_LOSS')">Pérdida de señal</button><button type="button" class="btn-secondary btn-sm" (click)="simulateLowFuel()" [disabled]="!!generatingCode() || hasOpenEvent('LOW_FUEL')">Combustible al 9 %</button><button type="button" class="btn-danger btn-sm" (click)="generateEvent('SOS')" [disabled]="!!generatingCode() || hasOpenEvent('SOS')">SOS</button></div>

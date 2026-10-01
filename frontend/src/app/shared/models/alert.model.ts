@@ -75,6 +75,24 @@ export interface MapOpenEvent {
   priority: AlertPriority;
   can_coordinate: boolean;
   fuel_status: 'pending' | 'coordinated' | 'confirmed';
+  fuel_workflow: FuelWorkflow;
+}
+
+export interface FuelActionRecord {
+  user?: UserSummary | null;
+  profile?: { id: number; name: string } | null;
+  timestamp: string;
+  observation?: string | null;
+  mode: 'station' | 'manual';
+  station?: {
+    id?: string | null; name: string; latitude: number; longitude: number;
+    road_distance?: number;
+  } | null;
+}
+
+export interface FuelWorkflow {
+  coordination?: FuelActionRecord | null;
+  confirmation?: FuelActionRecord | null;
 }
 
 export interface FuelStation {

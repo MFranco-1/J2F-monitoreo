@@ -75,7 +75,8 @@ def create_map_event():
 @jwt_required()
 def get_map_fuel_stations():
     return alert_controller.get_nearby_fuel_stations(
-        request.args.get("latitude"), request.args.get("longitude"), request.args.get("radius")
+        request.args.get("latitude"), request.args.get("longitude"), request.args.get("radius"),
+        request.args.get("alert_id")
     )
 
 
@@ -84,7 +85,8 @@ def get_map_fuel_stations():
 def get_map_route():
     return alert_controller.get_street_route(
         request.args.get("origin_lat"), request.args.get("origin_lng"),
-        request.args.get("destination_lat"), request.args.get("destination_lng")
+        request.args.get("destination_lat"), request.args.get("destination_lng"),
+        request.args.get("alert_id")
     )
 
 
