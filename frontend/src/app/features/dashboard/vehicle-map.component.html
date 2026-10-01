@@ -1,68 +1,46 @@
 <section class="fleet-map-card card" aria-labelledby="fleet-map-title">
-  <div class="fleet-map-header">
-    <div>
-      <h2 id="fleet-map-title">Monitoreo de flota</h2>
-      <p>Posiciones y velocidades simuladas sobre vehículos registrados</p>
-    </div>
+  <header class="fleet-map-header">
+    <div><h2 id="fleet-map-title">Monitoreo de flota</h2><p>Posiciones, velocidades y combustible simulados</p></div>
     <div class="fleet-map-controls">
-      <select class="filter-select" [(ngModel)]="selectedClientId" (change)="applyClientFilter()"
-              aria-label="Filtrar vehículos por cliente">
-        <option [ngValue]="null">Todos los clientes autorizados</option>
-        <option *ngFor="let client of clients()" [ngValue]="client.id">{{ client.business_name }}</option>
+      <select class="filter-select" [(ngModel)]="selectedClientId" (change)="applyClientFilter()" aria-label="Filtrar vehículos por cliente">
+        <option [ngValue]="null">Todos los clientes autorizados</option><option *ngFor="let client of clients()" [ngValue]="client.id">{{ client.business_name }}</option>
       </select>
-      <button class="btn-secondary btn-sm" type="button" (click)="toggleSimulation()">
-        {{ running() ? 'Pausar recorrido' : 'Iniciar recorrido' }}
-      </button>
+      <button class="btn-secondary btn-sm" type="button" (click)="toggleSimulation()">{{ running() ? 'Pausar recorrido' : 'Iniciar recorrido' }}</button>
     </div>
-  </div>
-
+  </header>
   <div class="alert-banner alert-success" *ngIf="message()">{{ message() }}</div>
   <div class="alert-banner alert-error" *ngIf="error()">{{ error() }}</div>
-
   <div class="fleet-map-layout">
-    <div class="fleet-map-shell">
-      <div id="fleet-map" aria-label="Mapa interactivo de vehículos"></div>
-      <div class="map-status" *ngIf="loading()">Cargando vehículos...</div>
-      <div class="map-legend"><span></span> Vehículo con alerta abierta</div>
-    </div>
-
+    <div class="fleet-map-shell"><div id="fleet-map" aria-label="Mapa interactivo de vehículos"></div><div class="map-status" *ngIf="loading()">Cargando vehículos...</div><div class="map-legend"><span></span> Vehículo con alerta abierta · trazos discontinuos: recorrido simulado</div></div>
     <aside class="vehicle-panel">
       <ng-container *ngIf="selectedVehicle() as vehicle; else noVehicle">
-        <div class="vehicle-panel-heading">
-          <span class="vehicle-plate">{{ vehicle.plate }}</span>
-          <span class="badge" [class.badge-critical]="vehicle.open_events.length"
-                [class.badge-active]="!vehicle.open_events.length">
-            {{ vehicle.open_events.length ? 'Con alerta' : 'Operativo' }}
-          </span>
+        <div class="vehicle-panel-heading"><div><span class="panel-label">Vehículo</span><strong class="vehicle-plate">{{ vehicle.plate }}</strong></div><span class="status-pill" [class.alert]="vehicle.open_events.length">{{ vehicle.open_events.length ? 'Con alerta' : 'Operativo' }}</span></div>
+        <div class="telemetry-grid">
+          <div><span>Velocidad</span><strong>{{ positionFor(vehicle)?.speed | number:'1.0-0' }} km/h</strong></div>
+          <div><span>Combustible</span><strong [class.fuel-low]="(positionFor(vehicle)?.fuel || 0) <= 10">{{ positionFor(vehicle)?.fuel | number:'1.0-0' }} %</strong></div>
         </div>
         <dl>
-          <div><dt>Cliente</dt><dd>{{ vehicle.client.business_name }}</dd></div>
-          <div><dt>Vehículo</dt><dd>{{ vehicle.brand || '—' }} {{ vehicle.model || '' }}</dd></div>
-          <div><dt>Velocidad simulada</dt><dd>{{ positionFor(vehicle)?.speed | number:'1.0-0' }} km/h</dd></div>
-          <div><dt>Ubicación simulada</dt><dd>{{ locationFor(vehicle) }}</dd></div>
-          <div><dt>Coordenadas simuladas</dt><dd>{{ positionFor(vehicle)?.lat | number:'1.5-5' }}, {{ positionFor(vehicle)?.lng | number:'1.5-5' }}</dd></div>
+          <div><dt>Cliente</dt><dd>{{ vehicle.client.business_name }}</dd></div><div><dt>Vehículo</dt><dd>{{ vehicle.brand || '—' }} {{ vehicle.model || '' }}</dd></div>
+          <div><dt>Ubicación simulada</dt><dd>{{ locationFor(vehicle) }}</dd></div><div><dt>Última actualización</dt><dd>{{ positionFor(vehicle)?.updatedAt | date:'dd/MM/yyyy HH:mm:ss' }}</dd></div>
         </dl>
-
-        <div class="open-events" *ngIf="vehicle.open_events.length">
-          <span *ngFor="let event of vehicle.open_events" class="event-chip">{{ event.name }}</span>
-        </div>
-
-        <div class="event-controls" *ngIf="auth.canAssign()">
-          <p>Generar evento operativo</p>
-          <button type="button" class="btn-secondary btn-sm" (click)="generateEvent('SPEEDING')"
-                  [disabled]="!!generatingCode() || hasOpenEvent('SPEEDING')">Exceso de velocidad</button>
-          <button type="button" class="btn-secondary btn-sm" (click)="generateEvent('GPS_SIGNAL_LOSS')"
-                  [disabled]="!!generatingCode() || hasOpenEvent('GPS_SIGNAL_LOSS')">Pérdida de señal</button>
-          <button type="button" class="btn-danger btn-sm" (click)="generateEvent('SOS')"
-                  [disabled]="!!generatingCode() || hasOpenEvent('SOS')">SOS</button>
-        </div>
+        <section class="events-section"><h3>Alertas autorizadas</h3><p class="empty-inline" *ngIf="!vehicle.open_events.length">No tiene alertas abiertas.</p>
+          <article class="event-row" *ngFor="let event of vehicle.open_events"><div><strong>{{ event.name }}</strong><span>{{ priorityLabel(event.priority) }}</span></div><button type="button" class="btn-link" (click)="manageAlert(event.alert_id)">Gestionar</button></article>
+        </section>
+        <section class="fuel-section" *ngIf="lowFuelEvent(vehicle) as fuelEvent">
+          <h3>Abastecimiento</h3><button type="button" class="btn-secondary btn-sm" (click)="consultFuelStations()" [disabled]="loadingStations()">{{ loadingStations() ? 'Consultando...' : 'Estaciones cercanas' }}</button>
+          <div class="station-list" *ngIf="stations().length"><button type="button" *ngFor="let station of stations()" (click)="chooseStation(station)" [class.selected]="selectedStation()?.id === station.id"><strong>{{ station.name }}</strong><span>{{ station.roadDistance / 1000 | number:'1.1-1' }} km por calles</span></button></div>
+          <div class="fuel-actions" *ngIf="fuelEvent.can_coordinate">
+            <button type="button" class="btn-primary btn-sm" *ngIf="fuelEvent.fuel_status === 'pending'" (click)="recordFuel('coordinate')" [disabled]="fuelAction() !== null">Registrar coordinación</button>
+            <button type="button" class="btn-secondary btn-sm" *ngIf="fuelEvent.fuel_status === 'coordinated' && !arrivedAtStation(vehicle) && !tripInProgress(vehicle) && !selectedStation()" (click)="consultFuelStations()" [disabled]="loadingStations()">Retomar ruta a estación</button>
+            <button type="button" class="btn-secondary btn-sm" *ngIf="fuelEvent.fuel_status === 'coordinated' && !arrivedAtStation(vehicle) && !tripInProgress(vehicle) && selectedStation()" (click)="resumeStationTrip()">Iniciar recorrido</button>
+            <button type="button" class="btn-success btn-sm" *ngIf="fuelEvent.fuel_status === 'coordinated'" (click)="recordFuel('confirm')" [disabled]="fuelAction() !== null || !arrivedAtStation(vehicle)">Confirmar abastecimiento</button>
+            <span class="empty-inline" *ngIf="fuelEvent.fuel_status === 'coordinated' && !arrivedAtStation(vehicle)">El vehículo debe llegar a la estación.</span>
+            <span class="confirmed" *ngIf="fuelEvent.fuel_status === 'confirmed'">Abastecimiento confirmado</span>
+          </div>
+        </section>
+        <div class="event-controls" *ngIf="auth.canAssign()"><p>Generar evento operativo</p><button type="button" class="btn-secondary btn-sm" (click)="generateEvent('SPEEDING')" [disabled]="!!generatingCode() || hasOpenEvent('SPEEDING')">Exceso de velocidad</button><button type="button" class="btn-secondary btn-sm" (click)="generateEvent('GPS_SIGNAL_LOSS')" [disabled]="!!generatingCode() || hasOpenEvent('GPS_SIGNAL_LOSS')">Pérdida de señal</button><button type="button" class="btn-secondary btn-sm" (click)="simulateLowFuel()" [disabled]="!!generatingCode() || hasOpenEvent('LOW_FUEL')">Combustible al 9 %</button><button type="button" class="btn-danger btn-sm" (click)="generateEvent('SOS')" [disabled]="!!generatingCode() || hasOpenEvent('SOS')">SOS</button></div>
       </ng-container>
-      <ng-template #noVehicle>
-        <div class="vehicle-empty">
-          <strong>Selecciona un vehículo</strong>
-          <p>Consulta cliente, placa, velocidad y ubicación simulada.</p>
-        </div>
-      </ng-template>
+      <ng-template #noVehicle><div class="vehicle-empty"><strong>Selecciona un vehículo</strong><p>Consulta su telemetría simulada y las alertas que tu perfil puede gestionar.</p></div></ng-template>
     </aside>
   </div>
 </section>

@@ -205,6 +205,7 @@ def _seed_initial_data() -> None:
         ("GEOFENCE_EXIT", "Salida de geocerca", "high", True),
         ("GEOFENCE_ENTRY", "Ingreso a geocerca", "low", False),
         ("GPS_SIGNAL_LOSS", "Pérdida de señal GPS", "high", True),
+        ("LOW_FUEL", "Combustible bajo", "high", True),
         ("POWER_CUT", "Corte de alimentación del dispositivo", "critical", True),
         ("LOW_BATTERY", "Batería baja", "medium", True),
         ("DEVICE_TAMPER", "Manipulación o desconexión del dispositivo", "critical", True),

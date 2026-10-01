@@ -39,6 +39,9 @@ class BaseConfig:
     JSON_SORT_KEYS = False
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=8)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+    OVERPASS_API_URL = os.environ.get("OVERPASS_API_URL", "https://overpass-api.de/api/interpreter")
+    ROUTING_API_URL = os.environ.get("ROUTING_API_URL", "https://router.project-osrm.org")
+    MAP_SERVICE_TIMEOUT = int(os.environ.get("MAP_SERVICE_TIMEOUT", "12"))
 
 
 class DevelopmentConfig(BaseConfig):

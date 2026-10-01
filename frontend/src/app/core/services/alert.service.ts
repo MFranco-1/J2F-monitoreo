@@ -2,7 +2,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { Alert, AlertMetrics, AlertsResponse, AlertFilters, MapVehicle } from '../../shared/models/alert.model';
+import { Alert, AlertMetrics, AlertsResponse, AlertFilters, FuelStation, MapVehicle, StreetRoute } from '../../shared/models/alert.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -49,13 +49,30 @@ export class AlertService {
 
   createMapEvent(data: {
     vehicle_id: number;
-    event_code: 'SPEEDING' | 'GPS_SIGNAL_LOSS' | 'SOS';
+    event_code: 'SPEEDING' | 'GPS_SIGNAL_LOSS' | 'SOS' | 'LOW_FUEL';
     latitude: number;
     longitude: number;
     speed: number;
+    fuel_percent?: number;
   }): Observable<{ message: string; created: boolean; alert: Alert }> {
     return this.http.post<{ message: string; created: boolean; alert: Alert }>(
       `${this.BASE}/map/events`, data
     );
+  }
+
+  getFuelStations(latitude: number, longitude: number, radius = 3000) {
+    const params = new HttpParams().set('latitude', latitude).set('longitude', longitude).set('radius', radius);
+    return this.http.get<{ stations: FuelStation[]; source: string }>(`${this.BASE}/map/fuel-stations`, { params });
+  }
+
+  getStreetRoute(originLat: number, originLng: number, destinationLat: number, destinationLng: number) {
+    const params = new HttpParams().set('origin_lat', originLat).set('origin_lng', originLng)
+      .set('destination_lat', destinationLat).set('destination_lng', destinationLng);
+    return this.http.get<StreetRoute>(`${this.BASE}/map/route`, { params });
+  }
+
+  recordFuelAction(alertId: number, action: 'coordinate' | 'confirm', detail: string) {
+    return this.http.post<{ message: string; fuel_status: 'pending' | 'coordinated' | 'confirmed' }>(
+      `${this.BASE}/${alertId}/fuel-actions`, { action, detail });
   }
 }

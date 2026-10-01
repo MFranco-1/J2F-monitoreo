@@ -140,46 +140,51 @@ def _generate_operator_performance(report: Report) -> dict:
     filters = _report_filters(report)
     if filters.get("user_id"):
         query = query.filter(Assignment.user_id == filters["user_id"])
-    if filters.get("vehicle_id") or filters.get("client_id"):
+    if any(filters.get(key) for key in ("vehicle_id", "client_id", "priority", "state")):
         query = query.join(Alert, Assignment.alert_id == Alert.id)
         if filters.get("vehicle_id"):
             query = query.filter(Alert.vehicle_id == filters["vehicle_id"])
         if filters.get("client_id"):
             query = query.join(Vehicle, Alert.vehicle_id == Vehicle.id).filter(
                 Vehicle.client_id == filters["client_id"])
+        if filters.get("priority"):
+            query = query.filter(Alert.priority == filters["priority"])
+        if filters.get("state"):
+            query = query.join(State, Alert.state_id == State.id).filter(State.name == filters["state"])
 
     assignments = query.all()
     performance = {}
     for a in assignments:
         if not a.user:
             continue
-        name = a.user.full_name
-        if name not in performance:
-            performance[name] = {"assigned": 0, "resolved": 0, "reassigned": 0,
-                                 "active": 0, "avg_response_minutes": []}
-        performance[name]["assigned"] += 1
+        user_id = a.user.id
+        if user_id not in performance:
+            performance[user_id] = {"technician_id": user_id, "technician": a.user.full_name,
+                                    "assigned": 0, "resolved": 0, "reassigned": 0,
+                                    "active": 0, "avg_response_minutes": []}
+        performance[user_id]["assigned"] += 1
         siblings = a.alert.assignments.order_by(Assignment.assigned_at, Assignment.id).all()
         is_latest = bool(siblings and siblings[-1].id == a.id)
         resolved = bool(a.completed_at and is_latest and a.alert.resolved_at)
         reassigned = bool(a.completed_at and not is_latest)
         if resolved:
-            performance[name]["resolved"] += 1
+            performance[user_id]["resolved"] += 1
         elif reassigned:
-            performance[name]["reassigned"] += 1
+            performance[user_id]["reassigned"] += 1
         elif a.completed_at is None:
-            performance[name]["active"] += 1
+            performance[user_id]["active"] += 1
         if resolved and a.response_time_minutes is not None:
-            performance[name]["avg_response_minutes"].append(a.response_time_minutes)
+            performance[user_id]["avg_response_minutes"].append(a.response_time_minutes)
 
     # Calcular promedios
-    for name, data in performance.items():
+    for data in performance.values():
         times = data["avg_response_minutes"]
         data["avg_response_minutes"] = round(sum(times) / len(times), 2) if times else None
 
-    rows = [{"technician": name, **data} for name, data in sorted(performance.items())]
+    rows = sorted(performance.values(), key=lambda item: (item["technician"], item["technician_id"]))
     return {
         "type": "operator_performance",
-        "operators": performance,
+        "operators": {str(user_id): data for user_id, data in performance.items()},
         "rows": rows,
         "filters": filters,
         "generated_at": datetime.now(timezone.utc).isoformat(),

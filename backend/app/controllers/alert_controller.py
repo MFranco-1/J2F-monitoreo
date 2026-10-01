@@ -4,7 +4,11 @@ Gestiona el flujo automático de alertas, cambio de estados y trazabilidad.
 """
 
 from app.datetime_utils import utcnow
-from flask import jsonify
+import json
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+from flask import current_app, jsonify
 from app import db
 from app.models.alert import Alert
 from app.models.state import State
@@ -200,7 +204,7 @@ def get_dashboard_metrics() -> tuple:
     }), 200
 
 
-MAP_EVENT_CODES = {"SPEEDING", "GPS_SIGNAL_LOSS", "SOS"}
+MAP_EVENT_CODES = {"SPEEDING", "GPS_SIGNAL_LOSS", "SOS", "LOW_FUEL"}
 
 
 def get_map_vehicles(client_id_value=None) -> tuple:
@@ -221,13 +225,16 @@ def get_map_vehicles(client_id_value=None) -> tuple:
     vehicles = []
     for vehicle in query.order_by(Vehicle.plate).all():
         device = vehicle.gps_devices.join(State).filter(State.name == "Activo").order_by(GpsDevice.id).first()
-        open_events = (
+        open_events_query = (
             Alert.query.join(State, Alert.state_id == State.id)
             .join(EventType, Alert.event_type_id == EventType.id)
             .filter(Alert.vehicle_id == vehicle.id, State.name != "Cerrado",
                     EventType.code.in_(MAP_EVENT_CODES))
-            .order_by(Alert.opened_at.desc()).all()
         )
+        if is_technician(actor) and not can_view_all_operations(actor):
+            open_events_query = open_events_query.filter(
+                Alert.assignments.any(Assignment.user_id == actor.id))
+        open_events = open_events_query.order_by(Alert.opened_at.desc()).all()
         vehicles.append({
             "id": vehicle.id,
             "plate": vehicle.plate,
@@ -236,7 +243,9 @@ def get_map_vehicles(client_id_value=None) -> tuple:
             "client": vehicle.client.to_dict() if vehicle.client else None,
             "gps_device": device.to_dict() if device else None,
             "open_events": [{"alert_id": item.id, "code": item.event_type.code,
-                             "name": item.event_type.name, "priority": item.priority}
+                             "name": item.event_type.name, "priority": item.priority,
+                             "can_coordinate": may_attend(item, actor),
+                             "fuel_status": _fuel_status(item)}
                             for item in open_events],
         })
     return jsonify({"vehicles": vehicles}), 200
@@ -256,6 +265,14 @@ def create_map_event(data: dict, current_user_id: int) -> tuple:
         return jsonify({"error": "La posición y velocidad simuladas son inválidas"}), 400
     if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
         return jsonify({"error": "La posición simulada está fuera de rango"}), 400
+    fuel_percent = None
+    if event_code == "LOW_FUEL":
+        try:
+            fuel_percent = float(data.get("fuel_percent"))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Indica el porcentaje de combustible simulado"}), 400
+        if not (0 <= fuel_percent <= 10):
+            return jsonify({"error": "Combustible bajo requiere un nivel entre 0 % y 10 %"}), 400
 
     vehicle = Vehicle.query.filter_by(id=vehicle_id).with_for_update().first()
     if not vehicle or not vehicle.is_active or not vehicle.client or not vehicle.client.is_active:
@@ -281,6 +298,7 @@ def create_map_event(data: dict, current_user_id: int) -> tuple:
     alert = Alert(
         title=f"{event_type.name} - {vehicle.plate}",
         description=(f"Evento generado desde el mapa. Velocidad simulada: {speed:.0f} km/h. "
+                     f"{f'Combustible simulado: {fuel_percent:.1f} %. ' if fuel_percent is not None else ''}"
                      f"{event_type.expected_action or ''}").strip(),
         priority=event_type.default_priority,
         service_type="Monitoreo GPS",
@@ -295,10 +313,116 @@ def create_map_event(data: dict, current_user_id: int) -> tuple:
     db.session.add(alert)
     db.session.flush()
     _log_history(alert.id, current_user_id, "created", new_state="Abierto",
-                 detail=f"{event_type.name}; {location}; velocidad {speed:.0f} km/h")
+                 detail=(f"{event_type.name}; {location}; velocidad {speed:.0f} km/h"
+                         + (f"; combustible {fuel_percent:.1f} %" if fuel_percent is not None else "")))
     db.session.commit()
     return jsonify({"message": f"Alerta #{alert.id} creada para {vehicle.plate}",
                     "created": True, "alert": alert.to_dict()}), 201
+
+
+def get_nearby_fuel_stations(latitude_value, longitude_value, radius_value=None) -> tuple:
+    """Consulta estaciones reales registradas en OpenStreetMap mediante Overpass."""
+    latitude, longitude = _coordinates(latitude_value, longitude_value)
+    radius = integer(radius_value or 3000, "radius", minimum=100, maximum=10000)
+    endpoint = current_app.config.get("OVERPASS_API_URL")
+    if not endpoint:
+        return jsonify({"error": "El servicio de estaciones no está configurado"}), 503
+    query = (f'[out:json][timeout:10];nwr["amenity"="fuel"]'
+             f'(around:{radius},{latitude},{longitude});out center tags;')
+    try:
+        payload = _external_json(endpoint, data=urlencode({"data": query}).encode("utf-8"))
+        stations = []
+        for item in payload.get("elements", []):
+            lat = item.get("lat") or (item.get("center") or {}).get("lat")
+            lng = item.get("lon") or (item.get("center") or {}).get("lon")
+            if lat is None or lng is None:
+                continue
+            tags = item.get("tags") or {}
+            stations.append({"id": f'{item.get("type", "osm")}-{item.get("id")}',
+                             "name": tags.get("name") or tags.get("brand") or "Estación sin nombre registrado",
+                             "brand": tags.get("brand"), "latitude": lat, "longitude": lng})
+        return jsonify({"stations": stations, "source": "OpenStreetMap"}), 200
+    except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        return jsonify({"error": "No se pudo consultar el servicio de estaciones cercanas"}), 502
+
+
+def get_street_route(origin_lat, origin_lng, destination_lat, destination_lng) -> tuple:
+    """Obtiene una geometría vial real; nunca fabrica una línea de respaldo."""
+    start_lat, start_lng = _coordinates(origin_lat, origin_lng)
+    end_lat, end_lng = _coordinates(destination_lat, destination_lng)
+    endpoint = (current_app.config.get("ROUTING_API_URL") or "").rstrip("/")
+    if not endpoint:
+        return jsonify({"error": "El servicio de rutas no está configurado"}), 503
+    url = (f"{endpoint}/route/v1/driving/{start_lng},{start_lat};{end_lng},{end_lat}"
+           "?overview=full&geometries=geojson&steps=false")
+    try:
+        payload = _external_json(url)
+        routes = payload.get("routes") or []
+        if payload.get("code") != "Ok" or not routes:
+            return jsonify({"error": "El servicio no encontró una ruta por calles"}), 404
+        route = routes[0]
+        coordinates = route.get("geometry", {}).get("coordinates") or []
+        if len(coordinates) < 2:
+            return jsonify({"error": "El servicio no devolvió una geometría vial válida"}), 502
+        return jsonify({"coordinates": [[lat, lng] for lng, lat in coordinates],
+                        "distance_meters": route.get("distance"),
+                        "duration_seconds": route.get("duration"), "source": "OSRM"}), 200
+    except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        return jsonify({"error": "No se pudo consultar el servicio de rutas"}), 502
+
+
+def record_fuel_action(alert_id: int, data: dict, user_id: int) -> tuple:
+    alert = Alert.query.get_or_404(alert_id, description="Alerta no encontrada")
+    if not may_attend(alert, current_user()):
+        return jsonify({"error": "Solo el técnico asignado o un administrador puede registrar el abastecimiento"}), 403
+    if not alert.event_type or alert.event_type.code != "LOW_FUEL":
+        return jsonify({"error": "La alerta no corresponde a combustible bajo"}), 400
+    if alert.state.name == "Cerrado":
+        return jsonify({"error": "La alerta de combustible ya está cerrada"}), 409
+    action = text_value(data, "action", required=True, limit=30)
+    detail = text_value(data, "detail", required=True, limit=500)
+    actions = {"coordinate": ("fuel_coordinated", "Coordinación de abastecimiento"),
+               "confirm": ("fuel_confirmed", "Abastecimiento confirmado")}
+    if action not in actions:
+        return jsonify({"error": "Acción de abastecimiento inválida"}), 400
+    history_action, label = actions[action]
+    if action == "confirm" and not alert.history.filter_by(action="fuel_coordinated").first():
+        return jsonify({"error": "Primero registra la coordinación del abastecimiento"}), 409
+    _log_history(alert.id, user_id, history_action, detail=f"{label}: {detail}")
+    if action == "confirm":
+        result = _change_state(alert, user_id, "Cerrado", f"Abastecimiento confirmado: {detail}")
+        if result is not None:
+            db.session.rollback()
+            return result
+    db.session.commit()
+    return jsonify({"message": f"{label} registrada", "fuel_status": _fuel_status(alert)}), 200
+
+
+def _fuel_status(alert):
+    if alert.history.filter_by(action="fuel_confirmed").first():
+        return "confirmed"
+    if alert.history.filter_by(action="fuel_coordinated").first():
+        return "coordinated"
+    return "pending"
+
+
+def _coordinates(latitude_value, longitude_value):
+    try:
+        latitude, longitude = float(latitude_value), float(longitude_value)
+    except (TypeError, ValueError):
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("Coordenadas inválidas")
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        from werkzeug.exceptions import BadRequest
+        raise BadRequest("Coordenadas fuera de rango")
+    return latitude, longitude
+
+
+def _external_json(url, data=None):
+    request = Request(url, data=data, headers={"User-Agent": "J2F-Monitoreo/1.0",
+                                               "Content-Type": "application/x-www-form-urlencoded"})
+    with urlopen(request, timeout=current_app.config.get("MAP_SERVICE_TIMEOUT", 12)) as response:
+        return json.loads(response.read().decode("utf-8"))
 
 
 # --- Helpers internos ---

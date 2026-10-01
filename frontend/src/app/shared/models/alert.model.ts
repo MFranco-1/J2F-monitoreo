@@ -70,9 +70,19 @@ export interface AlertFilters {
 
 export interface MapOpenEvent {
   alert_id: number;
-  code: 'SPEEDING' | 'GPS_SIGNAL_LOSS' | 'SOS';
+  code: 'SPEEDING' | 'GPS_SIGNAL_LOSS' | 'SOS' | 'LOW_FUEL';
   name: string;
   priority: AlertPriority;
+  can_coordinate: boolean;
+  fuel_status: 'pending' | 'coordinated' | 'confirmed';
+}
+
+export interface FuelStation {
+  id: string; name: string; brand?: string | null; latitude: number; longitude: number;
+}
+
+export interface StreetRoute {
+  coordinates: [number, number][]; distance_meters: number; duration_seconds: number; source: string;
 }
 
 export interface MapVehicle {

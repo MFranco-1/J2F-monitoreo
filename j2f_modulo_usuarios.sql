@@ -117,6 +117,7 @@ WITH active_state AS (
  ('GEOFENCE_EXIT','Salida de geocerca','Salida de una zona autorizada','high',TRUE,'Validar ruta y autorización de salida.'),
  ('GEOFENCE_ENTRY','Ingreso a geocerca','Ingreso a una zona configurada','low',FALSE,'Registrar el ingreso para trazabilidad.'),
  ('GPS_SIGNAL_LOSS','Pérdida de señal GPS','El equipo dejó de reportar posición','high',TRUE,'Comprobar cobertura y estado del dispositivo.'),
+ ('LOW_FUEL','Combustible bajo','Nivel simulado de combustible igual o menor al 10 %','high',TRUE,'Coordinar una estación y confirmar el abastecimiento.'),
  ('POWER_CUT','Corte de alimentación del dispositivo','Pérdida de alimentación principal','critical',TRUE,'Contactar al conductor y revisar posible manipulación.'),
  ('LOW_BATTERY','Batería baja','Nivel de batería por debajo del umbral','medium',TRUE,'Programar revisión de alimentación.'),
  ('DEVICE_TAMPER','Manipulación o desconexión del dispositivo','Detección de desconexión o manipulación','critical',TRUE,'Escalar y validar físicamente el dispositivo.'),
@@ -235,12 +236,12 @@ END $$;
 WITH active_state AS (
  SELECT id FROM states WHERE LOWER(BTRIM(name))='activo' AND type='user' ORDER BY id LIMIT 1
 ), seed(document_number,business_name,contact_name,phone,email,address) AS (VALUES
- ('J2F-DEMO-001','Transportes Andinos Demo','Ana Torres','900000001','andinos.demo@example.invalid','Lima'),
- ('J2F-DEMO-002','Logística del Pacífico Demo','Luis Medina','900000002','pacifico.demo@example.invalid','Callao'),
- ('J2F-DEMO-003','Distribuciones del Sur Demo','Rosa Vargas','900000003','sur.demo@example.invalid','Arequipa')
+ ('J2F-001','Transportes Andinos','Ana Torres','900000001',NULL,'Lima'),
+ ('J2F-002','Logística del Pacífico','Luis Medina','900000002',NULL,'Callao'),
+ ('J2F-003','Distribuciones del Sur','Rosa Vargas','900000003',NULL,'Arequipa')
 )
 INSERT INTO clients(document_type,document_number,business_name,contact_name,phone,email,address,state_id,created_at,updated_at)
-SELECT 'RUC',s.document_number,s.business_name,s.contact_name,s.phone,s.email,s.address,a.id,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
+SELECT 'Código interno',s.document_number,s.business_name,s.contact_name,s.phone,s.email,s.address,a.id,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
 FROM seed s CROSS JOIN active_state a
 ON CONFLICT (document_number) DO UPDATE SET
  business_name=EXCLUDED.business_name,contact_name=EXCLUDED.contact_name,phone=EXCLUDED.phone,
@@ -251,15 +252,18 @@ WHERE (clients.business_name,clients.contact_name,clients.phone,clients.email,cl
 WITH active_state AS (
  SELECT id FROM states WHERE LOWER(BTRIM(name))='activo' AND type='user' ORDER BY id LIMIT 1
 ), seed(document_number,plate,brand,model,color,vehicle_type) AS (VALUES
- ('J2F-DEMO-001','J2F-A01','Toyota','Hilux','Blanco','Camioneta'),
- ('J2F-DEMO-001','J2F-A02','Hino','300','Azul','Camión'),
- ('J2F-DEMO-001','J2F-A03','Nissan','Frontier','Gris','Camioneta'),
- ('J2F-DEMO-002','J2F-P01','Volvo','FH','Rojo','Tráiler'),
- ('J2F-DEMO-002','J2F-P02','Scania','P360','Blanco','Camión'),
- ('J2F-DEMO-002','J2F-P03','Mercedes-Benz','Actros','Azul','Tráiler'),
- ('J2F-DEMO-003','J2F-S01','Kia','K2700','Blanco','Furgón'),
- ('J2F-DEMO-003','J2F-S02','Hyundai','H100','Plata','Furgón'),
- ('J2F-DEMO-003','J2F-S03','Isuzu','NPR','Blanco','Camión')
+ ('J2F-001','J2F-A01','Toyota','Hilux','Blanco','Camioneta'),
+ ('J2F-001','J2F-A02','Hino','300','Azul','Camión'),
+ ('J2F-001','J2F-A03','Nissan','Frontier','Gris','Camioneta'),
+ ('J2F-001','J2F-A04','Toyota','Hilux','Azul','Camioneta'),
+ ('J2F-002','J2F-P01','Volvo','FH','Rojo','Tráiler'),
+ ('J2F-002','J2F-P02','Scania','P360','Blanco','Camión'),
+ ('J2F-002','J2F-P03','Mercedes-Benz','Actros','Azul','Tráiler'),
+ ('J2F-002','J2F-P04','Volvo','FH','Blanco','Tráiler'),
+ ('J2F-003','J2F-S01','Kia','K2700','Blanco','Furgón'),
+ ('J2F-003','J2F-S02','Hyundai','H100','Plata','Furgón'),
+ ('J2F-003','J2F-S03','Isuzu','NPR','Blanco','Camión'),
+ ('J2F-003','J2F-S04','Hyundai','H100','Gris','Furgón')
 )
 INSERT INTO vehicles(client_id,plate,brand,model,color,vehicle_type,state_id,created_at,updated_at)
 SELECT c.id,s.plate,s.brand,s.model,s.color,s.vehicle_type,a.id,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
@@ -293,8 +297,8 @@ WITH seed(plate,event_code,label,priority,state_name,hours_ago) AS (VALUES
 INSERT INTO alerts(title,description,priority,service_type,location,source,state_id,vehicle_id,event_type_id,
                    opened_at,acknowledged_at,resolved_at,created_at,updated_at)
 SELECT seed.label || ' - ' || seed.plate,
-       'Alerta de demostración para validar la consulta por cliente y vehículo.',
-       seed.priority,'Monitoreo GPS','Ubicación de prueba','Datos de prueba J2F',state.id,vehicle.id,event_type.id,
+       'Registro inicial de monitoreo.',
+       seed.priority,'Monitoreo GPS','Ubicación no informada','Carga inicial J2F',state.id,vehicle.id,event_type.id,
        CURRENT_TIMESTAMP-(seed.hours_ago::text || ' hours')::interval,
        CASE WHEN seed.state_name IN ('En Progreso','Cerrado') THEN CURRENT_TIMESTAMP-((seed.hours_ago-1)::text || ' hours')::interval END,
        CASE WHEN seed.state_name='Cerrado' THEN CURRENT_TIMESTAMP-((seed.hours_ago-2)::text || ' hours')::interval END,
@@ -305,23 +309,23 @@ JOIN states state ON state.name=seed.state_name AND state.type='alert'
 LEFT JOIN event_types event_type ON event_type.code=seed.event_code
 WHERE NOT EXISTS (
  SELECT 1 FROM alerts existing
- WHERE existing.source='Datos de prueba J2F' AND existing.vehicle_id=vehicle.id
+ WHERE existing.source IN ('Datos de prueba J2F','Carga inicial J2F') AND existing.vehicle_id=vehicle.id
    AND existing.event_type_id=event_type.id
 );
 
 UPDATE alerts demo
 SET title=event_type.name || ' - ' || vehicle.plate,
-    description='Alerta de demostración para validar la consulta por cliente y vehículo.',
-    location='Ubicación de prueba'
+    description='Registro inicial de monitoreo.',
+    location='Ubicación no informada'
 FROM vehicles vehicle CROSS JOIN event_types event_type
-WHERE demo.source='Datos de prueba J2F' AND demo.vehicle_id=vehicle.id
+WHERE demo.source IN ('Datos de prueba J2F','Carga inicial J2F') AND demo.vehicle_id=vehicle.id
   AND event_type.id=demo.event_type_id
   AND vehicle.plate LIKE 'J2F-%'
   AND (demo.title,demo.description,demo.location) IS DISTINCT FROM
       (event_type.name || ' - ' || vehicle.plate,
-       'Alerta de demostración para validar la consulta por cliente y vehículo.',
-       'Ubicación de prueba');
+       'Registro inicial de monitoreo.',
+       'Ubicación no informada');
 
 COMMIT;
--- Reversión segura: conservar los registros. Pueden identificarse por source='Datos de prueba J2F'
+-- Reversión segura: conservar los registros. Pueden identificarse por source='Carga inicial J2F'
 -- y desactivarse desde los CRUD; no borrarlos si ya tienen asignaciones o historial.

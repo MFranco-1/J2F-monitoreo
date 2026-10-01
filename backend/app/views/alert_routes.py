@@ -71,6 +71,31 @@ def create_map_event():
     )
 
 
+@alert_bp.get("/map/fuel-stations")
+@jwt_required()
+def get_map_fuel_stations():
+    return alert_controller.get_nearby_fuel_stations(
+        request.args.get("latitude"), request.args.get("longitude"), request.args.get("radius")
+    )
+
+
+@alert_bp.get("/map/route")
+@jwt_required()
+def get_map_route():
+    return alert_controller.get_street_route(
+        request.args.get("origin_lat"), request.args.get("origin_lng"),
+        request.args.get("destination_lat"), request.args.get("destination_lng")
+    )
+
+
+@alert_bp.post("/<int:alert_id>/fuel-actions")
+@jwt_required()
+def record_fuel_action(alert_id: int):
+    return alert_controller.record_fuel_action(
+        alert_id, request.get_json(silent=True) or {}, int(get_jwt_identity())
+    )
+
+
 @alert_bp.put("/<int:alert_id>")
 @jwt_required()
 def update_alert(alert_id: int):

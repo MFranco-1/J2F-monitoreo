@@ -575,6 +575,77 @@ class RegressionTests(unittest.TestCase):
         visible = self.client.get("/api/alerts/map/vehicles", headers=technician_headers).get_json()["vehicles"]
         self.assertEqual([item["id"] for item in visible], [vehicle["id"]])
 
+        low_fuel = self.client.post("/api/alerts/map/events", headers=self.admin, json={
+            **payload, "event_code": "LOW_FUEL", "speed": 30, "fuel_percent": 9,
+        })
+        self.assertEqual(low_fuel.status_code, 201, low_fuel.get_json())
+        fuel_alert_id = low_fuel.get_json()["alert"]["id"]
+        coordinated = self.client.post(f"/api/alerts/{fuel_alert_id}/fuel-actions", headers=self.admin,
+            json={"action": "coordinate", "detail": "Estación OSM seleccionada"})
+        confirmed = self.client.post(f"/api/alerts/{fuel_alert_id}/fuel-actions", headers=self.admin,
+            json={"action": "confirm", "detail": "Carga finalizada"})
+        self.assertEqual(coordinated.get_json()["fuel_status"], "coordinated")
+        self.assertEqual(confirmed.get_json()["fuel_status"], "confirmed")
+        self.assertEqual(self.client.get(f"/api/alerts/{fuel_alert_id}", headers=self.admin)
+                         .get_json()["alert"]["state"]["name"], "Cerrado")
+        with self.app.app_context():
+            self.assertEqual(History.query.filter_by(alert_id=fuel_alert_id, action="fuel_coordinated").count(), 1)
+            self.assertEqual(History.query.filter_by(alert_id=fuel_alert_id, action="fuel_confirmed").count(), 1)
+
+    def test_low_fuel_alert_requires_level_at_or_below_ten(self):
+        customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
+            "document_type": "RUC", "document_number": "20999999992",
+            "business_name": "Cliente Combustible", "state_id": self.active,
+        }).get_json()["record"]
+        vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+            "client_id": customer["id"], "plate": "FUEL-01", "state_id": self.active,
+        }).get_json()["record"]
+        payload = {"vehicle_id": vehicle["id"], "event_code": "LOW_FUEL",
+                   "latitude": -12.08, "longitude": -77.05, "speed": 35}
+        for percentage in (None, 10.1, 54, -1):
+            with self.subTest(percentage=percentage):
+                result = self.client.post("/api/alerts/map/events", headers=self.admin,
+                    json={**payload, "fuel_percent": percentage})
+                self.assertEqual(result.status_code, 400, result.get_json())
+        accepted = self.client.post("/api/alerts/map/events", headers=self.admin,
+            json={**payload, "fuel_percent": 10})
+        self.assertEqual(accepted.status_code, 201, accepted.get_json())
+
+    def test_map_services_report_unavailability_without_fabricated_results(self):
+        self.app.config["OVERPASS_API_URL"] = ""
+        self.app.config["ROUTING_API_URL"] = ""
+        stations = self.client.get("/api/alerts/map/fuel-stations?latitude=-12.08&longitude=-77.05",
+                                   headers=self.admin)
+        route = self.client.get("/api/alerts/map/route?origin_lat=-12.08&origin_lng=-77.05"
+                                "&destination_lat=-12.09&destination_lng=-77.04", headers=self.admin)
+        self.assertEqual(stations.status_code, 503)
+        self.assertEqual(route.status_code, 503)
+        self.assertNotIn("coordinates", route.get_json())
+
+    def test_operator_report_groups_by_user_id_and_applies_alert_filters(self):
+        first, second = self.user(), self.user(2)
+        with self.app.app_context():
+            db.session.get(User, first).full_name = "Nombre compartido"
+            db.session.get(User, second).full_name = "Nombre compartido"
+            db.session.commit()
+        high = self.client.post("/api/alerts/", headers=self.admin,
+                                json={"title": "Alta", "priority": "high"}).get_json()["alert"]["id"]
+        low = self.client.post("/api/alerts/", headers=self.admin,
+                               json={"title": "Baja", "priority": "low"}).get_json()["alert"]["id"]
+        self.assign(high, first)
+        self.assign(low, second)
+        self.client.put(f"/api/alerts/{high}", headers=self.admin,
+                        json={"state_name": "Cerrado", "notes": "Resuelto"})
+        report = self.client.post("/api/reports/", headers=self.admin, json={
+            "name": "Filtro rendimiento", "type": "operator_performance",
+            "filters": {"priority": "high", "state": "Cerrado"},
+        }).get_json()["report"]
+        generated = self.client.post(f"/api/reports/{report['id']}/generate", headers=self.admin).get_json()
+        result = json.loads(generated["report"]["result_json"])
+        self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(result["rows"][0]["technician_id"], first)
+        self.assertEqual(result["rows"][0]["resolved"], 1)
+
     def test_technician_scope_and_report_role_are_enforced(self):
         own_technician = self.user()
         self.user(2)
@@ -709,8 +780,8 @@ class MigrationScriptTests(unittest.TestCase):
         lowered = sql.lower()
         self.assertIn("select id, profile_id from users", lowered)
         self.assertIn("on conflict (user_id, profile_id) do nothing", lowered)
-        self.assertIn("j2f-demo-003", lowered)
-        self.assertIn("datos de prueba j2f", lowered)
+        self.assertIn("j2f-003", lowered)
+        self.assertIn("carga inicial j2f", lowered)
         self.assertGreaterEqual(lowered.count("where not exists"), 4)
         self.assertGreaterEqual(lowered.count("on conflict"), 3)
 

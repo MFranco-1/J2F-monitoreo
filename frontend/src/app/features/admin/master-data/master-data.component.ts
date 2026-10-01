@@ -32,5 +32,5 @@ export class MasterDataComponent implements OnInit {
     request.subscribe({next:r=>{this.saving.set(false);this.success.set(r.message);this.showModal.set(false);this.loadReferences();this.load();setTimeout(()=>this.success.set(''),3000);},error:e=>{this.saving.set(false);this.error.set(e?.error?.error||'No se pudo guardar');}});}
   remove(record:any){if(!confirm('¿Eliminar este registro? Si tiene relaciones, deberá cambiarlo a Inactivo.'))return;this.service.delete(this.kind,record.id).subscribe({next:r=>{this.success.set(r.message);this.load();},error:e=>this.error.set(e?.error?.error||'No se pudo eliminar')});}
   title(record:any){return record.business_name||record.plate||record.imei||record.name;}
-  detail(record:any){return record.document_number||[record.brand,record.model].filter(Boolean).join(' ')||record.serial_number||record.code;}
+  detail(record:any){return this.kind==='event-types' ? record.description || record.name : record.document_number||[record.brand,record.model].filter(Boolean).join(' ')||record.serial_number||record.code;}
 }

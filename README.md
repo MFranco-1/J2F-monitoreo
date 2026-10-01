@@ -7,8 +7,8 @@ GPS y tipos de evento.
 ## Migración segura de PostgreSQL / Neon
 
 El código no ejecuta migraciones al arrancar. Antes de desplegarlo, crea un respaldo
-de Neon y revisa `j2f_modulo_usuarios.sql`. Es el único script SQL del proyecto:
-contiene cambios incrementales e idempotentes, no usa `DROP` ni `TRUNCATE` y conserva
+de Neon y revisa `j2f_modulo_usuarios.sql` y las migraciones incrementales de
+`backend/migrations`. Los scripts no usan `DROP` ni `TRUNCATE` y conservan
 `users.profile_id`, las alertas y los demás datos actuales.
 
 Para aplicar todo desde un único archivo del proyecto:
@@ -18,9 +18,9 @@ $env:DATABASE_URL = '<URL_PRIVADA_DE_NEON>'
 psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f j2f_modulo_usuarios.sql
 ```
 
-El mismo archivo incorpora tres clientes de demostración, tres vehículos para cada
-cliente y dieciocho alertas identificables mediante la fuente `Datos de prueba J2F`.
-Ejecutarlo nuevamente no duplica esos registros.
+El mismo archivo incorpora tres clientes, cuatro vehículos por cliente y dieciocho
+alertas iniciales identificables mediante la fuente `Carga inicial J2F`. Ejecutarlo
+nuevamente no duplica esos registros.
 
 Después, `backend/init_db.py` valida en modo de solo lectura las 14 tablas y sus
 columnas. No crea, altera ni borra datos.
