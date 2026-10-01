@@ -6,10 +6,11 @@ import { interval, Subscription, switchMap, startWith, catchError, EMPTY } from 
 import { AlertService } from '../../core/services/alert.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AlertMetrics } from '../../shared/models/alert.model';
+import { VehicleMapComponent } from './vehicle-map.component';
 
 @Component({
   selector: 'app-dashboard', standalone: true,
-  imports: [NgFor, NgIf, DecimalPipe, DatePipe, FormsModule, RouterLink],
+  imports: [NgFor, NgIf, DecimalPipe, DatePipe, FormsModule, RouterLink, VehicleMapComponent],
   templateUrl: './dashboard.component.html', styleUrl: './dashboard.component.scss',
 })
 export class DashboardComponent implements OnInit, OnDestroy {
@@ -43,6 +44,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.connectionError.set(false); this.metrics.set(data);
         this.loading.set(false); this.lastUpdate.set(new Date());
       });
+  }
+
+  refreshMetrics(): void {
+    this.alertService.getMetrics().subscribe({
+      next: data => {
+        this.metrics.set(data);
+        this.connectionError.set(false);
+        this.lastUpdate.set(new Date());
+      },
+      error: () => this.connectionError.set(true),
+    });
   }
 
   onProfileChange(): void {

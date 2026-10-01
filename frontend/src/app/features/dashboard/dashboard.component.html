@@ -90,6 +90,8 @@
     </div>
 
     <!-- Gráficos Section -->
+    <app-vehicle-map (eventCreated)="refreshMetrics()"></app-vehicle-map>
+
     <div class="charts-grid">
       <!-- Distribución por Estado -->
       <div class="card chart-card">

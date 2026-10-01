@@ -3,7 +3,7 @@ views/alert_routes.py - Endpoints REST para Alertas
 """
 
 from flask import Blueprint, request
-from app.security import admin_required
+from app.security import admin_required, assignment_manager_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers import alert_controller
 
@@ -46,11 +46,29 @@ def get_alert(alert_id: int):
 
 @alert_bp.post("/")
 @jwt_required()
+@assignment_manager_required
 def create_alert():
     """POST /api/alerts — Crea una nueva alerta."""
     data = request.get_json(silent=True) or {}
     current_user_id = int(get_jwt_identity())
     return alert_controller.create_alert(data, current_user_id)
+
+
+@alert_bp.get("/map/vehicles")
+@jwt_required()
+def get_map_vehicles():
+    """Vehículos autorizados y eventos abiertos para el mapa del dashboard."""
+    return alert_controller.get_map_vehicles(request.args.get("client_id"))
+
+
+@alert_bp.post("/map/events")
+@jwt_required()
+@assignment_manager_required
+def create_map_event():
+    """Registra un evento simulado como alerta real, sin duplicar eventos abiertos."""
+    return alert_controller.create_map_event(
+        request.get_json(silent=True) or {}, int(get_jwt_identity())
+    )
 
 
 @alert_bp.put("/<int:alert_id>")

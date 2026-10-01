@@ -1,0 +1,68 @@
+<section class="fleet-map-card card" aria-labelledby="fleet-map-title">
+  <div class="fleet-map-header">
+    <div>
+      <h2 id="fleet-map-title">Monitoreo de flota</h2>
+      <p>Posiciones y velocidades simuladas sobre vehículos registrados</p>
+    </div>
+    <div class="fleet-map-controls">
+      <select class="filter-select" [(ngModel)]="selectedClientId" (change)="applyClientFilter()"
+              aria-label="Filtrar vehículos por cliente">
+        <option [ngValue]="null">Todos los clientes autorizados</option>
+        <option *ngFor="let client of clients()" [ngValue]="client.id">{{ client.business_name }}</option>
+      </select>
+      <button class="btn-secondary btn-sm" type="button" (click)="toggleSimulation()">
+        {{ running() ? 'Pausar recorrido' : 'Iniciar recorrido' }}
+      </button>
+    </div>
+  </div>
+
+  <div class="alert-banner alert-success" *ngIf="message()">{{ message() }}</div>
+  <div class="alert-banner alert-error" *ngIf="error()">{{ error() }}</div>
+
+  <div class="fleet-map-layout">
+    <div class="fleet-map-shell">
+      <div id="fleet-map" aria-label="Mapa interactivo de vehículos"></div>
+      <div class="map-status" *ngIf="loading()">Cargando vehículos...</div>
+      <div class="map-legend"><span></span> Vehículo con alerta abierta</div>
+    </div>
+
+    <aside class="vehicle-panel">
+      <ng-container *ngIf="selectedVehicle() as vehicle; else noVehicle">
+        <div class="vehicle-panel-heading">
+          <span class="vehicle-plate">{{ vehicle.plate }}</span>
+          <span class="badge" [class.badge-critical]="vehicle.open_events.length"
+                [class.badge-active]="!vehicle.open_events.length">
+            {{ vehicle.open_events.length ? 'Con alerta' : 'Operativo' }}
+          </span>
+        </div>
+        <dl>
+          <div><dt>Cliente</dt><dd>{{ vehicle.client.business_name }}</dd></div>
+          <div><dt>Vehículo</dt><dd>{{ vehicle.brand || '—' }} {{ vehicle.model || '' }}</dd></div>
+          <div><dt>Velocidad simulada</dt><dd>{{ positionFor(vehicle)?.speed | number:'1.0-0' }} km/h</dd></div>
+          <div><dt>Ubicación simulada</dt><dd>{{ locationFor(vehicle) }}</dd></div>
+          <div><dt>Coordenadas simuladas</dt><dd>{{ positionFor(vehicle)?.lat | number:'1.5-5' }}, {{ positionFor(vehicle)?.lng | number:'1.5-5' }}</dd></div>
+        </dl>
+
+        <div class="open-events" *ngIf="vehicle.open_events.length">
+          <span *ngFor="let event of vehicle.open_events" class="event-chip">{{ event.name }}</span>
+        </div>
+
+        <div class="event-controls" *ngIf="auth.canAssign()">
+          <p>Generar evento operativo</p>
+          <button type="button" class="btn-secondary btn-sm" (click)="generateEvent('SPEEDING')"
+                  [disabled]="!!generatingCode() || hasOpenEvent('SPEEDING')">Exceso de velocidad</button>
+          <button type="button" class="btn-secondary btn-sm" (click)="generateEvent('GPS_SIGNAL_LOSS')"
+                  [disabled]="!!generatingCode() || hasOpenEvent('GPS_SIGNAL_LOSS')">Pérdida de señal</button>
+          <button type="button" class="btn-danger btn-sm" (click)="generateEvent('SOS')"
+                  [disabled]="!!generatingCode() || hasOpenEvent('SOS')">SOS</button>
+        </div>
+      </ng-container>
+      <ng-template #noVehicle>
+        <div class="vehicle-empty">
+          <strong>Selecciona un vehículo</strong>
+          <p>Consulta cliente, placa, velocidad y ubicación simulada.</p>
+        </div>
+      </ng-template>
+    </aside>
+  </div>
+</section>

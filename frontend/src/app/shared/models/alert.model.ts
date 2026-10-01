@@ -67,3 +67,20 @@ export interface AlertFilters {
   page?: number;
   per_page?: number;
 }
+
+export interface MapOpenEvent {
+  alert_id: number;
+  code: 'SPEEDING' | 'GPS_SIGNAL_LOSS' | 'SOS';
+  name: string;
+  priority: AlertPriority;
+}
+
+export interface MapVehicle {
+  id: number;
+  plate: string;
+  brand?: string;
+  model?: string;
+  client: import('./master-data.model').Client;
+  gps_device?: import('./master-data.model').GpsDevice | null;
+  open_events: MapOpenEvent[];
+}

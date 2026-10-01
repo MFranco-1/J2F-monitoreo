@@ -6,12 +6,14 @@ from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers import report_controller
 from app.controllers import history_controller
+from app.security import report_viewer_required, admin_required
 
 report_bp = Blueprint("reports", __name__)
 
 
 @report_bp.get("/")
 @jwt_required()
+@report_viewer_required
 def get_reports():
     """GET /api/reports — Lista todos los reportes."""
     return report_controller.get_all_reports()
@@ -19,6 +21,7 @@ def get_reports():
 
 @report_bp.get("/<int:report_id>")
 @jwt_required()
+@report_viewer_required
 def get_report(report_id: int):
     """GET /api/reports/<id> — Reporte por ID con resultado incluido."""
     return report_controller.get_report_by_id(report_id)
@@ -26,6 +29,7 @@ def get_report(report_id: int):
 
 @report_bp.post("/")
 @jwt_required()
+@report_viewer_required
 def create_report():
     """POST /api/reports — Crea metadatos de un reporte."""
     data = request.get_json(silent=True) or {}
@@ -35,6 +39,7 @@ def create_report():
 
 @report_bp.post("/<int:report_id>/generate")
 @jwt_required()
+@report_viewer_required
 def generate_report(report_id: int):
     """POST /api/reports/<id>/generate — Genera el contenido del reporte."""
     return report_controller.generate_report(report_id)
@@ -42,6 +47,7 @@ def generate_report(report_id: int):
 
 @report_bp.delete("/<int:report_id>")
 @jwt_required()
+@admin_required
 def delete_report(report_id: int):
     """DELETE /api/reports/<id> — Elimina un reporte."""
     return report_controller.delete_report(report_id)

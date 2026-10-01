@@ -62,10 +62,10 @@
               <button
                 class="btn-success btn-sm"
                 [id]="'btn-complete-assignment-' + a.id"
-                (click)="completeAssignment(a)" [disabled]="!canEdit(a)"
+                (click)="openCloseModal(a)" [disabled]="!canEdit(a)"
                 *ngIf="!a.completed_at"
               >
-                 Completar
+                 Cerrar atención
               </button>
             </div>
           </td>
@@ -77,6 +77,27 @@
         </tr>
       </tbody>
     </table>
+  </div>
+</div>
+
+<div class="modal-backdrop" *ngIf="showCloseModal()" (click)="closeCloseModal()">
+  <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Cerrar atención y alerta</h2>
+      <button class="modal-close" aria-label="Cerrar" (click)="closeCloseModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="solution-text">Solución aplicada *</label>
+        <textarea id="solution-text" class="form-control" [(ngModel)]="solutionText" rows="5"
+          placeholder="Describe la acción realizada y el resultado obtenido"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closeCloseModal()">Cancelar</button>
+      <button id="btn-confirm-close" class="btn-success" (click)="completeAssignment()"
+        [disabled]="!solutionText.trim()">Cerrar atención</button>
+    </div>
   </div>
 </div>
 

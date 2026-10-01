@@ -36,7 +36,7 @@ export class AssignmentService {
     );
   }
 
-  updateAssignment(id: number, data: { notes?: string; complete?: boolean }): Observable<{ assignment: Assignment; message: string }> {
+  updateAssignment(id: number, data: { notes?: string; complete?: boolean; solution?: string }): Observable<{ assignment: Assignment; message: string }> {
     return this.http.put<{ assignment: Assignment; message: string }>(`${this.BASE}/assignments/${id}`, data);
   }
 

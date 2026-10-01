@@ -205,12 +205,13 @@ class RegressionTests(unittest.TestCase):
         alert_id = self.alert()
         assignment = self.assign(alert_id, self.user())
         url = f"/api/assignments/{assignment}"
-        first = self.client.put(url, headers=self.admin, json={"complete": True})
-        second = self.client.put(url, headers=self.admin, json={"complete": True})
+        first = self.client.put(url, headers=self.admin, json={"complete": True, "solution": "Servicio restablecido"})
+        second = self.client.put(url, headers=self.admin, json={"complete": True, "solution": "Servicio restablecido"})
         self.assertEqual(first.status_code, 200)
         self.assertEqual(first.get_json()["assignment"]["completed_at"], second.get_json()["assignment"]["completed_at"])
         with self.app.app_context():
-            self.assertEqual(History.query.filter_by(alert_id=alert_id, action="updated").count(), 1)
+            self.assertEqual(History.query.filter_by(alert_id=alert_id, action="closed").count(), 1)
+            self.assertEqual(db.session.get(Alert, alert_id).state.name, "Cerrado")
 
     def test_notes_are_audited(self):
         alert_id = self.alert()
@@ -236,7 +237,8 @@ class RegressionTests(unittest.TestCase):
         headers = self.headers(self.login("test1@example.invalid")["access_token"])
         alert_id = self.alert()
         self.assign(alert_id, user_id)
-        self.assertEqual(self.client.put(f"/api/alerts/{alert_id}", headers=headers, json={"state_name": "Cerrado"}).status_code, 200)
+        self.assertEqual(self.client.put(f"/api/alerts/{alert_id}", headers=headers,
+                                        json={"state_name": "Cerrado", "notes": "Solución verificada"}).status_code, 200)
 
     def test_delete_preserves_user_and_alert_history(self):
         user_id = self.user()
@@ -538,6 +540,55 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(alert.get_json()["alert"]["client"]["id"], client["id"])
         self.assertEqual(self.client.post("/api/alerts/", headers=self.admin,
                                          json={"title":"Alerta anterior"}).status_code, 201)
+
+    def test_map_event_is_persisted_linked_and_not_duplicated(self):
+        customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
+            "document_type": "RUC", "document_number": "20999999991",
+            "business_name": "Cliente Mapa", "state_id": self.active,
+        }).get_json()["record"]
+        vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
+            "client_id": customer["id"], "plate": "MAP-001", "state_id": self.active,
+        }).get_json()["record"]
+        device = self.client.post("/api/master-data/gps-devices/", headers=self.admin, json={
+            "vehicle_id": vehicle["id"], "imei": "999999999999991", "state_id": self.active,
+        }).get_json()["record"]
+        payload = {"vehicle_id": vehicle["id"], "event_code": "SOS",
+                   "latitude": -12.08, "longitude": -77.05, "speed": 41}
+        first = self.client.post("/api/alerts/map/events", headers=self.admin, json=payload)
+        duplicate = self.client.post("/api/alerts/map/events", headers=self.admin, json=payload)
+        self.assertEqual(first.status_code, 201, first.get_json())
+        self.assertEqual(duplicate.status_code, 200, duplicate.get_json())
+        self.assertFalse(duplicate.get_json()["created"])
+        alert = first.get_json()["alert"]
+        self.assertEqual(alert["vehicle"]["id"], vehicle["id"])
+        self.assertEqual(alert["gps_device"]["id"], device["id"])
+        self.assertEqual(alert["event_type"]["code"], "SOS")
+        self.assertIn("simulada", alert["location"].lower())
+
+        technician_id = self.user()
+        technician_headers = self.headers(self.login("test1@example.invalid")["access_token"])
+        self.assertEqual(self.client.post("/api/alerts/map/events", headers=technician_headers,
+                                         json=payload).status_code, 403)
+        self.assertEqual(self.client.get("/api/alerts/map/vehicles", headers=technician_headers)
+                         .get_json()["vehicles"], [])
+        self.assign(alert["id"], technician_id)
+        visible = self.client.get("/api/alerts/map/vehicles", headers=technician_headers).get_json()["vehicles"]
+        self.assertEqual([item["id"] for item in visible], [vehicle["id"]])
+
+    def test_technician_scope_and_report_role_are_enforced(self):
+        own_technician = self.user()
+        self.user(2)
+        own_headers = self.headers(self.login("test1@example.invalid")["access_token"])
+        other_headers = self.headers(self.login("test2@example.invalid")["access_token"])
+        own_alert, unrelated_alert = self.alert(), self.alert()
+        self.assign(own_alert, own_technician)
+
+        visible = self.client.get("/api/alerts/?per_page=200", headers=own_headers).get_json()
+        self.assertEqual([item["id"] for item in visible["alerts"]], [own_alert])
+        self.assertEqual(self.client.get(f"/api/alerts/{unrelated_alert}", headers=own_headers).status_code, 403)
+        self.assertEqual(self.client.get("/api/assignments/", headers=other_headers)
+                         .get_json()["assignments"], [])
+        self.assertEqual(self.client.get("/api/reports/", headers=own_headers).status_code, 403)
 
     def test_alert_rejects_inconsistent_client_vehicle_device(self):
         def client(number):

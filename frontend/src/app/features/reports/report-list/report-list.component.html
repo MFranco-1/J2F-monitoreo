@@ -21,12 +21,22 @@
       <h3> Resultado del Reporte</h3>
       <button class="btn-secondary btn-sm" (click)="closeResult()">× Cerrar</button>
     </div>
-    <div class="result-body">
-      <div class="result-row" *ngFor="let entry of resultEntries()">
-        <strong>{{ entry[0] | titlecase }}:</strong>
-        <span *ngIf="!isObject(entry[1])">{{ entry[1] }}</span>
-        <pre *ngIf="isObject(entry[1])">{{ entry[1] | json }}</pre>
-      </div>
+    <div class="result-body" [ngSwitch]="selectedResult().type">
+      <ng-container *ngSwitchCase="'alerts_summary'">
+        <div class="result-row"><strong>Total de alertas</strong><span>{{ selectedResult().total_alerts }}</span></div>
+        <table class="data-table"><thead><tr><th>Prioridad</th><th>Cantidad</th></tr></thead><tbody>
+          <tr *ngFor="let item of objectEntries(selectedResult().by_priority)"><td>{{ item[0] | titlecase }}</td><td>{{ item[1] }}</td></tr>
+        </tbody></table>
+        <table class="data-table"><thead><tr><th>Estado</th><th>Cantidad</th></tr></thead><tbody>
+          <tr *ngFor="let item of objectEntries(selectedResult().by_state)"><td>{{ item[0] }}</td><td>{{ item[1] }}</td></tr>
+        </tbody></table>
+      </ng-container>
+      <table class="data-table" *ngSwitchCase="'operator_performance'"><thead><tr><th>Técnico</th><th>Asignadas</th><th>Resueltas</th><th>Reasignadas</th><th>Activas</th><th>Promedio</th></tr></thead><tbody>
+        <tr *ngFor="let row of selectedResult().rows"><td>{{ row.technician }}</td><td>{{ row.assigned }}</td><td>{{ row.resolved }}</td><td>{{ row.reassigned }}</td><td>{{ row.active }}</td><td>{{ row.avg_response_minutes ?? '—' }}</td></tr>
+      </tbody></table>
+      <table class="data-table" *ngSwitchCase="'response_times'"><thead><tr><th>Prioridad</th><th>Casos</th><th>Promedio</th><th>Mínimo</th><th>Máximo</th></tr></thead><tbody>
+        <tr *ngFor="let item of objectEntries(selectedResult().by_priority)"><td>{{ item[0] | titlecase }}</td><td>{{ item[1].count }}</td><td>{{ item[1].avg_minutes ?? '—' }}</td><td>{{ item[1].min_minutes ?? '—' }}</td><td>{{ item[1].max_minutes ?? '—' }}</td></tr>
+      </tbody></table>
     </div>
   </div>
 
@@ -63,7 +73,7 @@
               <button class="btn-secondary btn-sm" [id]="'btn-view-report-' + report.id" (click)="viewResult(report)" *ngIf="report.has_result">
                  Ver
               </button>
-              <button class="btn-danger btn-sm" [id]="'btn-delete-report-' + report.id" (click)="deleteReport(report.id)">Eliminar</button>
+              <button *ngIf="auth.isAdmin()" class="btn-danger btn-sm" [id]="'btn-delete-report-' + report.id" (click)="deleteReport(report.id)">Eliminar</button>
             </div>
           </td>
         </tr>
@@ -89,6 +99,24 @@
       <div class="form-group">
         <label for="r-name">Nombre del Reporte *</label>
         <input id="r-name" class="form-control" [(ngModel)]="newForm.name" placeholder="ej. Resumen mensual de alertas" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="r-client">Cliente</label>
+          <select id="r-client" class="form-control" [(ngModel)]="newForm.filters.client_id">
+            <option [ngValue]="null">Todos</option><option *ngFor="let client of clients()" [ngValue]="client.id">{{ client.business_name }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="r-vehicle">Vehículo</label>
+          <select id="r-vehicle" class="form-control" [(ngModel)]="newForm.filters.vehicle_id">
+            <option [ngValue]="null">Todos</option><option *ngFor="let vehicle of filteredVehicles()" [ngValue]="vehicle.id">{{ vehicle.plate }}</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label for="r-priority">Prioridad</label><select id="r-priority" class="form-control" [(ngModel)]="newForm.filters.priority"><option value="">Todas</option><option value="critical">Crítica</option><option value="high">Alta</option><option value="medium">Media</option><option value="low">Baja</option></select></div>
+        <div class="form-group"><label for="r-state">Estado</label><select id="r-state" class="form-control" [(ngModel)]="newForm.filters.state"><option value="">Todos</option><option value="Abierto">Abierto</option><option value="En Progreso">En Progreso</option><option value="Escalado">Escalado</option><option value="Cerrado">Cerrado</option></select></div>
       </div>
       <div class="form-group">
         <label for="r-type">Tipo de Reporte</label>

@@ -28,8 +28,10 @@ export class AssignmentListComponent implements OnInit {
   successMsg = signal('');
   errorMsg = signal('');
   showNoteModal = signal(false);
+  showCloseModal = signal(false);
   editingAssignment = signal<Assignment | null>(null);
   noteText = '';
+  solutionText = '';
   showActiveOnly = true;
 
   ngOnInit(): void {
@@ -78,11 +80,26 @@ export class AssignmentListComponent implements OnInit {
     return this.auth.isAdmin() || (this.auth.isTechnician() && a.user_id === this.auth.currentUser()?.id);
   }
 
-  completeAssignment(a: Assignment): void {
-    if (!confirm('¿Marcar esta asignación como completada?')) return;
-    this.assignmentService.updateAssignment(a.id, { complete: true }).subscribe({
+  openCloseModal(a: Assignment): void {
+    this.editingAssignment.set(a);
+    this.solutionText = '';
+    this.showCloseModal.set(true);
+  }
+
+  closeCloseModal(): void { this.showCloseModal.set(false); }
+
+  completeAssignment(): void {
+    const assignment = this.editingAssignment();
+    if (!assignment || !this.solutionText.trim()) {
+      this.errorMsg.set('Debes registrar la solución aplicada');
+      return;
+    }
+    this.assignmentService.updateAssignment(assignment.id, {
+      complete: true, solution: this.solutionText.trim(),
+    }).subscribe({
       next: ({ message }) => {
         this.successMsg.set(message);
+        this.closeCloseModal();
         this.loadAssignments();
         setTimeout(() => this.successMsg.set(''), 3000);
       },

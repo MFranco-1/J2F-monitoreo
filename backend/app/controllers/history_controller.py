@@ -6,11 +6,14 @@ from flask import jsonify
 from app.models.history import History
 from app.models.alert import Alert
 from app.validation import integer, date_value, date_range
+from app.security import current_user, may_view_alert, scope_alert_query
 
 
 def get_history_by_alert(alert_id: int) -> tuple:
     """Retorna el historial completo de una alerta específica."""
-    Alert.query.get_or_404(alert_id, description="Alerta no encontrada")
+    alert = Alert.query.get_or_404(alert_id, description="Alerta no encontrada")
+    if not may_view_alert(alert, current_user()):
+        return jsonify({"error": "No tienes acceso al historial de esta alerta"}), 403
     entries = (
         History.query.filter_by(alert_id=alert_id)
         .order_by(History.timestamp.asc())
@@ -21,7 +24,8 @@ def get_history_by_alert(alert_id: int) -> tuple:
 
 def get_global_history(filters: dict) -> tuple:
     """Retorna el historial global con filtros opcionales."""
-    query = History.query
+    allowed_alerts = scope_alert_query(Alert.query, current_user()).with_entities(Alert.id)
+    query = History.query.filter(History.alert_id.in_(allowed_alerts))
 
     if filters.get("action"):
         query = query.filter_by(action=filters["action"])

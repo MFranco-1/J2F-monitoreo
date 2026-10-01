@@ -2,7 +2,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { Alert, AlertMetrics, AlertsResponse, AlertFilters } from '../../shared/models/alert.model';
+import { Alert, AlertMetrics, AlertsResponse, AlertFilters, MapVehicle } from '../../shared/models/alert.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -39,5 +39,23 @@ export class AlertService {
 
   deleteAlert(id: number): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(`${this.BASE}/${id}`);
+  }
+
+  getMapVehicles(clientId?: number): Observable<{ vehicles: MapVehicle[] }> {
+    let params = new HttpParams();
+    if (clientId) params = params.set('client_id', String(clientId));
+    return this.http.get<{ vehicles: MapVehicle[] }>(`${this.BASE}/map/vehicles`, { params });
+  }
+
+  createMapEvent(data: {
+    vehicle_id: number;
+    event_code: 'SPEEDING' | 'GPS_SIGNAL_LOSS' | 'SOS';
+    latitude: number;
+    longitude: number;
+    speed: number;
+  }): Observable<{ message: string; created: boolean; alert: Alert }> {
+    return this.http.post<{ message: string; created: boolean; alert: Alert }>(
+      `${this.BASE}/map/events`, data
+    );
   }
 }

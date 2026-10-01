@@ -1,6 +1,6 @@
 // app.routes.ts
 import { Routes } from '@angular/router';
-import { authGuard, adminGuard, activeProfileGuard } from './core/guards/auth.guard';
+import { authGuard, adminGuard, activeProfileGuard, reportGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -46,7 +46,7 @@ export const routes: Routes = [
       },
       {
         path: 'reports',
-        canActivate: [activeProfileGuard],
+        canActivate: [activeProfileGuard, reportGuard],
         loadComponent: () =>
           import('./features/reports/report-list/report-list.component').then((m) => m.ReportListComponent),
       },

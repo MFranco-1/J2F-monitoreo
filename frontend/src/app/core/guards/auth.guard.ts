@@ -23,3 +23,9 @@ export const activeProfileGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   return auth.hasActiveProfile() ? true : inject(Router).createUrlTree(['/dashboard']);
 };
+
+export const reportGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  return auth.isAdmin() || auth.isSupervisor()
+    ? true : inject(Router).createUrlTree(['/dashboard']);
+};

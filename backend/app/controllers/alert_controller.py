@@ -10,8 +10,12 @@ from app.models.alert import Alert
 from app.models.state import State
 from app.models.history import History
 from app.models.master_data import Client, Vehicle, GpsDevice, EventType
+from app.models.assignment import Assignment
 from app.validation import text_value, priority_value, integer, date_value, date_range
-from app.security import current_user, may_attend, active_profile_id
+from app.security import (
+    current_user, may_attend, may_view_alert, scope_alert_query,
+    active_profile_id, can_view_all_operations, is_technician,
+)
 
 
 # Orden válido de transiciones de estado de alerta
@@ -28,7 +32,7 @@ def get_all_alerts(filters: dict) -> tuple:
     Lista todas las alertas con filtros opcionales.
     Filtros: client_id, vehicle_id, state, priority, date_from, date_to
     """
-    query = Alert.query.join(State, Alert.state_id == State.id)
+    query = scope_alert_query(Alert.query, current_user()).join(State, Alert.state_id == State.id)
 
     client_id = integer(filters.get("client_id"), "client_id", optional=True)
     vehicle_id = integer(filters.get("vehicle_id"), "vehicle_id", optional=True)
@@ -77,6 +81,8 @@ def get_all_alerts(filters: dict) -> tuple:
 def get_alert_by_id(alert_id: int) -> tuple:
     """Retorna una alerta específica con su historial completo."""
     alert = Alert.query.get_or_404(alert_id, description="Alerta no encontrada")
+    if not may_view_alert(alert, current_user()):
+        return jsonify({"error": "No tienes acceso a esta alerta"}), 403
     return jsonify({"alert": alert.to_dict(include_history=True)}), 200
 
 
@@ -161,17 +167,18 @@ def get_dashboard_metrics() -> tuple:
     Retorna métricas de dashboard para las tarjetas de resumen.
     Usado por el frontend para polling en tiempo real.
     """
-    total = Alert.query.count()
+    base_query = scope_alert_query(Alert.query, current_user())
+    total = base_query.count()
 
     states = State.query.filter_by(type="alert").all()
     state_counts = {}
     for state in states:
-        count = Alert.query.filter_by(state_id=state.id).count()
+        count = base_query.filter(Alert.state_id == state.id).count()
         state_counts[state.name] = count
 
     # Últimas 7 alertas críticas abiertas
     critical_open = (
-        Alert.query.join(State)
+        scope_alert_query(Alert.query, current_user()).join(State)
         .filter(Alert.priority == "critical", State.name == "Abierto")
         .order_by(Alert.opened_at.desc())
         .limit(7)
@@ -179,7 +186,7 @@ def get_dashboard_metrics() -> tuple:
     )
 
     # Tiempo promedio de respuesta (alertas cerradas)
-    closed_alerts = Alert.query.filter(Alert.resolved_at.isnot(None)).all()
+    closed_alerts = base_query.filter(Alert.resolved_at.isnot(None)).all()
     avg_response = 0.0
     if closed_alerts:
         times = [a.response_time_minutes for a in closed_alerts if a.response_time_minutes is not None]
@@ -191,6 +198,107 @@ def get_dashboard_metrics() -> tuple:
         "critical_open": [a.to_dict() for a in critical_open],
         "avg_response_time_minutes": avg_response,
     }), 200
+
+
+MAP_EVENT_CODES = {"SPEEDING", "GPS_SIGNAL_LOSS", "SOS"}
+
+
+def get_map_vehicles(client_id_value=None) -> tuple:
+    """Devuelve solo vehículos que el perfil activo puede consultar."""
+    actor = current_user()
+    query = Vehicle.query.join(State, Vehicle.state_id == State.id).filter(State.name == "Activo")
+    if is_technician(actor) and not can_view_all_operations(actor):
+        query = query.filter(Vehicle.alerts.any(
+            Alert.assignments.any(Assignment.user_id == actor.id)
+        ))
+    elif not can_view_all_operations(actor):
+        return jsonify({"error": "El perfil activo no puede consultar vehículos"}), 403
+
+    client_id = integer(client_id_value, "client_id", optional=True)
+    if client_id:
+        query = query.filter(Vehicle.client_id == client_id)
+
+    vehicles = []
+    for vehicle in query.order_by(Vehicle.plate).all():
+        device = vehicle.gps_devices.join(State).filter(State.name == "Activo").order_by(GpsDevice.id).first()
+        open_events = (
+            Alert.query.join(State, Alert.state_id == State.id)
+            .join(EventType, Alert.event_type_id == EventType.id)
+            .filter(Alert.vehicle_id == vehicle.id, State.name != "Cerrado",
+                    EventType.code.in_(MAP_EVENT_CODES))
+            .order_by(Alert.opened_at.desc()).all()
+        )
+        vehicles.append({
+            "id": vehicle.id,
+            "plate": vehicle.plate,
+            "brand": vehicle.brand,
+            "model": vehicle.model,
+            "client": vehicle.client.to_dict() if vehicle.client else None,
+            "gps_device": device.to_dict() if device else None,
+            "open_events": [{"alert_id": item.id, "code": item.event_type.code,
+                             "name": item.event_type.name, "priority": item.priority}
+                            for item in open_events],
+        })
+    return jsonify({"vehicles": vehicles}), 200
+
+
+def create_map_event(data: dict, current_user_id: int) -> tuple:
+    """Convierte un evento cartográfico simulado en una alerta persistente."""
+    vehicle_id = integer(data.get("vehicle_id"), "vehicle_id")
+    event_code = text_value(data, "event_code", required=True, limit=50)
+    if event_code not in MAP_EVENT_CODES:
+        return jsonify({"error": "Evento de mapa no soportado"}), 400
+    try:
+        latitude = float(data.get("latitude"))
+        longitude = float(data.get("longitude"))
+        speed = max(0.0, min(float(data.get("speed", 0)), 250.0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "La posición y velocidad simuladas son inválidas"}), 400
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return jsonify({"error": "La posición simulada está fuera de rango"}), 400
+
+    vehicle = Vehicle.query.filter_by(id=vehicle_id).with_for_update().first()
+    if not vehicle or not vehicle.is_active or not vehicle.client or not vehicle.client.is_active:
+        return jsonify({"error": "Vehículo no encontrado o inactivo"}), 404
+    event_type = EventType.query.filter_by(code=event_code).first()
+    if not event_type or not event_type.is_active or not event_type.generates_alert:
+        return jsonify({"error": "Tipo de evento no disponible"}), 409
+
+    duplicate = (
+        Alert.query.join(State, Alert.state_id == State.id)
+        .filter(Alert.vehicle_id == vehicle.id, Alert.event_type_id == event_type.id,
+                State.name != "Cerrado").first()
+    )
+    if duplicate:
+        return jsonify({"message": "Ya existe una alerta abierta para este evento y vehículo",
+                        "created": False, "alert": duplicate.to_dict()}), 200
+
+    open_state = State.query.filter_by(name="Abierto", type="alert").first()
+    if not open_state:
+        return jsonify({"error": "Estado 'Abierto' no configurado"}), 500
+    device = vehicle.gps_devices.join(State).filter(State.name == "Activo").order_by(GpsDevice.id).first()
+    location = f"Posición simulada: {latitude:.5f}, {longitude:.5f}"
+    alert = Alert(
+        title=f"{event_type.name} - {vehicle.plate}",
+        description=(f"Evento generado desde el mapa. Velocidad simulada: {speed:.0f} km/h. "
+                     f"{event_type.expected_action or ''}").strip(),
+        priority=event_type.default_priority,
+        service_type="Monitoreo GPS",
+        location=location,
+        source="Simulación cartográfica",
+        state=open_state,
+        vehicle=vehicle,
+        gps_device=device,
+        event_type=event_type,
+        created_by=current_user_id,
+    )
+    db.session.add(alert)
+    db.session.flush()
+    _log_history(alert.id, current_user_id, "created", new_state="Abierto",
+                 detail=f"{event_type.name}; {location}; velocidad {speed:.0f} km/h")
+    db.session.commit()
+    return jsonify({"message": f"Alerta #{alert.id} creada para {vehicle.plate}",
+                    "created": True, "alert": alert.to_dict()}), 201
 
 
 # --- Helpers internos ---
@@ -208,6 +316,9 @@ def _change_state(alert: Alert, user_id: int, new_state_name: str, notes: str = 
             "error": f"Transición inválida: '{current_state_name}' → '{new_state_name}'. "
                      f"Transiciones permitidas: {allowed}"
         }), 422
+
+    if new_state_name == "Cerrado" and not notes:
+        return jsonify({"error": "Registra la solución aplicada antes de cerrar la alerta"}), 400
 
     new_state = State.query.filter_by(name=new_state_name, type="alert").first()
     if not new_state:
@@ -230,7 +341,7 @@ def _change_state(alert: Alert, user_id: int, new_state_name: str, notes: str = 
     _log_history(
         alert_id=alert.id,
         user_id=user_id,
-        action="state_changed",
+        action="closed" if new_state_name == "Cerrado" else "state_changed",
         previous_state=old_state_name,
         new_state=new_state_name,
         detail=notes or f"Estado cambiado de {old_state_name} a {new_state_name}",

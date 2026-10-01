@@ -74,6 +74,14 @@ def can_assign(user):
     return bool(is_admin(user) or is_supervisor(user) or is_operator(user))
 
 
+def can_view_reports(user):
+    return bool(is_admin(user) or is_supervisor(user))
+
+
+def can_view_all_operations(user):
+    return bool(is_admin(user) or is_supervisor(user) or is_operator(user))
+
+
 def current_user():
     try:
         return db.session.get(User, int(get_jwt_identity()))
@@ -102,6 +110,35 @@ def assignment_manager_required(fn):
             return jsonify({"error": "Esta operación requiere el perfil Supervisor, Operador o Administrador"}), 403
         return fn(*args, **kwargs)
     return wrapped
+
+
+def report_viewer_required(fn):
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        if not can_view_reports(current_user()):
+            return jsonify({"error": "Esta operación requiere el perfil Supervisor o Administrador"}), 403
+        return fn(*args, **kwargs)
+    return wrapped
+
+
+def may_view_alert(alert, user):
+    if can_view_all_operations(user):
+        return True
+    return bool(is_technician(user) and alert.assignments.filter_by(user_id=user.id).first())
+
+
+def scope_alert_query(query, user=None):
+    """Aplica el alcance operativo al query sin confiar en filtros del cliente."""
+    from sqlalchemy import false
+    from app.models.alert import Alert
+    from app.models.assignment import Assignment
+
+    user = user or current_user()
+    if can_view_all_operations(user):
+        return query
+    if is_technician(user):
+        return query.filter(Alert.assignments.any(Assignment.user_id == user.id))
+    return query.filter(false())
 
 
 def may_attend(alert, user):

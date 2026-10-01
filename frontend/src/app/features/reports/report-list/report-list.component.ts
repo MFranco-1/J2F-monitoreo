@@ -1,19 +1,24 @@
 // features/reports/report-list/report-list.component.ts
 import { Component, OnInit, signal, inject } from '@angular/core';
-import { NgFor, NgIf, DatePipe, JsonPipe, TitleCasePipe } from '@angular/common';
+import { NgFor, NgIf, NgSwitch, NgSwitchCase, DatePipe, TitleCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AssignmentService } from '../../../core/services/assignment.service';
 import { Report } from '../../../shared/models/assignment.model';
+import { MasterDataService } from '../../../core/services/master-data.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { Client, Vehicle } from '../../../shared/models/master-data.model';
 
 @Component({
   selector: 'app-report-list',
   standalone: true,
-  imports: [NgFor, NgIf, DatePipe, JsonPipe, TitleCasePipe, FormsModule],
+  imports: [NgFor, NgIf, NgSwitch, NgSwitchCase, DatePipe, TitleCasePipe, FormsModule],
   templateUrl: './report-list.component.html',
   styleUrl: './report-list.component.scss',
 })
 export class ReportListComponent implements OnInit {
   private assignmentService = inject(AssignmentService);
+  private masterData = inject(MasterDataService);
+  readonly auth = inject(AuthService);
 
   reports = signal<Report[]>([]);
   loading = signal(true);
@@ -23,10 +28,12 @@ export class ReportListComponent implements OnInit {
   successMsg = signal('');
   errorMsg = signal('');
   selectedResult = signal<any>(null);
+  clients = signal<Client[]>([]);
+  vehicles = signal<Vehicle[]>([]);
 
   newForm: any = {
     name: '', type: 'alerts_summary', description: '',
-    date_range_start: '', date_range_end: '',
+    date_range_start: '', date_range_end: '', filters: {},
   };
 
   readonly reportTypes = [
@@ -35,7 +42,11 @@ export class ReportListComponent implements OnInit {
     { value: 'response_times', label: ' Tiempos de Respuesta' },
   ];
 
-  ngOnInit(): void { this.loadReports(); }
+  ngOnInit(): void {
+    this.loadReports();
+    this.masterData.clients().subscribe(({ clients }) => this.clients.set(clients));
+    this.masterData.vehicles().subscribe(({ vehicles }) => this.vehicles.set(vehicles));
+  }
 
   loadReports(): void {
     this.loading.set(true);
@@ -46,7 +57,8 @@ export class ReportListComponent implements OnInit {
   }
 
   openNewModal(): void {
-    this.newForm = { name: '', type: 'alerts_summary', description: '', date_range_start: '', date_range_end: '' };
+    this.newForm = { name: '', type: 'alerts_summary', description: '', date_range_start: '',
+      date_range_end: '', filters: { client_id: null, vehicle_id: null, priority: '', state: '' } };
     this.showNewModal.set(true);
   }
 
@@ -117,5 +129,14 @@ export class ReportListComponent implements OnInit {
     const r = this.selectedResult();
     if (!r) return [];
     return Object.entries(r).filter(([k]) => !['type', 'generated_at'].includes(k));
+  }
+
+  filteredVehicles(): Vehicle[] {
+    const clientId = this.newForm.filters?.client_id;
+    return clientId ? this.vehicles().filter(vehicle => vehicle.client_id === clientId) : this.vehicles();
+  }
+
+  objectEntries(value: Record<string, any> | null | undefined): [string, any][] {
+    return Object.entries(value || {});
   }
 }

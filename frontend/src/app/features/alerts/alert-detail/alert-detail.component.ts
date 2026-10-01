@@ -67,6 +67,10 @@ export class AlertDetailComponent implements OnInit {
 
   changeState(): void {
     if (!this.newStateName) { this.errorMsg.set('Selecciona un estado'); return; }
+    if (this.newStateName === 'Cerrado' && !this.stateNotes.trim()) {
+      this.errorMsg.set('Debes registrar la solución aplicada para cerrar la alerta');
+      return;
+    }
     const id = this.alert()!.id;
     this.alertService.updateAlert(id, { state_name: this.newStateName, notes: this.stateNotes }).subscribe({
       next: ({ message }) => {
@@ -97,6 +101,7 @@ export class AlertDetailComponent implements OnInit {
       created: ' Creada', state_changed: ' Estado cambiado',
       assigned: ' Asignada', note_added: ' Nota añadida',
       escalated: ' Escalada', closed: ' Cerrada', updated: ' Actualizada',
+      reassigned: ' Reasignada',
     };
     return labels[action] ?? action;
   }

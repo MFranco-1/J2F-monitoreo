@@ -79,8 +79,9 @@
           </select>
         </div>
         <div class="form-group">
-          <label for="state-notes">Notas (opcional)</label>
-          <textarea id="state-notes" class="form-control" [(ngModel)]="stateNotes" rows="2" placeholder="Observaciones del cambio..."></textarea>
+          <label for="state-notes">{{ newStateName === 'Cerrado' ? 'Solución aplicada *' : 'Notas (opcional)' }}</label>
+          <textarea id="state-notes" class="form-control" [(ngModel)]="stateNotes" rows="2"
+            [placeholder]="newStateName === 'Cerrado' ? 'Describe la solución aplicada...' : 'Observaciones del cambio...'"></textarea>
         </div>
         <button id="btn-change-state" class="btn-primary" (click)="changeState()">
           Aplicar Cambio de Estado

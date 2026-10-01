@@ -6,7 +6,7 @@ from app.models.assignment import Assignment
 from app.models.alert import Alert
 from app.models.user import User
 from app.models.history import History
-from app.security import current_user, is_admin, is_technician, active_profile_id
+from app.security import current_user, is_admin, is_technician, can_assign, active_profile_id
 from app.validation import integer, text_value
 
 
@@ -20,6 +20,14 @@ def locked_alert(alert_id):
 
 def get_all_assignments(filters):
     query = Assignment.query
+    actor = current_user()
+    if is_technician(actor):
+        requested_user = integer(filters.get("user_id"), "user_id", optional=True)
+        if requested_user and requested_user != actor.id:
+            return jsonify({"error": "Solo puedes consultar tus propias asignaciones"}), 403
+        query = query.filter(Assignment.user_id == actor.id)
+    elif not can_assign(actor):
+        return jsonify({"error": "El perfil activo no puede consultar asignaciones"}), 403
     for field in ("alert_id", "user_id"):
         if filters.get(field):
             query = query.filter(getattr(Assignment, field) == integer(filters[field], field))
@@ -50,6 +58,8 @@ def create_assignment(data, current_user_id):
         return jsonify({"error": "La alerta ya está asignada a este técnico"}), 409
     for assignment in previous:
         assignment.complete()
+        _log(alert.id, current_user_id, "reassigned",
+             f"Asignación #{assignment.id} de {assignment.user.full_name} finalizada por reasignación")
     _transition_to_in_progress(alert, current_user_id)
     assignment = Assignment(alert_id=alert.id, user_id=user.id, notes=notes, assignment_type="manual")
     db.session.add(assignment)
@@ -96,11 +106,26 @@ def update_assignment(assignment_id, data, current_user_id):
         _log(assignment.alert_id, current_user_id, "note_added",
              f"Notas de asignación #{assignment.id}. Antes: {assignment.notes or '—'}. Ahora: {notes or '—'}")
         assignment.notes = notes
-    if data.get("complete") and assignment.completed_at is None:
-        assignment.complete()
-        _log(assignment.alert_id, current_user_id, "updated", f"Asignación #{assignment.id} completada")
+    if data.get("complete"):
+        solution = text_value(data, "solution", required=True)
+        if assignment.completed_at is not None:
+            if assignment.alert.state and assignment.alert.state.name == "Cerrado":
+                return jsonify({"message": "La atención ya estaba cerrada",
+                                "assignment": assignment.to_dict()}), 200
+            return jsonify({"error": "La asignación ya no está vigente"}), 409
+        current = assignment.alert.assignments.filter_by(completed_at=None).order_by(
+            Assignment.assigned_at.desc(), Assignment.id.desc()).first()
+        if not current or current.id != assignment.id:
+            return jsonify({"error": "Solo la asignación vigente puede cerrar la atención"}), 409
+        assignment.notes = solution
+        from app.controllers.alert_controller import _change_state
+        result = _change_state(assignment.alert, current_user_id, "Cerrado", solution)
+        if result is not None:
+            db.session.rollback()
+            return result
     db.session.commit()
-    return jsonify({"message": "Asignación actualizada", "assignment": assignment.to_dict()}), 200
+    message = "Atención y alerta cerradas" if data.get("complete") else "Asignación actualizada"
+    return jsonify({"message": message, "assignment": assignment.to_dict()}), 200
 
 
 def _transition_to_in_progress(alert, user_id):
