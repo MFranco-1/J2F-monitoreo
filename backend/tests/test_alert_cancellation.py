@@ -38,7 +38,7 @@ class AlertCancellationTests(unittest.TestCase):
         return response.get_json()["user"]["id"], self.login(f"user{index}@empresa.com")
 
     def alert(self, **changes):
-        response = self.client.post("/api/alerts/", headers=self.admin, json={"title": "Alerta para verificar", **changes})
+        response = self.client.post("/api/alerts/", headers=self.admin, json={"title": "Alerta para verificar", "description": "Incidencia registrada para verificar la atención", **changes})
         self.assertEqual(response.status_code, 201, response.get_json())
         return response.get_json()["alert"]["id"]
 

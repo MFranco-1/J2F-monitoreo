@@ -54,7 +54,7 @@ class RegressionTests(unittest.TestCase):
             return user.id
 
     def alert(self):
-        response = self.client.post("/api/alerts/", headers=self.admin, json={"title": "Evento de prueba"})
+        response = self.client.post("/api/alerts/", headers=self.admin, json={"title": "Evento de prueba", "description": "Incidencia registrada para verificar la atención"})
         self.assertEqual(response.status_code, 201, response.get_json())
         return response.get_json()["alert"]["id"]
 
@@ -574,12 +574,12 @@ class RegressionTests(unittest.TestCase):
             "vehicle_id":vehicle["id"], "imei":"123456789012345", "state_id":self.active}).status_code, 400)
         with self.app.app_context():
             event_id = db.session.query(__import__('app.models.master_data', fromlist=['EventType']).EventType.id).first()[0]
-        alert = self.client.post("/api/alerts/", headers=self.admin, json={"title":"GPS", "client_id":client["id"],
+        alert = self.client.post("/api/alerts/", headers=self.admin, json={"title":"GPS", "description":"Se detectó una incidencia en el dispositivo", "client_id":client["id"],
             "vehicle_id":vehicle["id"], "gps_device_id":device["id"], "event_type_id":event_id})
         self.assertEqual(alert.status_code, 201, alert.get_json())
         self.assertEqual(alert.get_json()["alert"]["client"]["id"], client["id"])
         self.assertEqual(self.client.post("/api/alerts/", headers=self.admin,
-                                         json={"title":"Alerta anterior"}).status_code, 201)
+                                         json={"title":"Alerta anterior", "description":"Incidencia general sin unidad vinculada"}).status_code, 201)
 
     def test_map_event_is_persisted_linked_and_not_duplicated(self):
         customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
@@ -664,11 +664,11 @@ class RegressionTests(unittest.TestCase):
             "client_id": customers[0]["id"], "vehicle_id": vehicles[1]["id"],
         })
         valid = self.client.post("/api/alerts/", headers=self.admin, json={
-            "title": "Combustible relacionado", "event_type_id": low_fuel_id,
+            "title": "Combustible relacionado", "description": "Nivel bajo que requiere abastecimiento", "event_type_id": low_fuel_id,
             "client_id": customers[0]["id"], "vehicle_id": vehicles[0]["id"],
         })
         compatible_manual = self.client.post("/api/alerts/", headers=self.admin, json={
-            "title": "Alerta general sin vehículo",
+            "title": "Alerta general sin vehículo", "description": "Incidencia general sin unidad vinculada",
         })
         self.assertEqual(missing.status_code, 400, missing.get_json())
         self.assertIn("cliente", missing.get_json()["error"].lower())
@@ -702,7 +702,7 @@ class RegressionTests(unittest.TestCase):
             from app.models.master_data import EventType
             low_fuel_id = EventType.query.filter_by(code="LOW_FUEL").one().id
         alert_id = self.client.post("/api/alerts/", headers=self.admin, json={
-            "title": "Combustible pendiente", "event_type_id": low_fuel_id,
+            "title": "Combustible pendiente", "description": "Nivel bajo que requiere abastecimiento", "event_type_id": low_fuel_id,
             "client_id": customer["id"], "vehicle_id": vehicle["id"],
         }).get_json()["alert"]["id"]
 
@@ -730,7 +730,7 @@ class RegressionTests(unittest.TestCase):
             from app.models.master_data import EventType
             power_cut_id = EventType.query.filter_by(code="POWER_CUT").one().id
         self.assertEqual(self.client.post("/api/alerts/", headers=self.admin, json={
-            "title": "Corte pendiente", "event_type_id": power_cut_id,
+            "title": "Corte pendiente", "description": "Se detectó un corte de alimentación", "event_type_id": power_cut_id,
             "client_id": customer["id"], "vehicle_id": other_vehicle["id"],
         }).status_code, 201)
         non_fuel_allowed = self.client.put(f"/api/master-data/vehicles/{other_vehicle['id']}",
@@ -749,11 +749,11 @@ class RegressionTests(unittest.TestCase):
             from app.models.master_data import EventType
             power_cut_id = EventType.query.filter_by(code="POWER_CUT").one().id
         power = self.client.post("/api/alerts/", headers=self.admin, json={
-            "title": "Corte de alimentación", "event_type_id": power_cut_id,
+            "title": "Corte de alimentación", "description": "Se detectó un corte de alimentación", "event_type_id": power_cut_id,
             "client_id": customer["id"], "vehicle_id": vehicle["id"],
         }).get_json()["alert"]
         manual = self.client.post("/api/alerts/", headers=self.admin, json={
-            "title": "Revisión manual de unidad", "client_id": customer["id"],
+            "title": "Revisión manual de unidad", "description": "Revisar la incidencia reportada en la unidad", "client_id": customer["id"],
             "vehicle_id": vehicle["id"],
         }).get_json()["alert"]
 
@@ -892,9 +892,9 @@ class RegressionTests(unittest.TestCase):
             db.session.get(User, second).full_name = "Nombre compartido"
             db.session.commit()
         high = self.client.post("/api/alerts/", headers=self.admin,
-                                json={"title": "Alta", "priority": "high"}).get_json()["alert"]["id"]
+                                json={"title": "Alta", "description": "Incidencia con atención prioritaria", "priority": "high"}).get_json()["alert"]["id"]
         low = self.client.post("/api/alerts/", headers=self.admin,
-                               json={"title": "Baja", "priority": "low"}).get_json()["alert"]["id"]
+                               json={"title": "Baja", "description": "Incidencia con atención de baja prioridad", "priority": "low"}).get_json()["alert"]["id"]
         self.assign(high, first)
         self.assign(low, second)
         self.client.put(f"/api/alerts/{high}", headers=self.admin,
@@ -957,7 +957,7 @@ class RegressionTests(unittest.TestCase):
             ("Tercera", second, other_vehicle),
         ]:
             response = self.client.post("/api/alerts/", headers=self.admin, json={
-                "title": title, "client_id": client["id"], "vehicle_id": vehicle["id"],
+                "title": title, "description": "Incidencia de la unidad que requiere revisión", "client_id": client["id"], "vehicle_id": vehicle["id"],
             })
             self.assertEqual(response.status_code, 201, response.get_json())
 
@@ -1037,7 +1037,7 @@ class RegressionTests(unittest.TestCase):
             "vehicle_id": vehicles[0]["id"], "imei": "860000000000011", "state_id": self.active,
         }).get_json()["record"]
         created = self.client.post("/api/alerts/", headers=self.admin, json={
-            "title": "Historial vinculado", "client_id": clients[0]["id"],
+            "title": "Historial vinculado", "description": "Incidencia con unidad y dispositivo vinculados", "client_id": clients[0]["id"],
             "vehicle_id": vehicles[0]["id"], "gps_device_id": device["id"],
         })
         self.assertEqual(created.status_code, 201, created.get_json())
@@ -1076,7 +1076,7 @@ class RegressionTests(unittest.TestCase):
                 "vehicle_id": vehicle["id"], "imei": f"86000000000002{index}", "state_id": self.active,
             }).get_json()["record"]
             alert = self.client.post("/api/alerts/", headers=self.admin, json={
-                "title": f"Alcance {index}", "client_id": customer["id"],
+                "title": f"Alcance {index}", "description": "Incidencia de la unidad que requiere revisión", "client_id": customer["id"],
                 "vehicle_id": vehicle["id"], "gps_device_id": device["id"],
             }).get_json()["alert"]
             created.append((customer, vehicle, device, alert))

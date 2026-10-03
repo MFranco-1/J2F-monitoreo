@@ -22,7 +22,7 @@ const rules: Record<FormKind, Record<string, Rule>> = {
   users: { full_name: rule('Nombre completo', 3, 150, true, 2, true) },
   profiles: { name: rule('Nombre', 3, 100, true), description: rule('Descripción', 5, 255) },
   'menu-options': { name: rule('Nombre', 3, 100, true) },
-  alerts: { title: rule('Título', 3, 200, true), description,
+  alerts: { title: rule('Título', 3, 200, true), description: rule('Descripción', 5, 2000, true),
     service_type: rule('Tipo de servicio', 3, 100), location: rule('Ubicación', 3, 200),
     source: rule('Origen', 3, 100), notes: rule('Observación / solución', 5, 2000) },
   reports: { name: rule('Nombre', 3, 200, true), description },

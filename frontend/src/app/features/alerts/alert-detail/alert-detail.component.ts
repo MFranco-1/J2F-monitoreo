@@ -98,7 +98,9 @@ export class AlertDetailComponent implements OnInit, OnDestroy {
       error: err => {
         if (requestId !== this.requestId) return;
         this.cancelling.set(false);
-        this.errorMsg.set(err?.error?.error || 'No se pudo anular la alerta');
+        this.errorMsg.set(err?.status === 404 ?
+          'La alerta no existe o el backend no tiene disponible la ruta de anulación. Comprueba que esté ejecutándose la versión actual.' :
+          err?.error?.error || 'No se pudo anular la alerta');
       },
     });
   }

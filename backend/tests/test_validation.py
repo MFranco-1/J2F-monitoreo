@@ -188,8 +188,8 @@ class InputValidationTests(unittest.TestCase):
     def test_alerts_and_assignment_notes_cannot_close_with_isolated_letters(self):
         for field, value in [("title", "A"), ("title", "123"), ("description", "A"),
                              ("location", "A"), ("priority", "alta")]:
-            self.rejected("post", "/api/alerts/", {"title": "Alerta manual", field: value})
-        alert_id = self.post("/api/alerts/", {"title": "Alerta manual"})["alert"]["id"]
+            self.rejected("post", "/api/alerts/", {"title": "Alerta manual", "description": "Incidencia que requiere atención", field: value})
+        alert_id = self.post("/api/alerts/", {"title": "Alerta manual", "description": "Incidencia que requiere atención"})["alert"]["id"]
         self.rejected("put", f"/api/alerts/{alert_id}", {"state_name": "Cerrado", "notes": "A"})
         with self.app.app_context():
             technician = Profile.query.filter_by(name="Técnico").one()
@@ -214,7 +214,7 @@ class InputValidationTests(unittest.TestCase):
         with self.app.app_context():
             event_id = EventType.query.filter_by(code="LOW_FUEL").one().id
             customer_id = db.session.get(Vehicle, vehicle_id).client_id
-        alert_id = self.post("/api/alerts/", {"title": "Combustible bajo", "vehicle_id": vehicle_id,
+        alert_id = self.post("/api/alerts/", {"title": "Combustible bajo", "description": "Nivel bajo que requiere abastecimiento", "vehicle_id": vehicle_id,
             "client_id": customer_id, "event_type_id": event_id})["alert"]["id"]
         path = f"/api/alerts/{alert_id}/fuel-actions"
         for observation in ("A", "...", "12345", "AAAAAA", "a" * 501):

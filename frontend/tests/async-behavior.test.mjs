@@ -31,7 +31,7 @@ const imports = {
   '@angular/forms': { FormsModule: emptyClass },
   '@angular/router': { RouterLink: emptyClass, Router: emptyClass, ActivatedRoute: emptyClass },
   '@angular/common/http': { HttpParams: emptyClass, HttpClient: emptyClass },
-  rxjs: rx,
+  rxjs: { ...rx },
   'libphonenumber-js/max': phoneNumbers,
   leaflet: {
     layerGroup: leafletLayer,
@@ -77,6 +77,104 @@ const auth = (admin = false) => ({
   isAdmin: () => admin, isTechnician: () => false, canAssign: () => true,
   canCancelAlert: () => admin,
   currentUser: () => ({ id: 1 }), profileChanges: new rx.Subject(),
+});
+
+test('una alerta con solo título o descripción vacía no se envía', () => {
+  const payloads = [];
+  injections = [auth(true), {createAlert: data => {payloads.push(data); return rx.of({message:'Creada'});},
+    getAlerts: () => rx.of({alerts:[], pages:1})}, {}, {}];
+  const component = new AlertListComponent();
+  for (const description of [undefined, '', '   ', 'A', '...', '12345']) {
+    component.newForm = {title:'Incidencia registrada', description}; component.createAlert();
+    assert.match(component.errorMsg(), /Descripción/);
+  }
+  assert.equal(payloads.length,0);
+  component.newForm.description = 'La unidad requiere una revisión documentada'; component.createAlert();
+  assert.equal(payloads.length,1);
+});
+
+test('la carga de técnicos se consulta al abrir y después de asignar manual o automáticamente', () => {
+  const loads = []; const assigned = [];
+  const assignment = {
+    getTechnicians: () => { const response = new rx.Subject(); loads.push(response); return response; },
+    createAssignment: (...args) => {assigned.push(args); return rx.of({message:'Asignada'});},
+    autoAssign: () => rx.of({message:'Asignada automáticamente'}),
+  };
+  injections = [auth(true), {getAlerts: () => rx.of({alerts:[], pages:1})}, assignment, {}];
+  const component = new AlertListComponent();
+  const alert = {id:1, state:{name:'Abierto'}};
+  component.openAssignmentModal(alert);
+  assert.equal(loads.length,1); assert.equal(component.loadingTechnicians(),true);
+  loads[0].next({technicians:[{id:8, full_name:'Técnico', active_assignments_count:0}]});
+  component.assignmentForm.user_id=8; component.assignTechnician();
+  assert.equal(assigned.length,1); assert.equal(loads.length,2);
+  loads[1].next({technicians:[{id:8, full_name:'Técnico', active_assignments_count:1}]});
+  assert.equal(component.technicians()[0].active_assignments_count,1);
+  component.autoAssign(2); assert.equal(loads.length,3);
+  loads[2].next({technicians:[{id:8, full_name:'Técnico', active_assignments_count:2}]});
+  assert.equal(component.technicians()[0].active_assignments_count,2);
+  component.ngOnDestroy();
+});
+
+test('consultas antiguas de técnicos y perfiles sin permiso no conservan cargas ajenas', () => {
+  const loads = []; const session = auth(true);
+  injections = [session, {}, {getTechnicians: () => {const response=new rx.Subject(); loads.push(response); return response;}}, {}];
+  const component = new AlertListComponent();
+  component.loadTechnicians(); component.loadTechnicians();
+  loads[1].next({technicians:[{id:2, active_assignments_count:4}]});
+  loads[0].next({technicians:[{id:1, active_assignments_count:9}]});
+  assert.equal(component.technicians()[0].id,2);
+  session.canAssign = () => false; component.loadTechnicians();
+  loads[1].next({technicians:[{id:2, active_assignments_count:5}]});
+  assert.deepEqual(component.technicians(),[]); assert.equal(loads.length,2);
+  component.ngOnDestroy();
+});
+
+test('la ventana refresca cargas cada cinco segundos y detiene polling al destruir o perder permisos', () => {
+  const ticks = new rx.Subject(); const oldInterval = imports.rxjs.interval;
+  let component;
+  try {
+    imports.rxjs.interval = ms => {assert.equal(ms,5000); return ticks;};
+    let requests=0, workload=0; const session=auth(true);
+    injections = [session, {getAlerts: () => rx.of({alerts:[],pages:1})}, {
+      getTechnicians: () => {requests++; return rx.of({technicians:[{id:1,active_assignments_count:workload}]});},
+    }, {clients: () => rx.of({clients:[]}), eventTypes: () => rx.of({event_types:[]})}];
+    component = new AlertListComponent(); component.ngOnInit();
+    assert.equal(requests,1);
+    component.openAssignmentModal({id:1,state:{name:'Abierto'}}); assert.equal(requests,2);
+    workload=3; ticks.next(); assert.equal(requests,3);
+    assert.equal(component.technicians()[0].active_assignments_count,3);
+    component.closeAssignmentModal(); ticks.next(); assert.equal(requests,3);
+    session.canAssign = () => false; session.profileChanges.next();
+    assert.deepEqual(component.technicians(),[]); assert.equal(requests,3);
+    component.ngOnDestroy(); ticks.next(); assert.equal(requests,3);
+    assert.equal(ticks.observers.length,0); assert.equal(session.profileChanges.observers.length,0);
+  } finally {component?.ngOnDestroy(); imports.rxjs.interval=oldInterval;}
+});
+
+test('un error en la carga no se presenta como lista vacía de técnicos disponibles', () => {
+  injections = [auth(true), {}, {getTechnicians: () => rx.throwError(() => ({error:{error:'Servicio no disponible'}}))}, {}];
+  const component = new AlertListComponent(); component.loadTechnicians();
+  assert.equal(component.technicianError(),'Servicio no disponible');
+  assert.equal(component.loadingTechnicians(),false);
+  assert.deepEqual(component.technicians(),[]);
+  component.ngOnDestroy();
+});
+
+test('anulación distingue ruta antigua no disponible de una denegación real de permisos', () => {
+  const errors = new rx.Subject();
+  injections = [auth(true), {}, {cancelAlert: () => errors}, {}];
+  const component = new AlertDetailComponent();
+  component.alert.set({id:1,state:{name:'Abierto'}}); component.cancellationReason='Caso duplicado documentado';
+  component.cancelAlert(); errors.error({status:404,error:{error:'Not Found'}});
+  assert.match(component.errorMsg(), /backend.*ruta de anulación/);
+  assert.equal(component.cancelling(),false); assert.equal(component.alert().state.name,'Abierto');
+  const denied = new rx.Subject();
+  injections = [auth(true), {}, {cancelAlert: () => denied}, {}];
+  const another = new AlertDetailComponent();
+  another.alert.set({id:2,state:{name:'Abierto'}}); another.cancellationReason='Caso duplicado documentado';
+  another.cancelAlert(); denied.error({status:403,error:{error:'Solo Administrador y Supervisor pueden anular alertas'}});
+  assert.equal(another.errorMsg(),'Solo Administrador y Supervisor pueden anular alertas');
 });
 
 test('el servicio de anulación usa POST con motivo, no elimina el registro', () => {
@@ -341,7 +439,7 @@ test('el formulario exige cliente y vehículo coherentes solo para LOW_FUEL', ()
     { id: 1, code: 'LOW_FUEL', default_priority: 'high' },
     { id: 2, code: 'POWER_CUT', default_priority: 'high' },
   ]);
-  component.newForm = { title: 'Combustible', event_type_id: 1,
+  component.newForm = { title: 'Combustible', description: 'Nivel bajo que requiere abastecimiento', event_type_id: 1,
     client_id: null, vehicle_id: null };
   component.createAlert();
   assert.equal(payloads.length, 0);
@@ -357,7 +455,7 @@ test('el formulario exige cliente y vehículo coherentes solo para LOW_FUEL', ()
   component.createAlert();
   assert.equal(payloads.length, 1);
 
-  component.newForm = { title: 'Corte general', event_type_id: 2,
+  component.newForm = { title: 'Corte general', description: 'Se detectó un corte de alimentación', event_type_id: 2,
     client_id: null, vehicle_id: null };
   component.createAlert();
   assert.equal(payloads.length, 2);

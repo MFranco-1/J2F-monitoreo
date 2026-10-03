@@ -104,7 +104,7 @@ def create_alert(data: dict, current_user_id: int) -> tuple:
     vehicle, device, event_type = _validated_relations(data)
     alert = Alert(
         title=text_value(data, "title", required=True, limit=200),
-        description=text_value(data, "description"),
+        description=text_value(data, "description", required=True),
         priority=priority_value(data.get("priority", event_type.default_priority if event_type else "medium")),
         service_type=text_value(data, "service_type", limit=100),
         location=text_value(data, "location", limit=200),
@@ -142,7 +142,7 @@ def update_alert(alert_id: int, data: dict, current_user_id: int) -> tuple:
     changes = {}
     for field, limit in [("title", 200), ("description", None), ("service_type", 100), ("location", 200)]:
         if field in data:
-            changes[field] = text_value(data, field, required=(field == "title"), limit=limit)
+            changes[field] = text_value(data, field, required=(field in {"title", "description"}), limit=limit)
     if "priority" in data:
         changes["priority"] = priority_value(data["priority"])
     notes = text_value(data, "notes")
@@ -239,6 +239,7 @@ def get_map_vehicles(client_id_value=None) -> tuple:
     """Devuelve solo vehículos que el perfil activo puede consultar."""
     actor = current_user()
     query = Vehicle.query.join(State, Vehicle.state_id == State.id).filter(State.name == "Activo")
+    query = query.filter(Vehicle.client.has(Client.state.has(name="Activo")))
     if is_technician(actor) and not can_view_all_operations(actor):
         query = query.filter(Vehicle.alerts.any(
             Alert.assignments.any(Assignment.user_id == actor.id)

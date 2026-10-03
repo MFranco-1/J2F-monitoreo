@@ -1,6 +1,7 @@
 import { AuthService } from '../../../core/services/auth.service';
 // features/alerts/alert-list/alert-list.component.ts
-import { Component, OnInit, signal, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
+import { interval, Subscription } from 'rxjs';
 import { NgFor, NgIf, DatePipe, TitleCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -18,7 +19,7 @@ import { firstError, validateForm } from '../../../shared/validation';
   templateUrl: './alert-list.component.html',
   styleUrl: './alert-list.component.scss',
 })
-export class AlertListComponent implements OnInit {
+export class AlertListComponent implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
   private alertService = inject(AlertService);
   private assignmentService = inject(AssignmentService);
@@ -38,12 +39,18 @@ export class AlertListComponent implements OnInit {
   devices = signal<GpsDevice[]>([]);
   eventTypes = signal<EventType[]>([]);
   technicians = signal<{ id: number; full_name: string; active_assignments_count: number }[]>([]);
+  loadingTechnicians = signal(false);
+  technicianError = signal('');
   assignmentAlert = signal<Alert | null>(null);
   assignmentForm = { user_id: null as number | null, notes: '' };
   private alertRequestId = 0;
   private formVehicleRequestId = 0;
   private filterVehicleRequestId = 0;
   private deviceRequestId = 0;
+  private technicianRequestId = 0;
+  private technicianRequest?: Subscription;
+  private workloadPolling?: Subscription;
+  private profileSubscription?: Subscription;
 
   filters: AlertFilters = { page: 1, per_page: 20 };
 
@@ -58,12 +65,40 @@ export class AlertListComponent implements OnInit {
     this.masterData.clients(true).subscribe(data => this.clients.set(data['clients'] || []));
     this.masterData.eventTypes(true).subscribe(data => this.eventTypes.set(
       (data['event_types'] || []).filter(item => item.generates_alert)));
-    if (this.auth.canAssign()) {
-      this.assignmentService.getTechnicians().subscribe({
-        next: data => this.technicians.set(data.technicians || []),
-        error: () => this.technicians.set([]),
-      });
-    }
+    this.loadTechnicians();
+    this.workloadPolling = interval(5000).subscribe(() => {
+      if (this.showAssignmentModal() && !this.loadingTechnicians()) this.loadTechnicians();
+    });
+    this.profileSubscription = this.auth.profileChanges.subscribe(() => {
+      this.showAssignmentModal.set(false); this.assignmentAlert.set(null);
+      this.technicians.set([]); this.loadTechnicians();
+      this.loadAlerts();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.workloadPolling?.unsubscribe(); this.profileSubscription?.unsubscribe();
+    this.technicianRequest?.unsubscribe(); this.technicianRequestId++;
+    this.alertRequestId++; this.formVehicleRequestId++; this.filterVehicleRequestId++; this.deviceRequestId++;
+  }
+
+  loadTechnicians(): void {
+    const requestId = ++this.technicianRequestId;
+    this.technicianRequest?.unsubscribe();
+    this.technicianError.set('');
+    if (!this.auth.canAssign()) { this.technicians.set([]); this.loadingTechnicians.set(false); return; }
+    this.loadingTechnicians.set(true);
+    this.technicianRequest = this.assignmentService.getTechnicians().subscribe({
+      next: data => {
+        if (requestId !== this.technicianRequestId || !this.auth.canAssign()) return;
+        this.technicians.set(data.technicians || []); this.loadingTechnicians.set(false);
+      },
+      error: err => {
+        if (requestId !== this.technicianRequestId) return;
+        this.loadingTechnicians.set(false); this.technicians.set([]);
+        this.technicianError.set(err?.error?.error || 'No se pudo actualizar la carga de técnicos. Vuelve a abrir la asignación para reintentar.');
+      },
+    });
   }
 
   loadAlerts(): void {
@@ -194,10 +229,12 @@ export class AlertListComponent implements OnInit {
   }
 
   autoAssign(alertId: number): void {
+    if (!this.auth.canAssign()) return;
     this.assignmentService.autoAssign(alertId).subscribe({
       next: ({ message }) => {
         this.successMsg.set(message);
         this.loadAlerts();
+        this.loadTechnicians();
         setTimeout(() => this.successMsg.set(''), 4000);
       },
       error: (err) => this.errorMsg.set(err?.error?.error || 'Error en asignación'),
@@ -205,10 +242,12 @@ export class AlertListComponent implements OnInit {
   }
 
   openAssignmentModal(alert: Alert): void {
+    if (!this.auth.canAssign() || ['Cerrado', 'Anulado'].includes(alert.state?.name || '')) return;
     this.assignmentAlert.set(alert);
     this.assignmentForm = { user_id: alert.current_assignee?.id ?? null, notes: '' };
     this.errorMsg.set('');
     this.showAssignmentModal.set(true);
+    this.loadTechnicians();
   }
 
   closeAssignmentModal(): void {
@@ -220,7 +259,7 @@ export class AlertListComponent implements OnInit {
 
   assignTechnician(): void {
     const alert = this.assignmentAlert();
-    if (!alert || !this.assignmentForm.user_id || this.saving()) {
+    if (!this.auth.canAssign() || !alert || !this.assignmentForm.user_id || this.saving() || this.loadingTechnicians() || this.technicianError()) {
       this.errorMsg.set('Selecciona un técnico');
       return;
     }
@@ -233,6 +272,7 @@ export class AlertListComponent implements OnInit {
         this.successMsg.set(message);
         this.closeAssignmentModal();
         this.loadAlerts();
+        this.loadTechnicians();
         setTimeout(() => this.successMsg.set(''), 4000);
       },
       error: err => {

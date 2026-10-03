@@ -137,7 +137,7 @@ test('perfiles, menús y tipos de evento no aceptan letras aisladas ni formatos 
 
 test('alertas, reportes, soluciones y abastecimiento exigen contenido y fechas válidas', () => {
   assert.ok(validateForm('alerts', { title: 'A' })['title']);
-  assert.equal(firstError(validateForm('alerts', { title: 'GPS', priority: 'high' })), '');
+  assert.equal(firstError(validateForm('alerts', { title: 'GPS', description: 'Incidencia que requiere revisión', priority: 'high' })), '');
   for (const observation of ['A', '...', '12345', 'AAAAAA', 'a'.repeat(501)])
     assert.ok(validateForm('fuel', { observation })['observation']);
   assert.equal(firstError(validateForm('fuel', { observation: 'Se cargaron 30 litros según comprobante 001' })), '');

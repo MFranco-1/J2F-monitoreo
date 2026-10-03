@@ -44,6 +44,12 @@ def list_records(kind, filters):
         return error
     if filters.get("active") == "true":
         query = query.join(State).filter(State.name == "Activo")
+        if kind == "vehicles":
+            query = query.filter(Vehicle.client.has(Client.state.has(name="Activo")))
+        elif kind == "gps-devices":
+            query = query.filter(GpsDevice.vehicle.has(
+                Vehicle.state.has(name="Activo") & Vehicle.client.has(Client.state.has(name="Activo"))
+            ))
     if kind == "vehicles" and filters.get("client_id"):
         query = query.filter(Vehicle.client_id == integer(filters["client_id"], "client_id"))
     if kind == "gps-devices" and filters.get("vehicle_id"):
@@ -132,6 +138,8 @@ def _apply(kind, record, data, creating=False):
                     value = validate_plate(value)
                     _unique(Vehicle, field, value, record.id)
                 setattr(record, field, value)
+        if record.is_active and not record.client.is_active:
+            raise BadRequest("No se puede activar un vehículo de un cliente inactivo; activa primero al cliente")
     elif kind == "gps-devices":
         if creating or "vehicle_id" in data:
             vehicle = db.session.get(Vehicle, integer(data.get("vehicle_id"), "vehicle_id"))
@@ -152,6 +160,8 @@ def _apply(kind, record, data, creating=False):
                 if field in {"imei", "serial_number"}:
                     _unique(GpsDevice, field, value, record.id)
                 setattr(record, field, value)
+        if record.is_active and (not record.vehicle.is_active or not record.vehicle.client.is_active):
+            raise BadRequest("No se puede activar un GPS de un vehículo o cliente inactivo; activa primero al cliente y al vehículo")
     else:
         for field, limit, required in [("code", 50, True), ("name", 150, True),
                                        ("description", None, False), ("expected_action", None, False)]:
@@ -198,6 +208,7 @@ def create_record(kind, data):
 
 
 def update_record(kind, record_id, data):
+    message = "Registro actualizado"
     record = MODELS[kind].query.filter_by(id=record_id).with_for_update().first_or_404(description="Registro no encontrado")
     if kind == "vehicles" and "state_id" in data:
         requested_state = _state(data["state_id"])
@@ -230,8 +241,29 @@ def update_record(kind, record_id, data):
             return jsonify({"error": "El código interno, estado activo y generación de alerta de este evento están protegidos"}), 409
     with db.session.no_autoflush:
         _apply(kind, record, data)
+        if kind in {"clients", "vehicles"} and "state_id" in data and record.state.name == "Inactivo":
+            if kind == "clients":
+                vehicles = record.vehicles.order_by(Vehicle.id).with_for_update().all()
+                vehicle_ids = [vehicle.id for vehicle in vehicles]
+                pending_fuel = (Alert.query.join(State, Alert.state_id == State.id)
+                    .join(EventType, Alert.event_type_id == EventType.id)
+                    .filter(Alert.vehicle_id.in_(vehicle_ids), State.name.notin_(TERMINAL_ALERT_STATES),
+                            EventType.code == "LOW_FUEL").first())
+                if pending_fuel:
+                    db.session.rollback()
+                    return jsonify({"error": ("Completa primero el abastecimiento o anula con motivo la alerta "
+                        f"#{pending_fuel.id} antes de desactivar el cliente y sus vehículos")}), 409
+                for vehicle in vehicles:
+                    vehicle.state = record.state
+            else:
+                vehicle_ids = [record.id]
+            devices = GpsDevice.query.filter(GpsDevice.vehicle_id.in_(vehicle_ids)).order_by(GpsDevice.id).with_for_update().all()
+            for device in devices:
+                device.state = record.state
+            message = ("Cliente actualizado; sus vehículos y GPS quedan inactivos" if kind == "clients" else
+                       "Vehículo actualizado; sus GPS quedan inactivos")
     db.session.commit()
-    return jsonify({"message": "Registro actualizado", "record": _dict(kind, record)}), 200
+    return jsonify({"message": message, "record": _dict(kind, record)}), 200
 
 
 def delete_record(kind, record_id):

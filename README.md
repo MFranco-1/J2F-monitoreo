@@ -202,6 +202,33 @@ combustible de forma explícita sigue disponible. Los recorridos de abastecimien
 interrumpidos quedan detenidos en su última posición local con retorno recuperable.
 La telemetría local no es compartida entre navegadores.
 
+## Desactivación de flota y mínimos de alertas
+
+Guardar un cliente como Inactivo desactiva también sus vehículos y GPS en la
+misma transacción. Si una unidad tiene un caso LOW_FUEL pendiente, se bloquea
+toda la operación hasta completar el abastecimiento o anular el caso con motivo;
+no se dejan estados parciales. Desactivar un vehículo desactiva sus GPS.
+Reactivar el cliente o vehículo no reactiva automáticamente sus descendientes.
+No se puede activar una unidad con su cliente inactivo, ni un GPS con su vehículo
+o cliente inactivo. Los catálogos activos y el mapa omiten también las unidades
+heredadas cuyo cliente está inactivo, sin borrar datos ni historial.
+
+Crear una alerta manual requiere título y descripción con contenido válido
+(descripción de 5 a 2000 caracteres). No basta un título. Tampoco se permite
+vaciar la descripción mediante una edición. Los casos antiguos sin descripción
+siguen consultables y pueden atenderse o anularse sin una reescritura masiva.
+Los eventos automáticos del mapa conservan sus descripciones generadas.
+
+La carga del selector de técnicos se consulta al abrir la asignación, después
+de asignar o reasignar y cada cinco segundos mientras la ventana permanezca abierta.
+El polling termina al salir de la pantalla; cambiar de perfil descarta consultas
+anteriores. No se calculan cargas sumando contadores locales.
+
+Tras actualizar archivos, reiniciar un backend sin recarga automática: una
+versión anterior en memoria puede devolver 404 para la ruta de anulación aunque
+el código y la migración actuales estén instalados. Esto no se soluciona ampliando
+los permisos; la anulación sigue reservada al perfil activo Administrador o Supervisor.
+
 ## Reversión
 
 La reversión no debe borrar las tablas nuevas: vuelve a la versión anterior del código
