@@ -4,7 +4,7 @@ from werkzeug.exceptions import BadRequest
 from app import db
 from app.models.menu_option import MenuOption
 from app.models.profile import Profile
-from app.validation import text_value, integer, ids_list, user_state
+from app.validation import record_text as text_value, integer, ids_list, user_state, validate_menu_url, validate_icon
 from app.security import current_user, current_profile, is_admin
 
 
@@ -70,8 +70,8 @@ def _profiles(value):
 
 def create_menu_option(data, state_id):
     name = text_value(data, "name", required=True, limit=100)
-    url = text_value(data, "url", limit=255)
-    icon = text_value(data, "icon", limit=100)
+    url = validate_menu_url(text_value(data, "url", limit=255))
+    icon = validate_icon(text_value(data, "icon", limit=100))
     parent = _parent(data.get("parent_id"))
     state = user_state(state_id)
     order = integer(data.get("order", 0), "order", minimum=0)
@@ -89,6 +89,10 @@ def update_menu_option(option_id, data):
     for field, limit in [("name", 100), ("url", 255), ("icon", 100)]:
         if field in data:
             values[field] = text_value(data, field, required=(field == "name"), limit=limit)
+            if field == "url":
+                values[field] = validate_menu_url(values[field])
+            if field == "icon":
+                values[field] = validate_icon(values[field])
     parent = _parent(data["parent_id"], option.id) if "parent_id" in data else option.parent
     state = user_state(data["state_id"]) if "state_id" in data else option.state
     order = integer(data["order"], "order", minimum=0) if "order" in data else option.order

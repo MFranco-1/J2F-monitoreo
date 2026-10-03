@@ -9,6 +9,7 @@ import { AssignmentService } from '../../../core/services/assignment.service';
 import { Alert, AlertFilters } from '../../../shared/models/alert.model';
 import { MasterDataService } from '../../../core/services/master-data.service';
 import { Client, Vehicle, GpsDevice, EventType } from '../../../shared/models/master-data.model';
+import { firstError, validateForm } from '../../../shared/validation';
 
 @Component({
   selector: 'app-alert-list',
@@ -100,7 +101,8 @@ export class AlertListComponent implements OnInit {
 
   createAlert(): void {
     if (this.saving()) return;
-    if (!this.newForm.title) { this.errorMsg.set('El título es requerido'); return; }
+    const error = firstError(validateForm('alerts', this.newForm));
+    if (error) { this.errorMsg.set(error); return; }
     if (this.isLowFuelSelected()) {
       const vehicle = this.formVehicles().find(item => item.id === this.newForm.vehicle_id);
       if (!this.newForm.client_id || !vehicle || vehicle.client_id !== this.newForm.client_id) {
@@ -222,6 +224,8 @@ export class AlertListComponent implements OnInit {
       this.errorMsg.set('Selecciona un técnico');
       return;
     }
+    const error = firstError(validateForm('assignment', this.assignmentForm));
+    if (error) { this.errorMsg.set(error); return; }
     this.saving.set(true);
     this.assignmentService.createAssignment(alert.id, this.assignmentForm.user_id, this.assignmentForm.notes).subscribe({
       next: ({ message }) => {

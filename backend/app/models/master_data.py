@@ -1,4 +1,5 @@
 """Datos maestros de clientes, vehículos, GPS y tipos de evento."""
+import json
 from app import db
 from app.datetime_utils import utcnow, iso_utc
 
@@ -23,6 +24,7 @@ class Client(TimestampStateMixin, db.Model):
     phone = db.Column(db.String(30))
     email = db.Column(db.String(150))
     address = db.Column(db.String(255))
+    verification_json = db.Column(db.Text)
     state = db.relationship("State", back_populates="clients")
     vehicles = db.relationship("Vehicle", back_populates="client", lazy="dynamic")
 
@@ -32,7 +34,21 @@ class Client(TimestampStateMixin, db.Model):
                 "contact_name": self.contact_name, "phone": self.phone, "email": self.email,
                 "address": self.address, "state_id": self.state_id,
                 "state": self.state.to_dict() if self.state else None,
+                "verification": self.verification,
                 "created_at": iso_utc(self.created_at), "updated_at": iso_utc(self.updated_at)}
+
+    @property
+    def verification(self):
+        if self.verification_json:
+            try:
+                value = json.loads(self.verification_json)
+                if isinstance(value, dict) and isinstance(value.get("audit", []), list):
+                    return value
+            except (TypeError, ValueError):
+                pass
+        return {"status": "pending" if self.document_type.upper() == "RUC" else "not_applicable",
+                "source": "legacy", "observation": "Registro anterior sin verificación documentada",
+                "actor": None, "timestamp": None, "audit": []}
 
 
 class Vehicle(TimestampStateMixin, db.Model):
@@ -54,6 +70,7 @@ class Vehicle(TimestampStateMixin, db.Model):
                 "brand": self.brand, "model": self.model, "color": self.color,
                 "vehicle_type": self.vehicle_type, "state_id": self.state_id,
                 "state": self.state.to_dict() if self.state else None,
+                "gps_devices": [device.to_dict() for device in self.gps_devices.order_by(GpsDevice.id)],
                 "created_at": iso_utc(self.created_at), "updated_at": iso_utc(self.updated_at)}
         if include_client:
             data["client"] = self.client.to_dict() if self.client else None

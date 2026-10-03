@@ -4,7 +4,7 @@ from app import db
 from app.models.profile import Profile
 from app.models.menu_option import MenuOption
 from app.models.state import State
-from app.validation import text_value, user_state, ids_list
+from app.validation import record_text as text_value, user_state, ids_list
 from app.security import role_name, active_admin_count, has_active_role
 from app.controllers.auth_controller import invalidate_sessions
 

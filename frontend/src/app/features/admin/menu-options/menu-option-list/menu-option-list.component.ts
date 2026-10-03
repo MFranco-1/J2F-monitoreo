@@ -4,6 +4,7 @@ import { NgFor, NgIf } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserService } from '../../../../core/services/user.service';
 import { MenuOption, Profile, State } from '../../../../shared/models/user.model';
+import { firstError, validateForm } from '../../../../shared/validation';
 
 @Component({
   selector: 'app-menu-option-list',
@@ -84,6 +85,8 @@ export class MenuOptionListComponent implements OnInit {
 
   save(): void {
     if (this.saving()) return;
+    const error = firstError(validateForm('menu-options', this.form));
+    if (error) { this.errorMsg.set(error); return; }
     this.saving.set(true);
     const editing = this.editingOption();
     const obs = editing

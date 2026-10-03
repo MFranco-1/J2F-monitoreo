@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS clients (
  state_id INTEGER NOT NULL REFERENCES states(id), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+-- 20261003: verificación documentada; no modifica registros anteriores.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS verification_json TEXT;
 CREATE TABLE IF NOT EXISTS vehicles (
  id SERIAL PRIMARY KEY, client_id INTEGER NOT NULL REFERENCES clients(id),
  plate VARCHAR(20) NOT NULL UNIQUE, brand VARCHAR(100), model VARCHAR(100), color VARCHAR(50),

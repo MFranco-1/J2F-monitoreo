@@ -9,6 +9,7 @@ from app import create_app, db
 from app.config import TestingConfig
 from app.models import User, Profile, State, Alert, Assignment, History, MenuOption
 from app.datetime_utils import utcnow
+from client_fixtures import client_fixture
 
 
 class RegressionTests(unittest.TestCase):
@@ -514,7 +515,7 @@ class RegressionTests(unittest.TestCase):
 
     def test_master_data_relations_and_alert_compatibility(self):
         client = self.client.post("/api/master-data/clients/", headers=self.admin, json={
-            "document_type":"RUC", "document_number":"20123456789", "business_name":"Cliente Prueba",
+            **client_fixture("20123456789"), "business_name":"Cliente Prueba",
             "state_id":self.active}).get_json()["record"]
         edited_client = self.client.put(f"/api/master-data/clients/{client['id']}", headers=self.admin,
                                         json={"contact_name":"Central de operaciones"})
@@ -544,7 +545,7 @@ class RegressionTests(unittest.TestCase):
 
     def test_map_event_is_persisted_linked_and_not_duplicated(self):
         customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
-            "document_type": "RUC", "document_number": "20999999991",
+            **client_fixture("20999999991"),
             "business_name": "Cliente Mapa", "state_id": self.active,
         }).get_json()["record"]
         vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
@@ -609,7 +610,7 @@ class RegressionTests(unittest.TestCase):
         vehicles = []
         for index in range(2):
             customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
-                "document_type": "RUC", "document_number": f"2070000000{index}",
+                **client_fixture(f"2070000000{index}"),
                 "business_name": f"Cliente combustible manual {index}", "state_id": self.active,
             }).get_json()["record"]
             customers.append(customer)
@@ -653,7 +654,7 @@ class RegressionTests(unittest.TestCase):
 
     def test_vehicle_with_pending_low_fuel_cannot_be_disabled_until_confirmation(self):
         customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
-            "document_type": "RUC", "document_number": "20700000010",
+            **client_fixture("20700000010"),
             "business_name": "Cliente baja vehículo", "state_id": self.active,
         }).get_json()["record"]
         vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
@@ -700,7 +701,7 @@ class RegressionTests(unittest.TestCase):
 
     def test_map_returns_all_authorized_open_alerts_but_simulation_codes_stay_limited(self):
         customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
-            "document_type": "RUC", "document_number": "20700000020",
+            **client_fixture("20700000020"),
             "business_name": "Cliente mapa completo", "state_id": self.active,
         }).get_json()["record"]
         vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
@@ -744,7 +745,7 @@ class RegressionTests(unittest.TestCase):
 
     def test_fuel_workflow_permissions_persistence_and_duplicates(self):
         customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
-            "document_type": "RUC", "document_number": "20999999993",
+            **client_fixture("20999999993"),
             "business_name": "Cliente Flujo", "state_id": self.active,
         }).get_json()["record"]
         vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
@@ -807,7 +808,7 @@ class RegressionTests(unittest.TestCase):
 
     def test_low_fuel_alert_requires_level_at_or_below_ten(self):
         customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
-            "document_type": "RUC", "document_number": "20999999992",
+            **client_fixture("20999999992"),
             "business_name": "Cliente Combustible", "state_id": self.active,
         }).get_json()["record"]
         vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
@@ -828,7 +829,7 @@ class RegressionTests(unittest.TestCase):
         self.app.config["OVERPASS_API_URL"] = ""
         self.app.config["ROUTING_API_URL"] = ""
         customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
-            "document_type": "RUC", "document_number": "20999999994",
+            **client_fixture("20999999994"),
             "business_name": "Cliente Servicios", "state_id": self.active,
         }).get_json()["record"]
         vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
@@ -888,7 +889,7 @@ class RegressionTests(unittest.TestCase):
     def test_alert_rejects_inconsistent_client_vehicle_device(self):
         def client(number):
             return self.client.post("/api/master-data/clients/", headers=self.admin, json={
-                "document_type":"RUC", "document_number":number, "business_name":number,
+                **client_fixture(number), "business_name":f"Cliente {number}",
                 "state_id":self.active}).get_json()["record"]
         first, second = client("20111111111"), client("20222222222")
         vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
@@ -900,7 +901,7 @@ class RegressionTests(unittest.TestCase):
     def test_alerts_filter_by_client_and_vehicle_without_hiding_default_results(self):
         def create_client(number):
             return self.client.post("/api/master-data/clients/", headers=self.admin, json={
-                "document_type": "RUC", "document_number": number,
+                **client_fixture(number),
                 "business_name": f"Cliente {number}", "state_id": self.active,
             }).get_json()["record"]
 
@@ -968,7 +969,7 @@ class RegressionTests(unittest.TestCase):
 
     def test_optional_gps_serial_is_null_and_allows_multiple_empty_values(self):
         customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
-            "document_type": "RUC", "document_number": "20600000001",
+            **client_fixture("20600000001"),
             "business_name": "Cliente serial opcional", "state_id": self.active,
         }).get_json()["record"]
         vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
@@ -987,7 +988,7 @@ class RegressionTests(unittest.TestCase):
         vehicles = []
         for index in range(2):
             customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
-                "document_type": "RUC", "document_number": f"2060000001{index}",
+                **client_fixture(f"2060000001{index}"),
                 "business_name": f"Cliente relación {index}", "state_id": self.active,
             }).get_json()["record"]
             clients.append(customer)
@@ -1027,7 +1028,7 @@ class RegressionTests(unittest.TestCase):
         created = []
         for index in range(2):
             customer = self.client.post("/api/master-data/clients/", headers=self.admin, json={
-                "document_type": "RUC", "document_number": f"2060000002{index}",
+                **client_fixture(f"2060000002{index}"),
                 "business_name": f"Cliente alcance {index}", "state_id": self.active,
             }).get_json()["record"]
             vehicle = self.client.post("/api/master-data/vehicles/", headers=self.admin, json={
@@ -1096,7 +1097,7 @@ class InstalledSchemaTests(unittest.TestCase):
             "reports": "id INTEGER!; name VARCHAR(200)!; type VARCHAR(50)!; description TEXT; filters_json TEXT; date_range_start TIMESTAMP; date_range_end TIMESTAMP; generated_by INTEGER; result_json TEXT; created_at TIMESTAMP",
             "assignments": "id INTEGER!; alert_id INTEGER!; user_id INTEGER!; notes TEXT; assignment_type VARCHAR(20); assigned_at TIMESTAMP; completed_at TIMESTAMP; response_time_minutes DOUBLE PRECISION",
             "history": "id INTEGER!; alert_id INTEGER!; user_id INTEGER; profile_id INTEGER; action VARCHAR(50)!; previous_state VARCHAR(100); new_state VARCHAR(100); detail TEXT; timestamp TIMESTAMP",
-            "clients": "id INTEGER!; document_type VARCHAR(20)!; document_number VARCHAR(30)!; business_name VARCHAR(180)!; contact_name VARCHAR(150); phone VARCHAR(30); email VARCHAR(150); address VARCHAR(255); state_id INTEGER!; created_at TIMESTAMP; updated_at TIMESTAMP",
+            "clients": "id INTEGER!; document_type VARCHAR(20)!; document_number VARCHAR(30)!; business_name VARCHAR(180)!; contact_name VARCHAR(150); phone VARCHAR(30); email VARCHAR(150); address VARCHAR(255); verification_json TEXT; state_id INTEGER!; created_at TIMESTAMP; updated_at TIMESTAMP",
             "vehicles": "id INTEGER!; client_id INTEGER!; plate VARCHAR(20)!; brand VARCHAR(100); model VARCHAR(100); color VARCHAR(50); vehicle_type VARCHAR(80); state_id INTEGER!; created_at TIMESTAMP; updated_at TIMESTAMP",
             "gps_devices": "id INTEGER!; vehicle_id INTEGER!; imei VARCHAR(40)!; serial_number VARCHAR(80); model VARCHAR(100); provider VARCHAR(100); sim_number VARCHAR(30); state_id INTEGER!; created_at TIMESTAMP; updated_at TIMESTAMP",
             "event_types": "id INTEGER!; code VARCHAR(50)!; name VARCHAR(150)!; description TEXT; default_priority VARCHAR(20)!; generates_alert BOOLEAN!; expected_action TEXT; state_id INTEGER!; created_at TIMESTAMP; updated_at TIMESTAMP",

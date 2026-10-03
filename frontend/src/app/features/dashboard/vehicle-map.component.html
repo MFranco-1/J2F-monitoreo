@@ -21,6 +21,7 @@
         </div>
         <dl>
           <div><dt>Cliente</dt><dd>{{ vehicle.client.business_name }}</dd></div><div><dt>Vehículo</dt><dd>{{ vehicle.brand || '—' }} {{ vehicle.model || '' }}</dd></div>
+          <div><dt>GPS registrado (IMEI)</dt><dd>{{vehicle.gps_device?.imei || 'Sin GPS registrado'}}</dd></div>
           <div><dt>Ubicación simulada</dt><dd>{{ locationFor(vehicle) }}</dd></div><div><dt>Última actualización</dt><dd>{{ positionFor(vehicle)?.updatedAt | date:'dd/MM/yyyy HH:mm:ss' }}</dd></div>
         </dl>
         <section class="events-section"><h3>Alertas autorizadas</h3><p class="empty-inline" *ngIf="!vehicle.open_events.length">No tiene alertas abiertas.</p>

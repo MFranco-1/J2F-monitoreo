@@ -6,7 +6,7 @@ from app import db
 from app.models.user import User
 from app.models.state import State
 from app.security import current_user, has_active_role, active_admin_count, role_name
-from app.validation import text_value, validate_dni, validate_email, user_state, ids_list
+from app.validation import record_text as text_value, validate_dni, validate_email, user_state, ids_list, validate_password
 from app.models.profile import Profile
 from app.controllers.auth_controller import invalidate_sessions
 
@@ -52,9 +52,7 @@ def create_user(data):
     dni = validate_dni(text_value(data, "dni", required=True, limit=20))
     name = text_value(data, "full_name", required=True, limit=150)
     email = validate_email(text_value(data, "email", required=True, limit=150))
-    password = data.get("password")
-    if not isinstance(password, str) or not password.strip() or len(password) > 1024:
-        return jsonify({"error": "Contraseña requerida"}), 400
+    password = validate_password(data.get("password"))
     state = user_state(data.get("state_id"))
     raw_profiles = data.get("profile_ids")
     if raw_profiles is None and data.get("profile_id") is not None:
@@ -88,8 +86,10 @@ def update_user(user_id, data):
         if not profiles or any(not p.state or p.state.name != "Activo" for p in profiles):
             raise BadRequest("Todo usuario debe conservar al menos un perfil activo")
     password = data.get("password", "")
-    if not isinstance(password, str) or len(password) > 1024:
+    if not isinstance(password, str):
         return jsonify({"error": "La contraseña debe ser texto"}), 400
+    if password:
+        validate_password(password)
     if current_user().id == user.id and state.name != "Activo":
         return jsonify({"error": "No puedes desactivar tu propia cuenta"}), 409
     proposed_roles = {role_name(profile.name) for profile in profiles}
@@ -109,8 +109,6 @@ def update_user(user_id, data):
     if user.profile_id not in {profile.id for profile in profiles}:
         user.profile_id = profiles[0].id
     if password:
-        if not password.strip() or len(password) > 1024:
-            return jsonify({"error": "La contraseña no puede contener solo espacios"}), 400
         user.set_password(password)
     invalidate_sessions(user)
     db.session.commit()

@@ -258,11 +258,48 @@ test('Datos Maestros conserva el mensaje del backend al bloquear una desactivaci
   const component = new MasterDataComponent();
   component.kind = 'vehicles';
   component.editing.set({ id: 5 });
-  component.form = { state_id: 2 };
+  component.form = { state_id: 2, client_id: 1, plate: 'ABC-123' };
   component.showModal.set(true);
   component.save();
   assert.equal(component.error(), message);
   assert.equal(component.showModal(), true);
+});
+
+test('los tipos nuevos generan alertas sin ofrecer una casilla en el formulario', () => {
+  const payloads = [];
+  injections = [{ create: (kind, data) => { payloads.push({ kind, data }); return rx.EMPTY; } }, {}, auth(true)];
+  const component = new MasterDataComponent();
+  component.kind = 'event-types';
+  component.states.set([{ id: 1, name: 'Activo' }]);
+  component.open();
+  Object.assign(component.form, { code: 'ENGINE_START', name: 'Encendido del motor' });
+  component.save();
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].kind, 'event-types');
+  assert.equal(payloads[0].data.generates_alert, true);
+  const html = fs.readFileSync(path.join(root, 'src/app/features/admin/master-data/master-data.component.html'), 'utf8');
+  assert.doesNotMatch(html, /form\.generates_alert|Genera alerta/);
+});
+
+test('editar un tipo de evento conserva la configuración anterior y exige administrador', () => {
+  const payloads = [];
+  const session = auth(true);
+  injections = [{ update: (kind, id, data) => { payloads.push(data); return rx.EMPTY; } }, {}, session];
+  const component = new MasterDataComponent();
+  component.kind = 'event-types';
+  const record = { id: 7, code: 'ENGINE_START', name: 'Encendido del motor',
+    default_priority: 'medium', generates_alert: false, state_id: 1 };
+  component.open(record);
+  component.form.name = 'Encendido de motor';
+  component.save();
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].generates_alert, false);
+  assert.equal(record.name, 'Encendido del motor');
+  assert.equal(record.generates_alert, false);
+  component.saving.set(false);
+  session.isAdmin = () => false;
+  component.save();
+  assert.equal(payloads.length, 1);
 });
 
 test('una alerta manual marca el vehículo y Gestionar navega a su detalle', () => {
@@ -278,4 +315,100 @@ test('una alerta manual marca el vehículo y Gestionar navega a su detalle', () 
   component.manageAlert(88);
   assert.deepEqual(navigations, [['/alerts', 88]]);
   assert.equal(component.vehicleStatus({ ...vehicle, open_events: [] }), 'Operativo');
+});
+
+test('el formulario de clientes bloquea los datos inválidos sin hacer peticiones', () => {
+  let requests = 0;
+  injections = [{ create: () => { requests++; return rx.EMPTY; } }, {}, auth(true)];
+  const component = new MasterDataComponent();
+  component.form = { document_type: 'RUC', document_number: '3000000028254561', business_name: 'A',
+    contact_name: 'A', phone: '987654321h', email: 'hola@gmail.com', address: 'A', state_id: 1 };
+  component.save();
+  assert.equal(requests, 0);
+  assert.equal(component.saving(), false);
+  for (const field of ['document_number', 'business_name', 'contact_name', 'phone', 'address'])
+    assert.ok(component.fieldErrors()[field]);
+});
+
+test('editar un cliente también valida y no envía una letra como razón social', () => {
+  let requests = 0;
+  injections = [{ update: () => { requests++; return rx.EMPTY; } }, {}, auth(true)];
+  const component = new MasterDataComponent();
+  component.editing.set({ id: 1 });
+  component.form = { document_type: 'RUC', document_number: '20123456789', business_name: 'A', state_id: 1 };
+  component.save();
+  assert.equal(requests, 0);
+  assert.match(component.error(), /Razón social/);
+});
+
+test('el mapa rechaza observaciones aisladas sin registrar abastecimiento', () => {
+  let requests = 0;
+  injections = [auth(true), { recordFuelAction: () => { requests++; return rx.EMPTY; } }, {}, {
+    snapshot: { queryParamMap: { get: () => null } },
+  }];
+  const component = new VehicleMapComponent();
+  component.selectedVehicle.set({ id: 1, open_events: [{ code: 'LOW_FUEL', alert_id: 1 }] });
+  component.fuelObservation = 'A';
+  component.recordFuel('confirm');
+  assert.equal(requests, 0);
+  assert.match(component.error(), /Observación/);
+});
+
+test('cliente RUC se guarda manualmente sin consulta, token ni motivo adicional', () => {
+  const payloads = [];
+  injections = [{create: (kind, data) => {payloads.push(data); return rx.EMPTY;}}, {}, auth(true)];
+  const component = new MasterDataComponent();
+  component.open();
+  component.form = {document_type:'RUC', document_number:'20123456786', business_name:'Empresa Prueba', state_id:1};
+  component.save();
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].business_name, 'Empresa Prueba');
+  assert.equal('ruc_verification' in payloads[0], false);
+});
+
+test('editar razón social no exige API y no envía historial como datos editables', () => {
+  const payloads = [];
+  injections = [{update: (kind, id, data) => {payloads.push(data); return rx.EMPTY;}}, {}, auth(true)];
+  const component = new MasterDataComponent();
+  component.open({id:1, document_type:'RUC', document_number:'20123456786', business_name:'Empresa anterior', state_id:1,
+    verification:{status:'pending',audit:[]}});
+  component.form.business_name = 'Empresa actualizada';
+  component.save();
+  assert.equal(payloads.length,1);
+  assert.equal(payloads[0].business_name, 'Empresa actualizada');
+  assert.equal('verification' in payloads[0], false);
+});
+
+test('cambiar perfil cierra el formulario y no habilita CRUD para el operador', () => {
+  const session = auth(true); let admin = true;
+  session.isAdmin = () => admin;
+  injections = [{list: () => rx.of({clients:[]}), clients: () => rx.of({clients:[]}), vehicles: () => rx.of({vehicles:[]})},
+    {getProfiles: () => rx.of({states:[]})}, session];
+  const component = new MasterDataComponent(); component.ngOnInit();
+  component.open(); component.form.document_number='20123456786';
+  admin=false; session.profileChanges.next();
+  assert.equal(component.showModal(), false);
+  component.open(); assert.equal(component.showModal(), false);
+  component.ngOnDestroy();
+});
+
+test('Registrar GPS preselecciona el vehículo y distingue sin equipo de IMEI registrado', () => {
+  injections = [{list: () => rx.of({gps_devices:[]})}, {}, auth(true)];
+  const component = new MasterDataComponent();
+  const vehicle = {id:8, plate:'GPS-008', gps_devices:[]};
+  assert.equal(component.gpsLabel(vehicle), 'Sin GPS registrado');
+  component.registerGps(vehicle);
+  assert.equal(component.kind, 'gps-devices'); assert.equal(component.showModal(), true);
+  assert.equal(component.form.vehicle_id, 8);
+  assert.match(component.gpsLabel({...vehicle, gps_devices:[{imei:'860000000000001', state:{name:'Activo'}}]}), /860000000000001.*Activo/);
+  assert.equal(component.title({serial_number:'GPS-ABC-123',imei:'000000000000018'}), 'GPS-ABC-123');
+  assert.match(component.detail({model:'GPS J2F',imei:'000000000000018'}), /GPS J2F.*IMEI 000000000000018/);
+  assert.match(component.gpsLabel({...vehicle,gps_devices:[{serial_number:'GPS-ABC-123',imei:'000000000000018',state:{name:'Activo'}}]}), /GPS-ABC-123.*Activo/);
+});
+
+test('Datos Maestros conserva la relación GPS-vehículo sin mensajes explicativos adicionales', () => {
+  const html = fs.readFileSync(path.join(root, 'src/app/features/admin/master-data/master-data.component.html'), 'utf8');
+  assert.match(html, /record\.vehicle\?\.plate/);
+  assert.match(html, /<p>No hay registros<\/p>/);
+  assert.doesNotMatch(html, /No hay equipos GPS registrados|El mapa utiliza posiciones simuladas|no conecta automáticamente|\bdemo\b|\bprueba\b/i);
 });

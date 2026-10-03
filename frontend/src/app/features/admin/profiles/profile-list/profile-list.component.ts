@@ -4,6 +4,7 @@ import { NgFor, NgIf } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserService } from '../../../../core/services/user.service';
 import { Profile, State } from '../../../../shared/models/user.model';
+import { firstError, validateForm } from '../../../../shared/validation';
 
 @Component({
   selector: 'app-profile-list',
@@ -72,6 +73,8 @@ export class ProfileListComponent implements OnInit {
 
   save(): void {
     if (this.saving()) return;
+    const error = firstError(validateForm('profiles', this.form));
+    if (error) { this.errorMsg.set(error); return; }
     this.saving.set(true);
     const editing = this.editingProfile();
     const obs = editing

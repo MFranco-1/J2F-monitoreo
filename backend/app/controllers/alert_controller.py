@@ -15,7 +15,7 @@ from app.models.state import State
 from app.models.history import History
 from app.models.master_data import Client, Vehicle, GpsDevice, EventType
 from app.models.assignment import Assignment
-from app.validation import text_value, priority_value, integer, date_value, date_range
+from app.validation import record_text as text_value, priority_value, integer, date_value, date_range, number_value
 from app.security import (
     current_user, may_attend, may_view_alert, scope_alert_query,
     active_profile_id, can_view_all_operations, is_technician,
@@ -282,22 +282,11 @@ def create_map_event(data: dict, current_user_id: int) -> tuple:
     event_code = text_value(data, "event_code", required=True, limit=50)
     if event_code not in SIMULATED_EVENT_CODES:
         return jsonify({"error": "Evento de mapa no soportado"}), 400
-    try:
-        latitude = float(data.get("latitude"))
-        longitude = float(data.get("longitude"))
-        speed = max(0.0, min(float(data.get("speed", 0)), 250.0))
-    except (TypeError, ValueError):
-        return jsonify({"error": "La posición y velocidad simuladas son inválidas"}), 400
-    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
-        return jsonify({"error": "La posición simulada está fuera de rango"}), 400
+    latitude, longitude = _coordinates(data.get("latitude"), data.get("longitude"))
+    speed = number_value(data.get("speed", 0), "Velocidad simulada", minimum=0, maximum=250)
     fuel_percent = None
     if event_code == "LOW_FUEL":
-        try:
-            fuel_percent = float(data.get("fuel_percent"))
-        except (TypeError, ValueError):
-            return jsonify({"error": "Indica el porcentaje de combustible simulado"}), 400
-        if not (0 <= fuel_percent <= 10):
-            return jsonify({"error": "Combustible bajo requiere un nivel entre 0 % y 10 %"}), 400
+        fuel_percent = number_value(data.get("fuel_percent"), "Combustible bajo (0 % a 10 %)", minimum=0, maximum=10)
 
     vehicle = Vehicle.query.filter_by(id=vehicle_id).with_for_update().first()
     if not vehicle or not vehicle.is_active or not vehicle.client or not vehicle.client.is_active:
@@ -496,15 +485,7 @@ def _validated_station(value):
         "longitude": longitude,
     }
     if value.get("road_distance") is not None:
-        try:
-            road_distance = float(value["road_distance"])
-        except (TypeError, ValueError):
-            from werkzeug.exceptions import BadRequest
-            raise BadRequest("La distancia vial de la estación no es válida")
-        if road_distance < 0:
-            from werkzeug.exceptions import BadRequest
-            raise BadRequest("La distancia vial de la estación no es válida")
-        station["road_distance"] = road_distance
+        station["road_distance"] = number_value(value["road_distance"], "Distancia vial", minimum=0)
     return station
 
 
@@ -523,14 +504,8 @@ def _validate_fuel_service_access(alert_id_value):
 
 
 def _coordinates(latitude_value, longitude_value):
-    try:
-        latitude, longitude = float(latitude_value), float(longitude_value)
-    except (TypeError, ValueError):
-        from werkzeug.exceptions import BadRequest
-        raise BadRequest("Coordenadas inválidas")
-    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
-        from werkzeug.exceptions import BadRequest
-        raise BadRequest("Coordenadas fuera de rango")
+    latitude = number_value(latitude_value, "Latitud", minimum=-90, maximum=90)
+    longitude = number_value(longitude_value, "Longitud", minimum=-180, maximum=180)
     return latitude, longitude
 
 

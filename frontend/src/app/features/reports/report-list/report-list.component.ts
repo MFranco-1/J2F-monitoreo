@@ -7,6 +7,7 @@ import { Report } from '../../../shared/models/assignment.model';
 import { MasterDataService } from '../../../core/services/master-data.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { Client, Vehicle } from '../../../shared/models/master-data.model';
+import { firstError, validateForm } from '../../../shared/validation';
 
 @Component({
   selector: 'app-report-list',
@@ -66,7 +67,8 @@ export class ReportListComponent implements OnInit {
 
   createReport(): void {
     if (this.saving()) return;
-    if (!this.newForm.name) { this.errorMsg.set('Nombre requerido'); return; }
+    const error = firstError(validateForm('reports', this.newForm));
+    if (error) { this.errorMsg.set(error); return; }
     this.saving.set(true);
     this.assignmentService.createReport(this.newForm).subscribe({
       next: ({ report }) => {

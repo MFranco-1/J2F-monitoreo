@@ -1,4 +1,5 @@
 """CRUD validado de los cuatro datos maestros del monitoreo."""
+import json
 from flask import jsonify
 from werkzeug.exceptions import BadRequest
 from sqlalchemy import func
@@ -8,7 +9,11 @@ from app.models.master_data import Client, Vehicle, GpsDevice, EventType
 from app.models.alert import Alert
 from app.models.assignment import Assignment
 from app.security import current_user, can_view_all_operations, is_technician
-from app.validation import text_value, integer, user_state, priority_value, validate_email
+from app.datetime_utils import utcnow, iso_utc
+from app.validation import (
+    record_text as text_value, integer, user_state, priority_value, validate_email,
+    validate_document, validate_phone, validate_plate, validate_imei, validate_code, validate_ruc,
+)
 
 
 MODELS = {"clients": Client, "vehicles": Vehicle, "gps-devices": GpsDevice,
@@ -82,20 +87,31 @@ def _unique(model, field, value, record_id=None):
 
 
 def _apply(kind, record, data, creating=False):
+    previous_identity = (record.document_type, record.document_number, record.business_name) if kind == "clients" else None
     if "state_id" in data or creating:
         record.state = _state(data.get("state_id"))
     if kind == "clients":
-        fields = [("document_type", 20, True), ("document_number", 30, True),
-                  ("business_name", 180, True), ("contact_name", 150, False),
+        # Validar el par completo cuando cambia cualquiera de sus partes. No
+        # reinterpretar documentos heredados en actualizaciones solo de estado.
+        if creating or "document_type" in data or "document_number" in data:
+            document_type = (text_value(data, "document_type", required=True, limit=20)
+                             if creating or "document_type" in data else record.document_type)
+            number = (text_value(data, "document_number", required=True, limit=30)
+                      if creating or "document_number" in data else record.document_number)
+            document_type, number = validate_document(document_type, number)
+            _unique(Client, "document_number", number, record.id)
+            record.document_type, record.document_number = document_type, number
+        fields = [("business_name", 180, True), ("contact_name", 150, False),
                   ("phone", 30, False), ("email", 150, False), ("address", 255, False)]
         for field, limit, required in fields:
             if creating or field in data:
                 value = text_value(data, field, required=required, limit=limit)
                 if field == "email" and value:
                     value = validate_email(value)
-                if field == "document_number":
-                    _unique(Client, field, value, record.id)
+                if field == "phone":
+                    value = validate_phone(value)
                 setattr(record, field, value)
+        _preserve_client_verification(record, data, previous_identity, creating)
     elif kind == "vehicles":
         if creating or "client_id" in data:
             client = db.session.get(Client, integer(data.get("client_id"), "client_id"))
@@ -108,7 +124,7 @@ def _apply(kind, record, data, creating=False):
             if creating or field in data:
                 value = text_value(data, field, required=required, limit=limit)
                 if field == "plate":
-                    value = value.upper()
+                    value = validate_plate(value)
                     _unique(Vehicle, field, value, record.id)
                 setattr(record, field, value)
     elif kind == "gps-devices":
@@ -123,7 +139,11 @@ def _apply(kind, record, data, creating=False):
             if creating or field in data:
                 value = text_value(data, field, required=required, limit=limit)
                 if field == "serial_number":
-                    value = value or None
+                    value = validate_code(value, serial=True) or None
+                if field == "imei":
+                    value = validate_imei(value)
+                if field == "sim_number":
+                    value = validate_phone(value, sim=True)
                 if field in {"imei", "serial_number"}:
                     _unique(GpsDevice, field, value, record.id)
                 setattr(record, field, value)
@@ -133,7 +153,7 @@ def _apply(kind, record, data, creating=False):
             if creating or field in data:
                 value = text_value(data, field, required=required, limit=limit)
                 if field == "code":
-                    value = value.upper()
+                    value = validate_code(value)
                     _unique(EventType, field, value, record.id)
                 setattr(record, field, value)
         if creating or "default_priority" in data:
@@ -143,6 +163,24 @@ def _apply(kind, record, data, creating=False):
             if not isinstance(value, bool):
                 raise BadRequest("generates_alert debe ser true o false")
             record.generates_alert = value
+
+
+def _preserve_client_verification(record, data, previous_identity, creating):
+    """Conserva el historial anterior sin exigir ni permitir consultas externas."""
+    identity = (record.document_type, record.document_number, record.business_name)
+    changed = creating or identity != previous_identity
+    if any(key in data for key in ("verification_json", "verification_status")):
+        raise BadRequest("La verificación se registra desde el servidor, no desde campos editables")
+    if record.document_type == "RUC" and changed:
+        validate_ruc(record.document_number)
+    if not changed or not record.verification_json:
+        return  # Sin reescribir registros ni historial por editar teléfono/estado.
+    actor = current_user()
+    entry = {"status": "pending" if record.document_type == "RUC" else "not_applicable",
+             "source": "manual", "observation": "Datos modificados manualmente, sin consulta externa",
+             "actor": {"id": actor.id, "name": actor.full_name}, "timestamp": iso_utc(utcnow()),
+             "document_number": record.document_number, "business_name": record.business_name}
+    record.verification_json = json.dumps({**entry, "audit": [*record.verification.get("audit", []), entry]}, ensure_ascii=False)
 
 
 def create_record(kind, data):
@@ -155,7 +193,7 @@ def create_record(kind, data):
 
 
 def update_record(kind, record_id, data):
-    record = MODELS[kind].query.get_or_404(record_id, description="Registro no encontrado")
+    record = MODELS[kind].query.filter_by(id=record_id).with_for_update().first_or_404(description="Registro no encontrado")
     if kind == "vehicles" and "state_id" in data:
         requested_state = _state(data["state_id"])
         if requested_state.name == "Inactivo" and record.state.name != "Inactivo":
@@ -185,7 +223,8 @@ def update_record(kind, record_id, data):
         if (requested_code != record.code or requested_state.name != "Activo"
                 or requested_generates is not True):
             return jsonify({"error": "El código interno, estado activo y generación de alerta de este evento están protegidos"}), 409
-    _apply(kind, record, data)
+    with db.session.no_autoflush:
+        _apply(kind, record, data)
     db.session.commit()
     return jsonify({"message": "Registro actualizado", "record": _dict(kind, record)}), 200
 

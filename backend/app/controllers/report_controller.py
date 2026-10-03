@@ -11,8 +11,8 @@ from app.models.alert import Alert
 from app.models.assignment import Assignment
 from app.models.user import User
 from app.models.state import State
-from app.models.master_data import Vehicle
-from app.validation import text_value, date_value, date_range, integer, priority_value
+from app.models.master_data import Client, Vehicle
+from app.validation import record_text as text_value, date_value, date_range, integer, priority_value
 
 
 def get_all_reports() -> tuple:
@@ -37,7 +37,9 @@ def create_report(data: dict, current_user_id: int) -> tuple:
     start = date_value(data.get("date_range_start"), "date_range_start")
     end = date_value(data.get("date_range_end"), "date_range_end", end_of_day=True)
     date_range(start, end)
-    filters = data.get("filters") or {}
+    filters = data.get("filters")
+    if filters is None:
+        filters = {}
     if not isinstance(filters, dict):
         return jsonify({"error": "filters debe ser un objeto"}), 400
     normalized_filters = {}
@@ -58,6 +60,8 @@ def create_report(data: dict, current_user_id: int) -> tuple:
             return jsonify({"error": "Vehículo no encontrado"}), 400
         if normalized_filters.get("client_id") and vehicle.client_id != normalized_filters["client_id"]:
             return jsonify({"error": "El vehículo no pertenece al cliente seleccionado"}), 400
+    if normalized_filters.get("client_id") and not db.session.get(Client, normalized_filters["client_id"]):
+        return jsonify({"error": "Cliente no encontrado"}), 400
     if normalized_filters.get("user_id") and not db.session.get(User, normalized_filters["user_id"]):
         return jsonify({"error": "Usuario no encontrado"}), 400
 

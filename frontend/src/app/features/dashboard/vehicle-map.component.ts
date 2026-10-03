@@ -7,6 +7,7 @@ import * as L from 'leaflet';
 import { AlertService } from '../../core/services/alert.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AlertPriority, FuelStation, MapOpenEvent, MapVehicle, StreetRoute } from '../../shared/models/alert.model';
+import { firstError, validateForm } from '../../shared/validation';
 
 type EventCode = 'SPEEDING' | 'GPS_SIGNAL_LOSS' | 'SOS' | 'LOW_FUEL';
 type Point = { lat: number; lng: number };
@@ -393,6 +394,8 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
       this.error.set(`La observación es obligatoria para ${action === 'confirm' ? 'confirmar' : 'coordinar'} el abastecimiento.`);
       return;
     }
+    const error = firstError(validateForm('fuel', { observation }));
+    if (error) { this.error.set(error); return; }
     this.fuelAction.set(action);
     this.alerts.recordFuelAction(event.alert_id, action, observation,
       action === 'coordinate' ? station || undefined : undefined).subscribe({

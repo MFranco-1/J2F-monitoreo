@@ -89,7 +89,8 @@
       </div>
       <div class="form-group">
         <label for="u-pass">{{ editingUser() ? 'Nueva Contraseña (dejar vacío para no cambiar)' : 'Contraseña *' }}</label>
-        <input id="u-pass" type="password" maxlength="1024" class="form-control" [(ngModel)]="form.password" placeholder="••••••••" />
+        <input id="u-pass" type="password" minlength="8" maxlength="128" class="form-control" [(ngModel)]="form.password" placeholder="••••••••" />
+        <small class="text-muted">Entre 8 y 128 caracteres.</small>
       </div>
       <div class="form-group">
         <label>Perfiles activos *</label>

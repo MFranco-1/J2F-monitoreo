@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AssignmentService } from '../../../core/services/assignment.service';
 import { Assignment } from '../../../shared/models/assignment.model';
+import { firstError, validateForm, textError } from '../../../shared/validation';
 
 @Component({
   selector: 'app-assignment-list',
@@ -65,6 +66,8 @@ export class AssignmentListComponent implements OnInit {
   saveNote(): void {
     const a = this.editingAssignment();
     if (!a) return;
+    const error = firstError(validateForm('assignment', { notes: this.noteText }));
+    if (error) { this.errorMsg.set(error); return; }
     this.assignmentService.updateAssignment(a.id, { notes: this.noteText }).subscribe({
       next: ({ message }) => {
         this.successMsg.set(message);
@@ -94,6 +97,8 @@ export class AssignmentListComponent implements OnInit {
       this.errorMsg.set('Debes registrar la solución aplicada');
       return;
     }
+    const error = textError(this.solutionText, { label: 'Solución', min: 5, max: 2000, letters: 2, required: true });
+    if (error) { this.errorMsg.set(error); return; }
     this.assignmentService.updateAssignment(assignment.id, {
       complete: true, solution: this.solutionText.trim(),
     }).subscribe({

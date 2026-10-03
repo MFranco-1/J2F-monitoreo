@@ -8,6 +8,7 @@ import { AlertService } from '../../../core/services/alert.service';
 import { AssignmentService } from '../../../core/services/assignment.service';
 import { Alert } from '../../../shared/models/alert.model';
 import { HistoryEntry } from '../../../shared/models/assignment.model';
+import { firstError, validateForm } from '../../../shared/validation';
 
 @Component({
   selector: 'app-alert-detail',
@@ -74,6 +75,8 @@ export class AlertDetailComponent implements OnInit {
       this.errorMsg.set('Debes registrar la solución aplicada para cerrar la alerta');
       return;
     }
+    const error = firstError(validateForm('assignment', { notes: this.stateNotes }));
+    if (error) { this.errorMsg.set(error); return; }
     const id = this.alert()!.id;
     this.alertService.updateAlert(id, { state_name: this.newStateName, notes: this.stateNotes }).subscribe({
       next: ({ message }) => {

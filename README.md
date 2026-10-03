@@ -79,6 +79,80 @@ npm run build
 
 Las pruebas de backend usan SQLite aislada y no acceden a Neon.
 
+## Validación de formularios
+
+Los formularios comprueban los datos antes de enviarlos y Flask vuelve a validarlos
+al crear o editar. No basta con completar un campo con una letra o símbolos.
+
+- Clientes: RUC de 11 dígitos con prefijo y dígito verificador válidos, DNI de 8, CE de 9 a 12 y pasaporte alfanumérico de
+  6 a 12; razón social de al menos 3 caracteres y con letras. No se obliga a usar
+  el sufijo S.A.C. Teléfono de 7 a 15 dígitos, sin letras, espacios ni símbolos;
+  correo con formato válido, contacto con letras y dirección de al menos 5 caracteres.
+- Vehículos y GPS: placa alfanumérica de 4 a 8 caracteres con guion opcional,
+  IMEI de 15 dígitos, SIM numérica de 7 a 22 y relaciones existentes.
+- Usuarios: DNI, correo, nombre, perfiles y estado válidos; nuevas contraseñas de
+  8 a 128 caracteres. La contraseña vacía al editar conserva la anterior.
+- Perfiles, menús, eventos, alertas y reportes: nombres/títulos de al menos 3
+  caracteres, límites de longitud, códigos, rutas internas, prioridades y fechas
+  válidos. Las observaciones, soluciones y descripciones ingresadas requieren
+  al menos 5 caracteres con contenido, no una letra aislada.
+
+Los campos opcionales pueden quedar vacíos. Se conservan los registros antiguos;
+las actualizaciones parciales validan los campos enviados (el tipo y número de
+documento se validan juntos). El formulario de edición solicita corregir sus
+campos inválidos antes de guardar. No hay borrados ni correcciones automáticas de datos antiguos.
+
+Las reglas de formato no acreditan la existencia del titular, correo, teléfono,
+placa o dispositivo. No hay consultas a SUNAT/RENIEC ni conexión automática a
+equipos GPS: la razón social y demás datos se ingresan manualmente.
+
+## Registro de clientes sin servicios externos
+
+Antes de iniciar esta versión sobre una base existente, aplica únicamente
+`backend/migrations/20261003_client_verification.sql`. Añade una columna nullable
+en `clients`; conserva los datos. `j2f_modulo_usuarios.sql` también la incorpora
+para instalaciones nuevas. No ejecutar pruebas ni reinicializaciones en Neon.
+
+```powershell
+psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/migrations/20261003_client_verification.sql
+```
+
+El Administrador registra y edita clientes manualmente. Se retiraron el botón de
+consulta RUC, su endpoint, comprobantes y configuración del proveedor. No se necesita
+token, consulta previa ni observación adicional para guardar. Angular y Flask
+mantienen validación de documento, razón social, contacto, teléfono, correo y dirección.
+Los demás perfiles conservan sus permisos de consulta.
+
+La columna de verificación de la versión anterior se conserva únicamente por
+compatibilidad y para no borrar información existente. No se ejecutan cambios de
+esquema ni de datos al retirar la API. Si un registro ya tenía historial y cambia
+su RUC/razón social, se conserva el historial y se invalida la verificación anterior;
+una edición manual nunca queda marcada como consulta externa exitosa. La validación
+local de RUC comprueba formato/control, no acredita inscripción ni razón social.
+
+## Identificación de GPS
+
+GPS vacío significa que no existen equipos registrados dentro del alcance del
+perfil. Los vehículos y las posiciones simuladas del mapa no crean un equipo físico.
+En Vehículos se muestran IMEI y estado de los equipos vinculados, o Sin GPS registrado;
+Registrar GPS abre el formulario existente con el vehículo preseleccionado. El
+Administrador registra IMEI de 15 dígitos único y los datos disponibles del equipo,
+su SIM/proveedor y estado. El mapa muestra el IMEI activo elegido para esa unidad.
+
+Para los vehículos sin hardware, se autorizó poblar registros GPS con identificadores
+generados. `backend/register_fleet_gps.py` muestra el plan y `--apply` lo aplica en
+una transacción. Solo añade un GPS a cada vehículo activo sin equipo registrado;
+no sustituye GPS existentes, ni crea SIM/proveedor, ni modifica alertas o vehículos.
+Es idempotente. Usa serie `GPS-<placa>` y números de 15 dígitos con prefijo `00` y
+control Luhn: son identificadores sintéticos, no IMEI asignados por un fabricante.
+Los nombres visibles son neutros; no se etiquetan como demo en la pantalla.
+
+Registrar un IMEI solo identifica el dispositivo: para telemetría real se necesita
+el equipo instalado, configuración de transmisión y un receptor/proveedor compatible,
+que esta aplicación aún no incorpora. El mapa sigue identificando posiciones como
+simuladas locales del navegador. El Técnico solo consulta unidades/equipos asociados
+a sus casos autorizados y no puede registrar ni editar GPS.
+
 ## Reversión
 
 La reversión no debe borrar las tablas nuevas: vuelve a la versión anterior del código

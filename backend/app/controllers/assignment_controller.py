@@ -7,7 +7,7 @@ from app.models.alert import Alert
 from app.models.user import User
 from app.models.history import History
 from app.security import current_user, is_admin, is_technician, can_assign, active_profile_id
-from app.validation import integer, text_value
+from app.validation import integer, record_text as text_value
 
 
 def locked_alert(alert_id):
