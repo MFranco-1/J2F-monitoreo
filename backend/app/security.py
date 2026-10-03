@@ -94,6 +94,21 @@ def can_view_reports(user):
     return bool(is_admin(user) or is_supervisor(user))
 
 
+def can_cancel_alert(user):
+    profile = current_profile(user)
+    return bool(account_is_active(user) and profile
+                and role_name(profile.name) in {"administrador", "supervisor"})
+
+
+def alert_cancellation_required(fn):
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        if not can_cancel_alert(current_user()):
+            return jsonify({"error": "Solo Administrador y Supervisor pueden anular alertas"}), 403
+        return fn(*args, **kwargs)
+    return wrapped
+
+
 def can_view_all_operations(user):
     return bool(is_admin(user) or is_supervisor(user) or is_operator(user))
 

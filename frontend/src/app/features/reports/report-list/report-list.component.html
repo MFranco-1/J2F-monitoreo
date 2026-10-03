@@ -31,8 +31,8 @@
           <tr *ngFor="let item of objectEntries(selectedResult().by_state)"><td>{{ item[0] }}</td><td>{{ item[1] }}</td></tr>
         </tbody></table>
       </ng-container>
-      <table class="data-table" *ngSwitchCase="'operator_performance'"><thead><tr><th>Técnico</th><th>Asignadas</th><th>Resueltas</th><th>Reasignadas</th><th>Activas</th><th>Promedio</th></tr></thead><tbody>
-        <tr *ngFor="let row of selectedResult().rows"><td>{{ row.technician }}</td><td>{{ row.assigned }}</td><td>{{ row.resolved }}</td><td>{{ row.reassigned }}</td><td>{{ row.active }}</td><td>{{ row.avg_response_minutes ?? '—' }}</td></tr>
+      <table class="data-table" *ngSwitchCase="'operator_performance'"><thead><tr><th>Técnico</th><th>Asignadas</th><th>Resueltas</th><th>Reasignadas</th><th>Anuladas</th><th>Activas</th><th>Promedio</th></tr></thead><tbody>
+        <tr *ngFor="let row of selectedResult().rows"><td>{{ row.technician }}</td><td>{{ row.assigned }}</td><td>{{ row.resolved }}</td><td>{{ row.reassigned }}</td><td>{{ row.cancelled || 0 }}</td><td>{{ row.active }}</td><td>{{ row.avg_response_minutes ?? '—' }}</td></tr>
       </tbody></table>
       <table class="data-table" *ngSwitchCase="'response_times'"><thead><tr><th>Prioridad</th><th>Casos</th><th>Promedio</th><th>Mínimo</th><th>Máximo</th></tr></thead><tbody>
         <tr *ngFor="let item of objectEntries(selectedResult().by_priority)"><td>{{ item[0] | titlecase }}</td><td>{{ item[1].count }}</td><td>{{ item[1].avg_minutes ?? '—' }}</td><td>{{ item[1].min_minutes ?? '—' }}</td><td>{{ item[1].max_minutes ?? '—' }}</td></tr>
@@ -116,7 +116,7 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label for="r-priority">Prioridad</label><select id="r-priority" class="form-control" [(ngModel)]="newForm.filters.priority"><option value="">Todas</option><option value="critical">Crítica</option><option value="high">Alta</option><option value="medium">Media</option><option value="low">Baja</option></select></div>
-        <div class="form-group"><label for="r-state">Estado</label><select id="r-state" class="form-control" [(ngModel)]="newForm.filters.state"><option value="">Todos</option><option value="Abierto">Abierto</option><option value="En Progreso">En Progreso</option><option value="Escalado">Escalado</option><option value="Cerrado">Cerrado</option></select></div>
+        <div class="form-group"><label for="r-state">Estado</label><select id="r-state" class="form-control" [(ngModel)]="newForm.filters.state"><option value="">Todos</option><option value="Abierto">Abierto</option><option value="En Progreso">En Progreso</option><option value="Escalado">Escalado</option><option value="Cerrado">Cerrado</option><option value="Anulado">Anulado</option></select></div>
       </div>
       <div class="form-group">
         <label for="r-type">Tipo de Reporte</label>

@@ -1,6 +1,6 @@
 // shared/models/alert.model.ts
 export type AlertPriority = 'critical' | 'high' | 'medium' | 'low';
-export type AlertStateName = 'Abierto' | 'En Progreso' | 'Cerrado' | 'Escalado';
+export type AlertStateName = 'Abierto' | 'En Progreso' | 'Cerrado' | 'Escalado' | 'Anulado';
 
 export interface AlertState {
   id: number;

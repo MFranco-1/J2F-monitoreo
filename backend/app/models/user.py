@@ -50,10 +50,11 @@ class User(db.Model):
     def active_assignments_count(self) -> int:
         """Número de alertas activas asignadas a este técnico."""
         from app.models.assignment import Assignment
-        from app.models.alert import Alert
+        from app.models.alert import Alert, TERMINAL_ALERT_STATES
+        from app.models.state import State
         return (
             self.assignments.join(Alert)
-            .filter(Assignment.completed_at.is_(None), ~Alert.state.has(name="Cerrado"))
+            .filter(Assignment.completed_at.is_(None), ~Alert.state.has(State.name.in_(TERMINAL_ALERT_STATES)))
             .count()
         )
 

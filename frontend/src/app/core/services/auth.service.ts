@@ -23,6 +23,7 @@ export class AuthService {
   readonly isOperator = computed(() => this.hasRole('operador'));
   readonly isSupervisor = computed(() => this.hasRole('supervisor'));
   readonly canAssign = computed(() => this.isAdmin() || this.isSupervisor() || this.isOperator());
+  readonly canCancelAlert = computed(() => this.isAdmin() || this.isSupervisor());
   readonly roleNames = computed(() => this._currentUser()?.profile?.name || 'Perfil pendiente');
 
   constructor(private http: HttpClient, private router: Router) {}

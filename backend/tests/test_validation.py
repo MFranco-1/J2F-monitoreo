@@ -54,7 +54,7 @@ class InputValidationTests(unittest.TestCase):
             ("business_name", "123456"), ("business_name", "AAAAAA"),
             ("business_name", "x" * 181), ("business_name", "Empresa\u200b falsa"),
             ("contact_name", "A"), ("contact_name", "Juan123"),
-            ("phone", "987654321h"), ("phone", "+51987654321"), ("phone", "987 654 321"),
+            ("phone", "987654321h"), ("phone", "+99987654321"), ("phone", "987 654 321"),
             ("phone", "1"), ("phone", "9" * 16), ("email", "hola@gmail"),
             ("email", "hola..nombre@gmail.com"), ("email", "hola@-gmail.com"),
             ("address", "A"), ("address", "12345"), ("state_id", 99999),
@@ -67,6 +67,7 @@ class InputValidationTests(unittest.TestCase):
 
     def test_clients_reject_invalid_edits_atomically(self):
         customer = self.customer()
+        original = self.client.get(f"/api/master-data/clients/{customer}", headers=self.headers).get_json()["client"]
         for field, value in [("document_number", "123"), ("document_type", "DNI"),
                              ("business_name", "A"), ("contact_name", "1"),
                              ("phone", "987654321h"), ("email", "no-correo"), ("address", "A")]:
@@ -74,7 +75,7 @@ class InputValidationTests(unittest.TestCase):
                 self.rejected("put", f"/api/master-data/clients/{customer}",
                               {field: value, "state_id": self.inactive})
                 record = self.client.get(f"/api/master-data/clients/{customer}", headers=self.headers).get_json()["client"]
-                self.assertEqual(record[field], self.client_data[field])
+                self.assertEqual(record[field], original[field])
                 self.assertEqual(record["state_id"], self.active)
 
     def test_valid_client_documents_optional_fields_and_normalization(self):
@@ -89,7 +90,7 @@ class InputValidationTests(unittest.TestCase):
                 })["record"]
                 self.assertEqual(record["document_type"], kind.upper())
                 self.assertEqual(record["document_number"], number.upper())
-                self.assertEqual(record["business_name"], "Logística Ñandú E.I.R.L.")
+                self.assertEqual(record["business_name"], "Logística ñandú e.i.r.l.")
         self.rejected("post", "/api/master-data/clients/", self.client_data)
 
     def test_document_type_and_number_must_be_valid_together_on_edit(self):

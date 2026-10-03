@@ -15,6 +15,7 @@
         <option value="assigned">Asignadas</option>
         <option value="escalated">Escaladas</option>
         <option value="closed">Cerradas</option>
+        <option value="cancelled">Anuladas</option>
       </select>
       <input type="date" class="filter-select" (change)="applyFilter('date_from', $any($event.target).value)" id="filter-date-from" />
       <input type="date" class="filter-select" (change)="applyFilter('date_to', $any($event.target).value)" id="filter-date-to" />

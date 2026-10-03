@@ -5,3 +5,4 @@ Flask-CORS==4.0.1
 Werkzeug==3.0.3
 SQLAlchemy==2.0.30
 psycopg2-binary==2.9.9
+phonenumbers==9.0.40

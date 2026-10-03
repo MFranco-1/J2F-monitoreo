@@ -29,9 +29,11 @@ class Client(TimestampStateMixin, db.Model):
     vehicles = db.relationship("Vehicle", back_populates="client", lazy="dynamic")
 
     def to_dict(self):
+        from app.validation import client_phone_country
         return {"id": self.id, "document_type": self.document_type,
                 "document_number": self.document_number, "business_name": self.business_name,
                 "contact_name": self.contact_name, "phone": self.phone, "email": self.email,
+                "phone_country": client_phone_country(self.phone),
                 "address": self.address, "state_id": self.state_id,
                 "state": self.state.to_dict() if self.state else None,
                 "verification": self.verification,

@@ -47,6 +47,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly stationTrips = new Map<number, StationTrip>();
   private readonly routeRecovery = new Set<number>();
   private readonly fuelRequests = new Set<number>();
+  private readonly suppressedLowFuel = new Set<number>();
   private readonly stationQueryCancel = new Subject<void>();
   private readonly destroy$ = new Subject<void>();
   private vehicleRequestId = 0;
@@ -160,11 +161,24 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
       next: ({ vehicles }) => {
         if (requestId !== this.vehicleRequestId) return;
         const selectedId = this.selectedVehicle()?.id;
+        const previousVehicles = this.vehicles();
         this.vehicles.set(vehicles);
         for (const vehicle of vehicles) {
           const position = this.ensurePosition(vehicle);
           const confirmationAt = vehicle.fuel_confirmation?.timestamp;
           const hasLowFuel = !!this.lowFuelEvent(vehicle);
+          const previousFuel = previousVehicles.find(item => item.id === vehicle.id)?.open_events.find(event => event.code === 'LOW_FUEL');
+          if (previousFuel && !vehicle.open_events.some(event => event.alert_id === previousFuel.alert_id)) {
+            // Cerrar o anular un caso no acredita una recarga ni debe recrearlo
+            // inmediatamente con el mismo nivel local de la simulación.
+            if (!hasLowFuel && position && position.fuel <= 10) this.suppressedLowFuel.add(vehicle.id);
+            if (selectedId === vehicle.id) { this.cancelStationRequests(); this.clearStationRoute(); }
+            const trip = this.stationTrips.get(vehicle.id);
+            if (trip?.mode === 'station') {
+              this.stationTrips.delete(vehicle.id); this.routeRecovery.add(vehicle.id);
+              if (position) position.speed = 0;
+            }
+          }
           if (position && confirmationAt && position.fuelConfirmationAt !== confirmationAt) {
             if (!hasLowFuel) position.fuel = 70;
             position.fuelConfirmationAt = confirmationAt;
@@ -259,6 +273,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!vehicle || this.lowFuelEvent(vehicle)) return;
     const position = this.positions.get(vehicle.id);
     if (!position) return;
+    this.suppressedLowFuel.delete(vehicle.id);
     position.fuel = 9;
     this.generateEvent('LOW_FUEL', vehicle);
   }
@@ -509,7 +524,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
           this.pendingTrip = undefined;
           this.routeRecovery.add(vehicle.id);
           position.speed = 0;
-          this.error.set('Abastecimiento confirmado. No se pudo calcular el retorno por calles; el vehículo queda detenido en su posición simulada y puedes reintentar.');
+          this.error.set('No se pudo calcular el retorno por calles; el vehículo queda detenido en su posición simulada y puedes reintentar.');
         },
       });
   }
@@ -552,6 +567,8 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.tick++;
     for (const vehicle of this.vehicles()) {
       const position = this.ensurePosition(vehicle);
+      if (position && position.fuel > 10) this.suppressedLowFuel.delete(vehicle.id);
+      if (this.routeRecovery.has(vehicle.id) && !this.stationTrips.has(vehicle.id)) continue;
       if (!position || vehicle.open_events.some(event => event.code === 'GPS_SIGNAL_LOSS')) continue;
       const trip = this.stationTrips.get(vehicle.id);
       if (trip?.arrived) continue;
@@ -581,6 +598,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
       position.fuel = Math.max(0, position.fuel - .015);
       position.updatedAt = new Date();
       if (this.auth.canAssign() && position.fuel <= 10 &&
+          !this.suppressedLowFuel.has(vehicle.id) &&
           !vehicle.open_events.some(event => event.code === 'LOW_FUEL') &&
           !this.fuelRequests.has(vehicle.id) && !this.generatingCode()) {
         this.fuelRequests.add(vehicle.id);

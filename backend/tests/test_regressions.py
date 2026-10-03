@@ -287,6 +287,44 @@ class RegressionTests(unittest.TestCase):
         result = self.client.put(f"/api/menu-options/{parent['id']}", headers=self.admin, json={"parent_id": child["id"]})
         self.assertEqual(result.status_code, 400)
 
+    def test_menu_without_url_is_listed_editable_and_deletable_only_by_admin(self):
+        response = self.client.post("/api/menu-options/", headers=self.admin, json={
+            "name": "CONTACTOS", "url": "", "state_id": self.active,
+            "profile_ids": [self.admin_profile]})
+        self.assertEqual(response.status_code, 201, response.get_json())
+        option_id = response.get_json()["menu_option"]["id"]
+        path = f"/api/menu-options/{option_id}"
+        listing = self.client.get("/api/menu-options/", headers=self.admin).get_json()["menu_options"]
+        self.assertIn(option_id, [option["id"] for option in listing])
+        navigation = self.client.get("/api/menu-options/?navigation=true", headers=self.admin).get_json()["menu_options"]
+        self.assertIn(option_id, [option["id"] for option in navigation])
+        for index, role in enumerate(["Técnico", "Operador", "Supervisor"], start=1):
+            self.user(index, role=role)
+            headers = self.headers(self.login(f"test{index}@example.invalid")["access_token"])
+            for method, url, body in [("get", "/api/menu-options/", None),
+                                      ("put", path, {"name": "Cambio no permitido"}),
+                                      ("delete", path, None)]:
+                self.assertEqual(getattr(self.client, method)(url, headers=headers, json=body).status_code, 403)
+        response = self.client.put(path, headers=self.admin, json={"name": "Contactos de servicio"})
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertEqual(response.get_json()["menu_option"]["url"], "")
+        response = self.client.delete(path, headers=self.admin)
+        self.assertEqual(response.status_code, 200, response.get_json())
+        listing = self.client.get("/api/menu-options/", headers=self.admin).get_json()["menu_options"]
+        self.assertNotIn(option_id, [option["id"] for option in listing])
+        navigation = self.client.get("/api/menu-options/?navigation=true", headers=self.admin).get_json()["menu_options"]
+        self.assertNotIn(option_id, [option["id"] for option in navigation])
+
+    def test_menu_section_cannot_be_deleted_until_its_children_are_removed(self):
+        parent = self.client.post("/api/menu-options/", headers=self.admin, json={"name": "Contactos"}).get_json()["menu_option"]
+        child = self.client.post("/api/menu-options/", headers=self.admin, json={
+            "name": "Agenda de contactos", "parent_id": parent["id"], "url": ""}).get_json()["menu_option"]
+        response = self.client.delete(f"/api/menu-options/{parent['id']}", headers=self.admin)
+        self.assertEqual(response.status_code, 409, response.get_json())
+        self.assertEqual(self.client.get(f"/api/menu-options/{child['id']}", headers=self.admin).status_code, 200)
+        self.assertEqual(self.client.delete(f"/api/menu-options/{child['id']}", headers=self.admin).status_code, 200)
+        self.assertEqual(self.client.delete(f"/api/menu-options/{parent['id']}", headers=self.admin).status_code, 200)
+
     def test_current_routes_are_registered_for_the_admin_profile(self):
         response = self.client.get("/api/menu-options/", headers=self.admin)
         options = response.get_json()["menu_options"]

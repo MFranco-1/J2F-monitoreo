@@ -32,7 +32,7 @@ class ClientRegistrationTests(unittest.TestCase):
             response = self.create()
         self.assertEqual(response.status_code, 201, response.get_json())
         record = response.get_json()['record']
-        self.assertEqual(record['business_name'], self.data['business_name'])
+        self.assertEqual(record['business_name'], 'Empresa de prueba s.a.c.')
         self.assertNotEqual(record['verification']['status'], 'verified_api')
         self.assertEqual(self.client.get(f"/api/master-data/clients/{record['id']}", headers=self.admin)
                          .get_json()['client']['document_number'], self.data['document_number'])

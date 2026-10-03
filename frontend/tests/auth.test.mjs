@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import * as rx from 'rxjs';
+import * as phoneNumbers from 'libphonenumber-js/max';
 import '@angular/compiler';
 import * as angular from '@angular/core';
 import * as http from '@angular/common/http';
@@ -22,6 +23,7 @@ const imports = {
   '@angular/forms': {},
   '@angular/router': {},
   rxjs: rx,
+  'libphonenumber-js/max': phoneNumbers,
 };
 function load(relative) {
   const filename = path.resolve(root, relative);
@@ -227,6 +229,23 @@ test('el perfil Supervisor puede asignar sin actuar como Técnico', () => {
   assert.equal(t.auth.canAssign(), true);
 });
 
+test('solo Administrador y Supervisor activos pueden anular, también en cuentas nuevas y multiperfil', () => {
+  for (const name of ['Administrador', 'Supervisor', 'Operador', 'Técnico', 'Auditor']) {
+    const t = setup();
+    const profile = { id: 11, name, state: { name: 'Activo' } };
+    const supervisor = { id: 12, name: 'Supervisor', state: { name: 'Activo' } };
+    t.auth.login('nueva', 'clave').subscribe();
+    t.success(0, { access_token: 'new', refresh_token: 'refresh', requires_profile_selection: false,
+      profiles: [profile, supervisor], user: { id: 50, full_name: 'Usuario nuevo', profile, profiles: [profile, supervisor] } });
+    assert.equal(t.auth.canCancelAlert(), ['Administrador', 'Supervisor'].includes(name));
+    profile.state.name = 'Inactivo';
+    // Una sesión restaurada relee el estado y no conserva facultades del perfil inactivo.
+    localStorage.setItem('j2f_user', JSON.stringify({ id: 50, full_name: 'Usuario nuevo', profile,
+      profiles: [profile, supervisor], requires_profile_selection: false }));
+    assert.equal(new AuthService({}, {}).canCancelAlert(), false);
+  }
+});
+
 test('una sesión incompleta anterior requiere iniciar sesión de nuevo', () => {
   setup();
   localStorage.setItem('j2f_user', JSON.stringify({ id: 3, full_name: 'Anterior',
@@ -325,15 +344,54 @@ test('la interfaz requerida está integrada sin pantalla ni modal de selección 
   assert.doesNotMatch(routes, /select-profile/);
 });
 
-test('el CRUD muestra rutas y conserva las secciones solo como menús padre', () => {
+test('el CRUD muestra todas las opciones, incluso sin ruta, inactivas o sin acceso', () => {
   const parent = { id: 9, name: 'MONITOREO', url: null, parent_id: null, state_id: 1 };
   const child = { id: 3, name: 'Panel de control', url: '/dashboard', parent_id: 9, state_id: 1 };
+  const contacts = { id: 13, name: 'CONTACTOS', url: '', parent_id: 9, state_id: 1 };
+  const inactive = { id: 14, name: 'Archivo', url: '   ', parent_id: null, state_id: 2, profiles: [] };
+  const pending = { id: 15, name: 'Consulta', url: '/consulta', parent_id: 9, state_id: 1 };
   injectedAuth = {
-    getMenuOptions: () => rx.of({ menu_options: [parent, child] }),
+    getMenuOptions: () => rx.of({ menu_options: [parent, child, contacts, inactive, pending] }),
     getProfiles: () => rx.of({ profiles: [], states: [] }),
   };
   const component = new MenuOptionListComponent();
   component.loadData();
-  assert.deepEqual(component.menuOptions().map(option => option.name), ['Panel de control']);
-  assert.deepEqual(component.parentOptions().map(option => option.name), ['MONITOREO']);
+  assert.deepEqual(component.menuOptions().map(option => option.name),
+    ['MONITOREO', 'Panel de control', 'CONTACTOS', 'Archivo', 'Consulta']);
+  assert.deepEqual(component.parentOptions().map(option => option.name), ['MONITOREO', 'Archivo']);
+  assert.equal(component.loading(), false);
+});
+
+test('una opción sin ruta se puede seleccionar para editar o solicitar su eliminación', () => {
+  const contact = { id: 13, name: 'CONTACTOS', url: '', parent_id: 9, order: 0, state_id: 1, profiles: [{ id: 1 }] };
+  const updates = [], deletions = [];
+  injectedAuth = {
+    getMenuOptions: () => rx.of({ menu_options: [contact] }),
+    getProfiles: () => rx.of({ profiles: [], states: [{ id: 1, name: 'Activo' }] }),
+    updateMenuOption: (id, data) => { updates.push({ id, data }); return rx.EMPTY; },
+    deleteMenuOption: id => { deletions.push(id); return rx.EMPTY; },
+  };
+  const component = new MenuOptionListComponent();
+  component.loadData();
+  component.openEdit(component.menuOptions()[0]);
+  assert.equal(component.showModal(), true);
+  assert.equal(component.editingOption().id, contact.id);
+  assert.equal(component.form.url, '');
+  component.form.name = 'Contactos de servicio';
+  component.save();
+  assert.equal(updates[0].id, contact.id);
+  assert.equal(updates[0].data.url, '');
+  assert.equal(contact.name, 'CONTACTOS');
+  const previousConfirm = globalThis.confirm;
+  try {
+    globalThis.confirm = () => false;
+    component.delete(contact);
+    assert.equal(deletions.length, 0);
+    globalThis.confirm = () => true;
+    component.delete(contact);
+    assert.deepEqual(deletions, [contact.id]);
+  } finally {
+    if (previousConfirm === undefined) delete globalThis.confirm;
+    else globalThis.confirm = previousConfirm;
+  }
 });

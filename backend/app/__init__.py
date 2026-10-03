@@ -117,6 +117,7 @@ def _seed_initial_data() -> None:
         State(name="En Progreso", type="alert", description="Alerta siendo atendida"),
         State(name="Cerrado", type="alert", description="Alerta resuelta y cerrada"),
         State(name="Escalado", type="alert", description="Alerta escalada a nivel superior"),
+        State(name="Anulado", type="alert", description="Caso anulado con motivo; no es una resolución"),
     ]
     db.session.add_all(states)
     db.session.flush()

@@ -51,8 +51,8 @@ def create_assignment(data, current_user_id):
     notes = text_value(data, "notes")
     if not is_technician(user):
         return jsonify({"error": "Selecciona un Técnico con cuenta y perfil activos"}), 400
-    if alert.state.name == "Cerrado":
-        return jsonify({"error": "No se puede asignar una alerta cerrada"}), 409
+    if alert.is_terminal:
+        return jsonify({"error": "No se puede asignar una alerta cerrada o anulada"}), 409
     previous = alert.assignments.filter_by(completed_at=None).all()
     if len(previous) == 1 and previous[0].user_id == user.id:
         return jsonify({"error": "La alerta ya está asignada a este técnico"}), 409
@@ -72,8 +72,8 @@ def create_assignment(data, current_user_id):
 
 def auto_assign(data, current_user_id):
     alert = locked_alert(integer(data.get("alert_id"), "alert_id"))
-    if alert.state.name == "Cerrado":
-        return jsonify({"error": "No se puede asignar una alerta cerrada"}), 409
+    if alert.is_terminal:
+        return jsonify({"error": "No se puede asignar una alerta cerrada o anulada"}), 409
     if alert.assignments.filter_by(completed_at=None).first():
         return jsonify({"error": "La alerta ya tiene una asignación vigente"}), 409
     technicians = [u for u in User.query.order_by(User.id).all() if is_technician(u)]
@@ -99,6 +99,8 @@ def update_assignment(assignment_id, data, current_user_id):
     actor = current_user()
     if not is_admin(actor) and not (is_technician(actor) and assignment.user_id == actor.id):
         return jsonify({"error": "Solo el técnico asignado o un administrador puede modificar esta atención"}), 403
+    if assignment.alert.state.name == "Anulado":
+        return jsonify({"error": "La alerta fue anulada; su atención ya no puede modificarse"}), 409
     if "complete" in data and not isinstance(data["complete"], bool):
         return jsonify({"error": "complete debe ser true o false"}), 400
     notes = text_value(data, "notes") if "notes" in data else assignment.notes

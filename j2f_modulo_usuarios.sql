@@ -2,6 +2,13 @@
 -- Puede ejecutarse desde psql o desde el editor SQL de Neon.
 -- No crea otra base de datos, no usa DROP ni TRUNCATE y no elimina registros.
 
+-- 20261003: estado terminal para anulación documentada, sin borrar alertas.
+BEGIN;
+INSERT INTO states (name, type, description)
+SELECT 'Anulado', 'alert', 'Caso anulado con motivo; no es una resolución'
+WHERE NOT EXISTS (SELECT 1 FROM states WHERE name = 'Anulado');
+COMMIT;
+
 -- 001: relación multiperfil. Aplicar dentro de una transacción; no elimina datos.
 BEGIN;
 CREATE TABLE IF NOT EXISTS user_profile (

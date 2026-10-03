@@ -41,6 +41,10 @@ export class AlertService {
     return this.http.delete<{ message: string }>(`${this.BASE}/${id}`);
   }
 
+  cancelAlert(id: number, reason: string): Observable<{ alert: Alert; message: string }> {
+    return this.http.post<{ alert: Alert; message: string }>(`${this.BASE}/${id}/cancel`, { reason });
+  }
+
   getMapVehicles(clientId?: number): Observable<{ vehicles: MapVehicle[] }> {
     let params = new HttpParams();
     if (clientId) params = params.set('client_id', String(clientId));

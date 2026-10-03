@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import * as rx from 'rxjs';
+import * as phoneNumbers from 'libphonenumber-js/max';
 import '@angular/compiler';
 import * as angular from '@angular/core';
 
@@ -31,6 +32,7 @@ const imports = {
   '@angular/router': { RouterLink: emptyClass, Router: emptyClass, ActivatedRoute: emptyClass },
   '@angular/common/http': { HttpParams: emptyClass, HttpClient: emptyClass },
   rxjs: rx,
+  'libphonenumber-js/max': phoneNumbers,
   leaflet: {
     layerGroup: leafletLayer,
     polyline: () => ({ addTo() { return this; }, getBounds() { return []; } }),
@@ -64,13 +66,123 @@ function load(relative) {
 }
 
 const { AlertListComponent } = load('src/app/features/alerts/alert-list/alert-list.component.ts');
+const { AlertDetailComponent } = load('src/app/features/alerts/alert-detail/alert-detail.component.ts');
+const { AlertService } = load('src/app/core/services/alert.service.ts');
+const { AssignmentListComponent } = load('src/app/features/assignments/assignment-list/assignment-list.component.ts');
 const { HistoryListComponent } = load('src/app/features/history/history-list/history-list.component.ts');
 const { MasterDataComponent } = load('src/app/features/admin/master-data/master-data.component.ts');
 const { VehicleMapComponent } = load('src/app/features/dashboard/vehicle-map.component.ts');
 
 const auth = (admin = false) => ({
   isAdmin: () => admin, isTechnician: () => false, canAssign: () => true,
+  canCancelAlert: () => admin,
   currentUser: () => ({ id: 1 }), profileChanges: new rx.Subject(),
+});
+
+test('el servicio de anulación usa POST con motivo, no elimina el registro', () => {
+  const requests = [];
+  const service = new AlertService({ post: (url, data) => { requests.push({ url, data }); return rx.EMPTY; } });
+  service.cancelAlert(12, 'Alerta duplicada').subscribe();
+  assert.match(requests[0].url, /\/api\/alerts\/12\/cancel$/);
+  assert.deepEqual(requests[0].data, { reason: 'Alerta duplicada' });
+});
+
+test('ni las notas de asignaciones anteriores son editables cuando se anula su alerta', () => {
+  injections = [auth(true), {}];
+  const component = new AssignmentListComponent();
+  assert.equal(component.canEdit({ user_id: 1, status: 'Anulada', alert_state: 'Anulado' }), false);
+  assert.equal(component.canEdit({ user_id: 1, status: 'Reasignada', alert_state: 'Anulado' }), false);
+});
+
+test('anular exige permiso, motivo válido y evita solicitudes duplicadas en el detalle', () => {
+  const requests = [];
+  const response = new rx.Subject();
+  const session = auth(true);
+  injections = [session, {}, { cancelAlert: (id, reason) => { requests.push({ id, reason }); return response; } }, {}];
+  const component = new AlertDetailComponent();
+  component.alert.set({ id: 12, title: 'Alerta manual', state: { name: 'Abierto' } });
+  for (const reason of ['', '   ', 'A', '...', '12345', 'x'.repeat(1001)]) {
+    component.cancellationReason = reason; component.cancelAlert();
+  }
+  assert.equal(requests.length, 0);
+  session.canCancelAlert = () => false;
+  component.cancellationReason = 'Se trata de un duplicado'; component.cancelAlert();
+  assert.equal(requests.length, 0);
+  session.canCancelAlert = () => true;
+  component.cancelAlert(); component.cancelAlert();
+  assert.equal(requests.length, 1);
+  const history = [{ action: 'cancelled', detail: 'Se trata de un duplicado', user_id: 1 }];
+  response.next({ message: 'Alerta anulada', alert: { id: 12, state: { name: 'Anulado' }, history } });
+  assert.equal(component.canCancel, false);
+  assert.equal(component.canAttend, false);
+  assert.deepEqual(component.transitions, []);
+  assert.deepEqual(component.history(), history);
+  assert.equal(component.getActionLabel('cancelled').trim(), 'Anulada');
+  assert.equal(component.cancelling(), false);
+  component.cancelAlert(); assert.equal(requests.length, 1);
+  component.alert.set({ id: 12, state: { name: 'Cerrado' } });
+  component.cancelAlert(); assert.equal(requests.length, 1);
+});
+
+test('cambiar perfil ignora una respuesta tardía de anulación y recarga el alcance', () => {
+  const response = new rx.Subject();
+  const session = auth(true);
+  const initial = { id: 12, state: { name: 'Abierto' }, history: [] };
+  injections = [session, { snapshot: { paramMap: { get: () => '12' } } }, {
+    getAlertById: () => rx.of({ alert: initial }), cancelAlert: () => response,
+  }, {}];
+  const component = new AlertDetailComponent(); component.ngOnInit();
+  component.cancellationReason = 'Alerta duplicada'; component.cancelAlert();
+  session.canCancelAlert = () => false;
+  session.profileChanges.next();
+  response.next({ message: 'No restaurar datos anteriores', alert: { id: 12, state: { name: 'Anulado' } } });
+  assert.equal(component.canCancel, false);
+  assert.equal(component.alert(), initial);
+  assert.equal(component.successMsg(), '');
+  assert.equal(component.cancelling(), false);
+  component.ngOnDestroy();
+});
+
+test('desaparecer un caso de combustible no recarga ni recrea la misma alerta automáticamente', () => {
+  const fuel = { alert_id: 99, code: 'LOW_FUEL', can_coordinate: true, fuel_status: 'coordinated', fuel_workflow: {} };
+  const previous = { id: 1, plate: 'AAA-111', client: { id: 1 }, open_events: [fuel] };
+  const current = { ...previous, open_events: [] };
+  const stationResponse = new rx.Subject();
+  const requests = [];
+  injections = [auth(true), {
+    getMapVehicles: () => rx.of({ vehicles: [current] }), getFuelStations: () => stationResponse,
+    createMapEvent: data => { requests.push(data); return rx.EMPTY; },
+  }, {}, { snapshot: { queryParamMap: { get: () => null } } }];
+  const component = new VehicleMapComponent();
+  component.vehicles.set([previous]); component.selectedVehicle.set(previous);
+  const position = { segment: 0, progress: 0, lat: -12, lng: -77, fuel: 8, speed: 30, bearing: 0, updatedAt: new Date() };
+  component.positions.set(1, position);
+  for (let index = 0; index < 3; index++) component.roadRoutes.set(index, [{ lat: -12, lng: -77 }, { lat: -12.01, lng: -77.01 }]);
+  component.consultFuelStations();
+  component.loadVehicles();
+  stationResponse.next({ stations: [{ id: 'old', name: 'Estación anterior', latitude: -12, longitude: -77 }] });
+  assert.deepEqual(component.stations(), []);
+  assert.equal(component.selectedVehicle().open_events.length, 0);
+  assert.equal(position.fuel, 8);
+  component.advance(); assert.equal(requests.length, 0);
+  component.simulateLowFuel(); assert.equal(requests.length, 1);
+  assert.equal(requests[0].event_code, 'LOW_FUEL');
+});
+
+test('la anulación interrumpe el recorrido local sin saltar la posición ni registrar recarga', () => {
+  const previous = { id: 1, plate: 'AAA-111', client: { id: 1 }, open_events: [{ alert_id: 99, code: 'LOW_FUEL' }] };
+  injections = [auth(true), { getMapVehicles: () => rx.of({ vehicles: [{ ...previous, open_events: [] }] }) }, {}, {
+    snapshot: { queryParamMap: { get: () => null } },
+  }];
+  const component = new VehicleMapComponent();
+  component.vehicles.set([previous]); component.selectedVehicle.set(previous);
+  const position = { segment: 0, progress: 0, lat: -12, lng: -77, fuel: 8, speed: 30, bearing: 0, updatedAt: new Date() };
+  component.positions.set(1, position);
+  component.stationTrips.set(1, { mode: 'station', arrived: false, points: [], segment: 0, progress: 0 });
+  component.loadVehicles(); component.advance();
+  assert.equal(component.needsRouteRecovery(previous), true);
+  assert.equal(position.lat, -12); assert.equal(position.lng, -77);
+  assert.equal(position.fuel, 8); assert.equal(position.speed, 0);
 });
 
 test('la lista de alertas ignora respuestas antiguas y filtros dependientes atrasados', () => {
@@ -362,8 +474,42 @@ test('cliente RUC se guarda manualmente sin consulta, token ni motivo adicional'
   component.form = {document_type:'RUC', document_number:'20123456786', business_name:'Empresa Prueba', state_id:1};
   component.save();
   assert.equal(payloads.length, 1);
-  assert.equal(payloads[0].business_name, 'Empresa Prueba');
+  assert.equal(payloads[0].business_name, 'Empresa prueba');
   assert.equal('ruc_verification' in payloads[0], false);
+});
+
+test('guardar cliente aplica formato de nombres y envía país y número por separado', () => {
+  const payloads = [];
+  injections = [{create: (kind, data) => {payloads.push(data); return rx.EMPTY;}}, {}, auth(true)];
+  const component = new MasterDataComponent(); component.open();
+  assert.equal(component.form.phone_country, 'PE');
+  Object.assign(component.form, {state_id:1, document_number:'20123456786', business_name:'  tRANSPORTES  ÑANDÚ S.A.C.  ',
+    contact_name:'aNA PÉREZ', phone:'987654321', address:'$@? thruno mz 9666'});
+  component.save(); assert.equal(payloads.length, 0); assert.ok(component.fieldErrors().address);
+  component.form.address='Av. Perú 123, Dpto. 301'; component.save();
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].business_name, 'Transportes ñandú s.a.c.');
+  assert.equal(payloads[0].contact_name, 'Ana pérez');
+  assert.equal(payloads[0].phone_country, 'PE'); assert.equal(payloads[0].phone, '987654321');
+});
+
+test('editar teléfono internacional no duplica prefijo ni modifica el registro antes de guardar', () => {
+  const payloads = [];
+  injections = [{update: (kind, id, data) => {payloads.push(data); return rx.EMPTY;}}, {}, auth(true)];
+  const component = new MasterDataComponent();
+  const record = {id:5, document_type:'RUC', document_number:'20123456786', business_name:'Empresa actual',
+    state_id:1, phone:'+34612345678', phone_country:'ES'};
+  component.open(record);
+  assert.equal(component.form.phone_country, 'ES'); assert.equal(component.form.phone, '612345678');
+  assert.equal(record.phone, '+34612345678');
+  component.form.phone_country='PE'; component.save();
+  assert.equal(payloads.length,0); assert.ok(component.fieldErrors().phone);
+  component.form.phone_country='ES'; component.save();
+  assert.equal(payloads.length,1); assert.equal(payloads[0].phone,'612345678');
+  assert.equal(payloads[0].phone_country,'ES');
+  assert.equal(record.phone,'+34612345678');
+  const html = fs.readFileSync(path.join(root, 'src/app/features/admin/master-data/master-data.component.html'), 'utf8');
+  assert.match(html, /id="client-phone-country"/); assert.match(html, /form\.phone_country/);
 });
 
 test('editar razón social no exige API y no envía historial como datos editables', () => {

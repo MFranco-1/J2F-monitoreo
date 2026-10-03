@@ -13,6 +13,8 @@ export interface Assignment {
   assigned_at?: string;
   completed_at?: string;
   response_time_minutes?: number;
+  status?: 'En Curso' | 'Completada' | 'Reasignada' | 'Anulada';
+  alert_state?: string | null;
   event_type_code?: string | null;
 }
 

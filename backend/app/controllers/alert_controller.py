@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from flask import current_app, jsonify
 from app import db
-from app.models.alert import Alert
+from app.models.alert import Alert, TERMINAL_ALERT_STATES
 from app.models.state import State
 from app.models.history import History
 from app.models.master_data import Client, Vehicle, GpsDevice, EventType
@@ -18,7 +18,7 @@ from app.models.assignment import Assignment
 from app.validation import record_text as text_value, priority_value, integer, date_value, date_range, number_value
 from app.security import (
     current_user, may_attend, may_view_alert, scope_alert_query,
-    active_profile_id, can_view_all_operations, is_technician,
+    active_profile_id, can_view_all_operations, is_technician, can_cancel_alert,
 )
 
 
@@ -28,6 +28,7 @@ VALID_TRANSITIONS = {
     "En Progreso": ["Cerrado", "Escalado", "Abierto"],
     "Escalado": ["En Progreso", "Cerrado"],
     "Cerrado": [],  # Terminal
+    "Anulado": [],  # Solo se alcanza mediante el endpoint de anulación.
 }
 
 
@@ -136,6 +137,8 @@ def update_alert(alert_id: int, data: dict, current_user_id: int) -> tuple:
     alert = locked_alert(alert_id)
     if not may_attend(alert, current_user()):
         return jsonify({"error": "Solo el técnico asignado o un administrador puede modificar la alerta"}), 403
+    if alert.state.name == "Anulado":
+        return jsonify({"error": "Una alerta anulada no puede modificarse ni reabrirse"}), 409
     changes = {}
     for field, limit in [("title", 200), ("description", None), ("service_type", 100), ("location", 200)]:
         if field in data:
@@ -160,10 +163,35 @@ def update_alert(alert_id: int, data: dict, current_user_id: int) -> tuple:
     return jsonify({"message": "Alerta actualizada", "alert": alert.to_dict()}), 200
 
 
+def cancel_alert(alert_id: int, data: dict, current_user_id: int) -> tuple:
+    """Finaliza un caso sin resolución, conservando alerta, asignaciones e historial."""
+    if not can_cancel_alert(current_user()):
+        return jsonify({"error": "Solo Administrador y Supervisor pueden anular alertas"}), 403
+    from app.controllers.assignment_controller import locked_alert
+    alert = locked_alert(alert_id)
+    if alert.is_terminal:
+        return jsonify({"error": "No se puede anular una alerta cerrada o ya anulada"}), 409
+    reason = text_value(data, "reason", required=True, limit=1000)
+    state = State.query.filter_by(name="Anulado", type="alert").first()
+    if not state:
+        return jsonify({"error": "Falta aplicar la migración del estado Anulado"}), 503
+    previous_state = alert.state.name
+    ended_at = utcnow()
+    for assignment in alert.assignments.filter_by(completed_at=None):
+        assignment.completed_at = ended_at
+        assignment.response_time_minutes = None
+    alert.state = state
+    alert.state_id = state.id
+    _log_history(alert.id, current_user_id, "cancelled", previous_state, "Anulado", reason)
+    db.session.commit()
+    return jsonify({"message": "Alerta anulada; se conserva su historial",
+                    "alert": alert.to_dict(include_history=True)}), 200
+
+
 def delete_alert(alert_id: int, current_user_id: int) -> tuple:
     """Elimina una alerta (solo si está cerrada)."""
     Alert.query.get_or_404(alert_id, description="Alerta no encontrada")
-    return jsonify({"error": "Las alertas se conservan para mantener la trazabilidad; utiliza el estado Cerrado"}), 409
+    return jsonify({"error": "Las alertas se conservan para mantener la trazabilidad; utiliza Cerrar o Anular"}), 409
 
 
 def get_dashboard_metrics() -> tuple:
@@ -190,7 +218,7 @@ def get_dashboard_metrics() -> tuple:
     )
 
     # Tiempo promedio de respuesta (alertas cerradas)
-    closed_alerts = base_query.filter(Alert.resolved_at.isnot(None)).all()
+    closed_alerts = base_query.filter(Alert.state.has(name="Cerrado"), Alert.resolved_at.isnot(None)).all()
     avg_response = 0.0
     if closed_alerts:
         times = [a.response_time_minutes for a in closed_alerts if a.response_time_minutes is not None]
@@ -227,7 +255,7 @@ def get_map_vehicles(client_id_value=None) -> tuple:
         device = vehicle.gps_devices.join(State).filter(State.name == "Activo").order_by(GpsDevice.id).first()
         open_events_query = (
             Alert.query.join(State, Alert.state_id == State.id)
-            .filter(Alert.vehicle_id == vehicle.id, State.name != "Cerrado")
+            .filter(Alert.vehicle_id == vehicle.id, State.name.notin_(TERMINAL_ALERT_STATES))
         )
         if is_technician(actor) and not can_view_all_operations(actor):
             open_events_query = open_events_query.filter(
@@ -298,7 +326,7 @@ def create_map_event(data: dict, current_user_id: int) -> tuple:
     duplicate = (
         Alert.query.join(State, Alert.state_id == State.id)
         .filter(Alert.vehicle_id == vehicle.id, Alert.event_type_id == event_type.id,
-                State.name != "Cerrado").first()
+                State.name.notin_(TERMINAL_ALERT_STATES)).first()
     )
     if duplicate:
         return jsonify({"message": "Ya existe una alerta abierta para este evento y vehículo",
@@ -399,10 +427,10 @@ def record_fuel_action(alert_id: int, data: dict, user_id: int) -> tuple:
         description="Alerta no encontrada")
     if not alert.event_type or alert.event_type.code != "LOW_FUEL":
         return jsonify({"error": "La alerta no corresponde a combustible bajo"}), 400
-    if alert.state.name == "Cerrado":
+    if alert.is_terminal:
         if not may_view_alert(alert, current_user()):
             return jsonify({"error": "No tienes acceso a esta alerta"}), 403
-        return jsonify({"error": "La alerta de combustible ya está cerrada"}), 409
+        return jsonify({"error": "La alerta de combustible está cerrada o anulada"}), 409
     if not may_attend(alert, current_user()):
         return jsonify({"error": "Solo el técnico asignado o un administrador puede registrar el abastecimiento"}), 403
     action = text_value(data, "action", required=True, limit=30)
@@ -496,8 +524,8 @@ def _validate_fuel_service_access(alert_id_value):
         return jsonify({"error": "Alerta no encontrada"}), 404
     if not alert.event_type or alert.event_type.code != "LOW_FUEL":
         return jsonify({"error": "La alerta no corresponde a combustible bajo"}), 400
-    if alert.state.name == "Cerrado":
-        return jsonify({"error": "La alerta de combustible ya está cerrada"}), 409
+    if alert.is_terminal:
+        return jsonify({"error": "La alerta de combustible está cerrada o anulada"}), 409
     if not may_attend(alert, current_user()):
         return jsonify({"error": "Solo el técnico asignado o un administrador puede consultar el abastecimiento"}), 403
     return None

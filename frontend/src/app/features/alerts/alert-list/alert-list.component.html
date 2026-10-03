@@ -25,6 +25,7 @@
         <option value="Abierto">Abierto</option>
         <option value="En Progreso">En Progreso</option>
         <option value="Cerrado">Cerrado</option>
+        <option value="Anulado">Anulado</option>
         <option value="Escalado">Escalado</option>
       </select>
       <select class="filter-select" (change)="applyFilter('priority', $any($event.target).value)" id="filter-priority">
@@ -85,7 +86,7 @@
           </td>
           <td>
             <span *ngIf="alert.current_assignee">{{ alert.current_assignee.full_name }}</span>
-            <div class="action-buttons" *ngIf="auth.canAssign() && alert.state?.name !== 'Cerrado'">
+            <div class="action-buttons" *ngIf="auth.canAssign() && alert.state?.name !== 'Cerrado' && alert.state?.name !== 'Anulado'">
               <button class="btn-secondary btn-sm" [id]="'btn-assign-' + alert.id" (click)="openAssignmentModal(alert)">
                 {{ alert.current_assignee ? 'Reasignar' : 'Asignar' }}
               </button>

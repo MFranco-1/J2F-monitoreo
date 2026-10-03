@@ -3,7 +3,7 @@ views/alert_routes.py - Endpoints REST para Alertas
 """
 
 from flask import Blueprint, request
-from app.security import admin_required, assignment_manager_required
+from app.security import admin_required, assignment_manager_required, alert_cancellation_required
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers import alert_controller
 
@@ -105,6 +105,14 @@ def update_alert(alert_id: int):
     data = request.get_json(silent=True) or {}
     current_user_id = int(get_jwt_identity())
     return alert_controller.update_alert(alert_id, data, current_user_id)
+
+
+@alert_bp.post("/<int:alert_id>/cancel")
+@jwt_required()
+@alert_cancellation_required
+def cancel_alert(alert_id: int):
+    return alert_controller.cancel_alert(
+        alert_id, request.get_json(silent=True) or {}, int(get_jwt_identity()))
 
 
 @alert_bp.delete("/<int:alert_id>")

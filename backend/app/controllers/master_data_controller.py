@@ -6,13 +6,14 @@ from sqlalchemy import func
 from app import db
 from app.models.state import State
 from app.models.master_data import Client, Vehicle, GpsDevice, EventType
-from app.models.alert import Alert
+from app.models.alert import Alert, TERMINAL_ALERT_STATES
 from app.models.assignment import Assignment
 from app.security import current_user, can_view_all_operations, is_technician
 from app.datetime_utils import utcnow, iso_utc
 from app.validation import (
     record_text as text_value, integer, user_state, priority_value, validate_email,
     validate_document, validate_phone, validate_plate, validate_imei, validate_code, validate_ruc,
+    normalize_client_name, validate_client_phone,
 )
 
 
@@ -109,8 +110,12 @@ def _apply(kind, record, data, creating=False):
                 if field == "email" and value:
                     value = validate_email(value)
                 if field == "phone":
-                    value = validate_phone(value)
+                    value = validate_client_phone(value, data.get("phone_country"))
+                if field in {"business_name", "contact_name"}:
+                    value = normalize_client_name(value)
                 setattr(record, field, value)
+        if "phone_country" in data and "phone" not in data and not creating:
+            raise BadRequest("Teléfono: envía también el número cuando cambies el país")
         _preserve_client_verification(record, data, previous_identity, creating)
     elif kind == "vehicles":
         if creating or "client_id" in data:
@@ -200,7 +205,7 @@ def update_record(kind, record_id, data):
             pending_fuel = (
                 record.alerts.join(State, Alert.state_id == State.id)
                 .join(EventType, Alert.event_type_id == EventType.id)
-                .filter(State.name != "Cerrado", EventType.code == "LOW_FUEL")
+                .filter(State.name.notin_(TERMINAL_ALERT_STATES), EventType.code == "LOW_FUEL")
                 .first()
             )
             if pending_fuel:

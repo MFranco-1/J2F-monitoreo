@@ -42,7 +42,7 @@ export class MenuOptionListComponent implements OnInit {
     this.loading.set(true);
     this.userService.getMenuOptions().subscribe({
       next: ({ menu_options }) => {
-        this.menuOptions.set(menu_options.filter(option => !!option.url?.trim()));
+        this.menuOptions.set(menu_options);
         this.parentOptions.set(menu_options.filter(option => !option.parent_id && !option.url?.trim()));
         this.loading.set(false);
       },

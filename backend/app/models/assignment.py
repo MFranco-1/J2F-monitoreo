@@ -36,6 +36,10 @@ class Assignment(db.Model):
             self.response_time_minutes = round(delta.total_seconds() / 60, 2)
 
     def to_dict(self) -> dict:
+        siblings = self.alert.assignments.order_by(Assignment.assigned_at, Assignment.id).all() if self.alert else []
+        is_latest = bool(siblings and siblings[-1].id == self.id)
+        status = ("En Curso" if self.completed_at is None else "Reasignada" if not is_latest else
+                  "Anulada" if self.alert.state.name == "Anulado" else "Completada")
         return {
             "id": self.id,
             "alert_id": self.alert_id,
@@ -46,6 +50,8 @@ class Assignment(db.Model):
             "assigned_at": iso_utc(self.assigned_at),
             "completed_at": iso_utc(self.completed_at),
             "response_time_minutes": self.response_time_minutes,
+            "status": status,
+            "alert_state": self.alert.state.name if self.alert and self.alert.state else None,
             "event_type_code": (self.alert.event_type.code
                                 if self.alert and self.alert.event_type else None),
         }

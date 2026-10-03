@@ -61,14 +61,14 @@
         <button
           class="btn-primary"
           (click)="autoAssign()" [disabled]="!auth.canAssign() || !!alert()!.current_assignee"
-          *ngIf="!alert()?.current_assignee && alert()?.state?.name !== 'Cerrado'"
+          *ngIf="!alert()?.current_assignee && !isTerminal"
           id="btn-auto-assign-detail"
         >
            Auto-asignar Técnico
         </button>
       </div>
 
-      <div class="card state-change-card" *ngIf="isFuelAlert && alert()?.state?.name !== 'Cerrado'">
+      <div class="card state-change-card" *ngIf="isFuelAlert && !isTerminal">
         <h3>Abastecimiento</h3>
         <p>La alerta se cierra únicamente al confirmar el abastecimiento documentado.</p>
         <a class="btn-primary" [routerLink]="['/dashboard']" [queryParams]="{fuel_alert: alert()?.id}">Gestionar abastecimiento en el mapa</a>
@@ -92,6 +92,15 @@
         <button id="btn-change-state" class="btn-primary" (click)="changeState()">
           Aplicar Cambio de Estado
         </button>
+      </div>
+      <div class="card state-change-card" *ngIf="canCancel">
+        <h3>Anular alerta</h3>
+        <p>Para casos creados por error o duplicados. Se conserva el historial y se finalizan las asignaciones pendientes sin contar una resolución.</p>
+        <div class="form-group">
+          <label for="cancellation-reason">Motivo de anulación *</label>
+          <textarea id="cancellation-reason" class="form-control" [(ngModel)]="cancellationReason" rows="3" maxlength="1000" [disabled]="cancelling()" placeholder="Explica por qué no corresponde atender este caso..."></textarea>
+        </div>
+        <button id="btn-cancel-alert" class="btn-danger" (click)="cancelAlert()" [disabled]="cancelling()">{{ cancelling() ? 'Anulando...' : 'Anular alerta' }}</button>
       </div>
     </div>
 

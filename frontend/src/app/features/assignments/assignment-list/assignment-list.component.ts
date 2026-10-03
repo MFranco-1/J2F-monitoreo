@@ -80,7 +80,7 @@ export class AssignmentListComponent implements OnInit {
   }
 
   canEdit(a: Assignment): boolean {
-    return this.auth.isAdmin() || (this.auth.isTechnician() && a.user_id === this.auth.currentUser()?.id);
+    return a.alert_state !== 'Anulado' && a.status !== 'Anulada' && (this.auth.isAdmin() || (this.auth.isTechnician() && a.user_id === this.auth.currentUser()?.id));
   }
 
   openCloseModal(a: Assignment): void {

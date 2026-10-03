@@ -8,6 +8,7 @@ import { Client, Vehicle, MasterKind } from '../../../shared/models/master-data.
 import { State } from '../../../shared/models/user.model';
 import { AuthService } from '../../../core/services/auth.service';
 import { firstError, validateForm } from '../../../shared/validation';
+import { normalizeClientName, phoneCountries, splitClientPhone } from '../../../shared/client-inputs';
 
 @Component({ selector: 'app-master-data', standalone: true, imports: [NgFor, NgIf, FormsModule],
   templateUrl: './master-data.component.html', styleUrl: './master-data.component.scss' })
@@ -31,6 +32,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
   error = signal('');
   success = signal('');
   form: any = {};
+  readonly phoneCountries = phoneCountries();
   fieldErrors = signal<Record<string, string>>({});
   private listRequestId = 0;
   private referenceRequestId = 0;
@@ -99,7 +101,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
 
   blank(): any {
     const state_id = this.states().find(state => state.name === 'Activo')?.id;
-    return this.kind === 'clients' ? { document_type: 'RUC', document_number: '', business_name: '', contact_name: '', phone: '', email: '', address: '', state_id } :
+    return this.kind === 'clients' ? { document_type: 'RUC', document_number: '', business_name: '', contact_name: '', phone_country: 'PE', phone: '', email: '', address: '', state_id } :
       this.kind === 'vehicles' ? { client_id: null, plate: '', brand: '', model: '', color: '', vehicle_type: '', state_id } :
       this.kind === 'gps-devices' ? { vehicle_id: null, imei: '', serial_number: '', model: '', provider: '', sim_number: '', state_id } :
       { code: '', name: '', description: '', default_priority: 'medium', generates_alert: true, expected_action: '', state_id };
@@ -109,6 +111,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     if (!this.auth.isAdmin()) return;
     this.editing.set(record);
     this.form = record ? { ...record } : { ...this.blank() };
+    if (this.kind === 'clients' && record) Object.assign(this.form, splitClientPhone(record.phone, record.phone_country));
     this.error.set('');
     this.fieldErrors.set({});
     this.showModal.set(true);
@@ -128,11 +131,17 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     const devices = vehicle.gps_devices || [];
     return devices.length ? devices.map(device => `${device.serial_number || device.imei} (${device.state?.name || 'Sin estado'})`).join(', ') : 'Sin GPS registrado';
   }
+  normalizeName(field: 'business_name' | 'contact_name'): void {
+    if (typeof this.form[field] === 'string') this.form[field] = normalizeClientName(this.form[field]);
+  }
   save(): void {
     if (!this.auth.isAdmin() || this.saving()) return;
     this.fieldErrors.set(validateForm(this.kind, this.form, !!this.editing()));
     const error = firstError(this.fieldErrors());
     if (error) { this.error.set(error); return; }
+    if (this.kind === 'clients') {
+      this.normalizeName('business_name'); this.normalizeName('contact_name');
+    }
     const data = { ...this.form };
     delete data.verification; delete data.verification_json;
     this.saving.set(true);

@@ -1,4 +1,5 @@
 /** Reglas de entrada de los formularios. Flask vuelve a validar cada escritura. */
+import { clientPhoneError } from './client-inputs';
 export type FormKind = 'clients' | 'vehicles' | 'gps-devices' | 'event-types' |
   'users' | 'profiles' | 'menu-options' | 'alerts' | 'reports' | 'assignment' | 'fuel';
 type Rule = { label: string; required?: boolean; min?: number; max: number; letters?: number; person?: boolean };
@@ -44,6 +45,10 @@ export function textError(value: unknown, spec: Rule): string {
     return `${spec.label}: ingresa un dato válido de al menos ${spec.min} caracteres, no una letra o símbolos aislados`;
   }
   if (spec.person && !/^[\p{L} .'-]+$/u.test(text)) return `${spec.label}: solo letras, espacios, puntos, apóstrofes y guiones`;
+  if (spec.label === 'Dirección' && !/^[\p{L}0-9 .,/\-#]+$/u.test(text))
+    return 'Dirección: solo admite letras (incluidas tildes y ñ), números, espacios y . , - / #';
+  if (spec.label === 'Razón social' && ['sa', 'sac', 'saa', 'sacs', 'srl', 'eirl'].includes(text.toLowerCase().replace(/[^a-z]/g, '')))
+    return 'Razón social: ingresa el nombre de la empresa, no solo su forma legal (S.A.C., S.A., etc.)';
   return '';
 }
 
@@ -81,7 +86,8 @@ export function validateForm(kind: FormKind, data: Record<string, any>, editing 
       const error = rucError(value('document_number'));
       if (error) errors['document_number'] = error;
     }
-    if (value('phone')) check('phone', /^[0-9]{7,15}$/.test(value('phone')), 'Teléfono: de 7 a 15 dígitos, sin letras, espacios ni símbolos');
+    const phoneError = clientPhoneError(data['phone'], data['phone_country']);
+    if (phoneError) errors['phone'] = phoneError;
   }
   if (kind === 'clients' || kind === 'users') {
     const email = value('email');

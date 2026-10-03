@@ -130,6 +130,32 @@ su RUC/razón social, se conserva el historial y se invalida la verificación an
 una edición manual nunca queda marcada como consulta externa exitosa. La validación
 local de RUC comprueba formato/control, no acredita inscripción ni razón social.
 
+## Formato de clientes y teléfonos internacionales
+
+Al crear o editar, Angular y Flask guardan razón social y persona de contacto con
+primera letra mayúscula y el resto en minúscula, normalizando espacios (por ejemplo,
+`Transportes andinos s.a.c.`). No se permite usar solo `S.A.C.` como razón social.
+No se cambia en bloque ningún nombre ni registro histórico.
+
+La dirección admite letras (incluidas tildes y ñ), números ASCII, espacios y
+`. , - / #`. Otros símbolos, controles y saltos de línea se rechazan, no se borran
+silenciosamente. Esta regla es de calidad de datos, no sustituye autorización,
+consultas parametrizadas ni escape de salida.
+
+Teléfono mantiene su carácter opcional. El formulario separa país/prefijo y número
+nacional con código de área, y valida el plan telefónico de cada país usando
+`libphonenumber-js/max`; Flask vuelve a comprobarlo con `phonenumbers`.
+Se guarda en la columna existente `phone` en formato internacional (`+51987654321`);
+`phone_country` es un campo de API derivado del número, no una columna nueva.
+Los números antiguos siguen consultables y se separan al editar si son interpretables.
+Los datos heredados inválidos deben corregirse si se envían en una edición; cambiar
+solo el estado no reescribe ni valida de nuevo los campos no enviados.
+
+No hay API externa, SMS ni verificación de titularidad: un formato válido no prueba
+que el número exista o pertenezca al cliente. Instalar las dependencias actualizadas
+con `pip install -r backend/requirements.txt` en el entorno virtual y `npm ci`
+desde `frontend`. No se necesita una migración de base de datos para estos cambios.
+
 ## Identificación de GPS
 
 GPS vacío significa que no existen equipos registrados dentro del alcance del
@@ -152,6 +178,29 @@ el equipo instalado, configuración de transmisión y un receptor/proveedor comp
 que esta aplicación aún no incorpora. El mapa sigue identificando posiciones como
 simuladas locales del navegador. El Técnico solo consulta unidades/equipos asociados
 a sus casos autorizados y no puede registrar ni editar GPS.
+
+## Anulación de alertas
+
+Aplicar `backend/migrations/20261003_cancel_alerts.sql` en bases existentes.
+Solo añade el estado `Anulado` si falta; no altera alertas ni crea tablas.
+
+Administrador y Supervisor, según el perfil activo del JWT, pueden anular un caso
+pendiente desde su detalle con un motivo obligatorio de 5 a 1000 caracteres.
+Operador, Técnico y perfiles nuevos distintos no tienen ese permiso, aunque se
+les dé acceso al menú. Un usuario nuevo con perfil Supervisor sí conserva las
+facultades de ese rol. No se permite anular alertas cerradas ni repetir la anulación.
+
+El historial conserva autor, perfil, fecha, motivo y estado anterior. Se finalizan
+las asignaciones pendientes sin tiempo de resolución, y el caso deja de aparecer
+como abierto en el mapa. El historial y los reportes distinguen anulación de cierre;
+el rendimiento cuenta las atenciones anuladas por separado. No se borran alertas.
+
+Anular combustible no confirma un abastecimiento ni aumenta el nivel simulado.
+Si termina un caso con combustible todavía bajo, esa simulación local no lo recrea
+automáticamente hasta recuperar un nivel superior a 10 %; generar otro evento de
+combustible de forma explícita sigue disponible. Los recorridos de abastecimiento
+interrumpidos quedan detenidos en su última posición local con retorno recuperable.
+La telemetría local no es compartida entre navegadores.
 
 ## Reversión
 

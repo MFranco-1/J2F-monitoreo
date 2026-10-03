@@ -6,6 +6,8 @@ Entidad central del sistema de monitoreo.
 from app.datetime_utils import utcnow, as_utc_naive, iso_utc
 from app import db
 
+TERMINAL_ALERT_STATES = ("Cerrado", "Anulado")
+
 
 class Alert(db.Model):
     __tablename__ = "alerts"
@@ -46,6 +48,10 @@ class Alert(db.Model):
     event_type = db.relationship("EventType", back_populates="alerts")
     assignments = db.relationship("Assignment", back_populates="alert", lazy="dynamic", cascade="all, delete-orphan")
     history = db.relationship("History", back_populates="alert", lazy="dynamic", cascade="all, delete-orphan")
+
+    @property
+    def is_terminal(self):
+        return bool(self.state and self.state.name in TERMINAL_ALERT_STATES)
 
     @property
     def response_time_minutes(self) -> float | None:

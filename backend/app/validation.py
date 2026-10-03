@@ -2,6 +2,7 @@
 import re
 import math
 import unicodedata
+import phonenumbers
 from datetime import datetime, timedelta
 from werkzeug.exceptions import BadRequest
 from app.datetime_utils import as_utc_naive
@@ -48,6 +49,7 @@ TEXT_RULES = {
     "notes": ("Observación / solución", 5, 2),
     "solution": ("Solución", 5, 2),
     "observation": ("Observación de abastecimiento", 5, 2),
+    "reason": ("Motivo de anulación", 5, 2),
 }
 
 
@@ -67,7 +69,63 @@ def record_text(data, field, *, required=False, limit=None):
         if field in {"contact_name", "full_name"} and any(
                 not (char.isalpha() or char in " .'-") for char in value):
             raise BadRequest(f"{label} solo admite letras, espacios, puntos, apóstrofes y guiones")
+        if field == "address" and any(
+                not (char.isalpha() or char in "0123456789 .,-/#") for char in value):
+            raise BadRequest("Dirección: solo admite letras (incluidas tildes y ñ), números, espacios y . , - / #")
+        if field == "business_name" and re.sub(r"[^a-z]", "", value.lower()) in {"sa", "sac", "saa", "sacs", "srl", "eirl"}:
+            raise BadRequest("Razón social: ingresa el nombre de la empresa, no solo su forma legal (S.A.C., S.A., etc.)")
     return value
+
+
+def normalize_client_name(value):
+    """Formato solicitado: primera letra mayúscula y el resto en minúscula."""
+    if not value:
+        return value
+    value = re.sub(r"\s+", " ", value.strip()).lower()
+    for index, char in enumerate(value):
+        if char.isalpha():
+            return value[:index] + char.upper() + value[index + 1:]
+    return value
+
+
+def validate_client_phone(value, country=None):
+    """Valida el plan telefónico del país, no la existencia ni el titular."""
+    if country is not None and (not isinstance(country, str)
+            or country not in phonenumbers.SUPPORTED_REGIONS):
+        raise BadRequest("Teléfono: selecciona un país válido")
+    if not value:
+        return value
+    if not isinstance(value, str) or not re.fullmatch(r"\+?[0-9]{7,15}", value):
+        raise BadRequest("Teléfono: ingresa solo dígitos, sin letras, espacios ni símbolos; el prefijo se elige por país")
+    try:
+        if country or value.startswith("+"):
+            parsed = phonenumbers.parse(value, country)
+        else:
+            # Compatibilidad con clientes de API anteriores: números nacionales
+            # peruanos o un prefijo internacional ya incluido, nunca reescritura masiva.
+            parsed = phonenumbers.parse(value, "PE")
+            if not phonenumbers.is_valid_number_for_region(parsed, "PE"):
+                parsed = phonenumbers.parse("+" + value, None)
+        if not phonenumbers.is_valid_number(parsed) or (country and
+                not phonenumbers.is_valid_number_for_region(parsed, country)):
+            raise BadRequest("Teléfono: el número no es válido para el país seleccionado; revisa la longitud y el código de área")
+        canonical = phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+        if len(canonical) > 16:
+            raise BadRequest("Teléfono: máximo 15 dígitos incluyendo el prefijo internacional")
+        return canonical
+    except phonenumbers.NumberParseException:
+        raise BadRequest("Teléfono: ingresa un número válido para el país seleccionado") from None
+
+
+def client_phone_country(value):
+    """País derivado del número guardado, sin añadir columnas ni alterar datos."""
+    if not value:
+        return None
+    try:
+        canonical = validate_client_phone(value)
+        return phonenumbers.region_code_for_number(phonenumbers.parse(canonical, None))
+    except BadRequest:
+        return None  # Los registros antiguos siguen siendo consultables.
 
 
 def validate_document(document_type, number):

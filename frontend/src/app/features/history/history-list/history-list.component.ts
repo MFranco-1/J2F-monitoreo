@@ -58,7 +58,7 @@ export class HistoryListComponent implements OnInit {
     const map: Record<string, string> = {
       created: ' Creada', state_changed: ' Estado cambiado',
       assigned: ' Asignada', escalated: ' Escalada',
-      closed: ' Cerrada', updated: ' Actualizada', note_added: ' Nota',
+      closed: ' Cerrada', cancelled: ' Anulada', updated: ' Actualizada', note_added: ' Nota',
       reassigned: ' Reasignada', fuel_coordinated: ' Coordinación de abastecimiento',
       fuel_confirmed: ' Abastecimiento confirmado',
     };

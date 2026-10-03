@@ -1,6 +1,7 @@
 import { AuthService } from '../../../core/services/auth.service';
 // features/alerts/alert-detail/alert-detail.component.ts
-import { Component, OnInit, signal, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { NgFor, NgIf, DatePipe, TitleCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -8,7 +9,7 @@ import { AlertService } from '../../../core/services/alert.service';
 import { AssignmentService } from '../../../core/services/assignment.service';
 import { Alert } from '../../../shared/models/alert.model';
 import { HistoryEntry } from '../../../shared/models/assignment.model';
-import { firstError, validateForm } from '../../../shared/validation';
+import { firstError, validateForm, textError } from '../../../shared/validation';
 
 @Component({
   selector: 'app-alert-detail',
@@ -17,7 +18,7 @@ import { firstError, validateForm } from '../../../shared/validation';
   templateUrl: './alert-detail.component.html',
   styleUrl: './alert-detail.component.scss',
 })
-export class AlertDetailComponent implements OnInit {
+export class AlertDetailComponent implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
   private route = inject(ActivatedRoute);
   private alertService = inject(AlertService);
@@ -28,6 +29,10 @@ export class AlertDetailComponent implements OnInit {
   loading = signal(true);
   successMsg = signal('');
   errorMsg = signal('');
+  cancelling = signal(false);
+  cancellationReason = '';
+  private profileSubscription?: Subscription;
+  private requestId = 0;
 
   // Para cambio de estado
   newStateName = '';
@@ -37,28 +42,65 @@ export class AlertDetailComponent implements OnInit {
     'En Progreso': ['Cerrado', 'Escalado', 'Abierto'],
     'Escalado': ['En Progreso', 'Cerrado'],
     'Cerrado': [],
+    'Anulado': [],
   };
 
   ngOnInit(): void {
     const id = Number(this.route.snapshot.paramMap.get('id'));
     this.loadAlert(id);
+    this.profileSubscription = this.auth.profileChanges.subscribe(() => {
+      this.alert.set(null); this.history.set([]);
+      this.cancellationReason = ''; this.cancelling.set(false);
+      this.stateNotes = ''; this.newStateName = '';
+      this.successMsg.set(''); this.errorMsg.set('');
+      this.loadAlert(id);
+    });
   }
+
+  ngOnDestroy(): void { this.profileSubscription?.unsubscribe(); this.requestId++; }
 
   loadAlert(id: number): void {
     this.loading.set(true);
+    const requestId = ++this.requestId;
     this.alertService.getAlertById(id).subscribe({
       next: ({ alert }) => {
+        if (requestId !== this.requestId) return;
         this.alert.set(alert);
         this.history.set(alert.history ?? []);
         this.loading.set(false);
       },
-      error: (err) => { this.loading.set(false); this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los datos. Comprueba la conexión con el servidor.'); },
+      error: (err) => { if (requestId !== this.requestId) return; this.loading.set(false); this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los datos. Comprueba la conexión con el servidor.'); },
     });
   }
 
   get canAttend(): boolean {
-    return this.auth.isAdmin() || (this.auth.isTechnician()
-      && this.alert()?.current_assignee?.id === this.auth.currentUser()?.id);
+    return !!this.alert() && !this.isTerminal && (this.auth.isAdmin() || (this.auth.isTechnician()
+      && this.alert()?.current_assignee?.id === this.auth.currentUser()?.id));
+  }
+
+  get isTerminal(): boolean { return ['Cerrado', 'Anulado'].includes(this.alert()?.state?.name || ''); }
+  get canCancel(): boolean { return !!this.alert() && !this.isTerminal && this.auth.canCancelAlert(); }
+
+  cancelAlert(): void {
+    if (!this.canCancel || this.cancelling()) return;
+    const error = textError(this.cancellationReason, { label: 'Motivo de anulación', min: 5, max: 1000, letters: 2, required: true });
+    if (error) { this.errorMsg.set(error); return; }
+    const id = this.alert()!.id;
+    const requestId = this.requestId;
+    this.cancelling.set(true); this.errorMsg.set('');
+    this.alertService.cancelAlert(id, this.cancellationReason.trim()).subscribe({
+      next: ({ alert, message }) => {
+        if (requestId !== this.requestId) return;
+        this.cancelling.set(false); this.cancellationReason = '';
+        this.alert.set(alert); this.history.set(alert.history ?? []);
+        this.successMsg.set(message);
+      },
+      error: err => {
+        if (requestId !== this.requestId) return;
+        this.cancelling.set(false);
+        this.errorMsg.set(err?.error?.error || 'No se pudo anular la alerta');
+      },
+    });
   }
 
   get transitions(): string[] {
@@ -91,6 +133,7 @@ export class AlertDetailComponent implements OnInit {
   }
 
   autoAssign(): void {
+    if (!this.auth.canAssign() || this.isTerminal) return;
     const id = this.alert()!.id;
     this.assignmentService.autoAssign(id).subscribe({
       next: ({ message }) => {
@@ -108,6 +151,7 @@ export class AlertDetailComponent implements OnInit {
       assigned: ' Asignada', note_added: ' Nota añadida',
       escalated: ' Escalada', closed: ' Cerrada', updated: ' Actualizada',
       reassigned: ' Reasignada',
+      cancelled: ' Anulada',
       fuel_coordinated: ' Coordinación de abastecimiento',
       fuel_confirmed: ' Abastecimiento confirmado',
     };

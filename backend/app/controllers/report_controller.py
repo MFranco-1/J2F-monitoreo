@@ -164,14 +164,17 @@ def _generate_operator_performance(report: Report) -> dict:
         user_id = a.user.id
         if user_id not in performance:
             performance[user_id] = {"technician_id": user_id, "technician": a.user.full_name,
-                                    "assigned": 0, "resolved": 0, "reassigned": 0,
+                                    "assigned": 0, "resolved": 0, "reassigned": 0, "cancelled": 0,
                                     "active": 0, "avg_response_minutes": []}
         performance[user_id]["assigned"] += 1
         siblings = a.alert.assignments.order_by(Assignment.assigned_at, Assignment.id).all()
         is_latest = bool(siblings and siblings[-1].id == a.id)
-        resolved = bool(a.completed_at and is_latest and a.alert.resolved_at)
+        cancelled = bool(a.completed_at and is_latest and a.alert.state.name == "Anulado")
+        resolved = bool(a.completed_at and is_latest and a.alert.state.name == "Cerrado" and a.alert.resolved_at)
         reassigned = bool(a.completed_at and not is_latest)
-        if resolved:
+        if cancelled:
+            performance[user_id]["cancelled"] += 1
+        elif resolved:
             performance[user_id]["resolved"] += 1
         elif reassigned:
             performance[user_id]["reassigned"] += 1
@@ -197,7 +200,7 @@ def _generate_operator_performance(report: Report) -> dict:
 
 def _generate_response_times(report: Report) -> dict:
     query = _filtered_alert_query(report, date_field=Alert.opened_at).filter(
-        Alert.resolved_at.isnot(None))
+        Alert.state.has(name="Cerrado"), Alert.resolved_at.isnot(None))
 
     alerts = query.all()
     by_priority = {}
