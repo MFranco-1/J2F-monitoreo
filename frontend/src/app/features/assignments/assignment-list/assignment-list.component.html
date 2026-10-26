@@ -87,7 +87,7 @@
   </div>
 </div>
 
-<div class="modal-backdrop" *ngIf="showCloseModal()" (click)="closeCloseModal()">
+<div class="modal-backdrop" *ngIf="showCloseModal()">
   <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h2>Cerrar atención y alerta</h2>
@@ -109,7 +109,7 @@
 </div>
 
 <!-- Modal Nota -->
-<div class="modal-backdrop" *ngIf="showNoteModal()" (click)="closeNoteModal()">
+<div class="modal-backdrop" *ngIf="showNoteModal()">
   <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h2> Notas de Atención</h2>

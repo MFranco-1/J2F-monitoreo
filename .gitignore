@@ -1,27 +1,88 @@
-# IDE y SO
-.vscode/
-.idea/
-.DS_Store
-*.swp
-*.swo
+# En la raiz, permitir solo los elementos del repositorio original
+/*
+!/backend/
+!/frontend/
+!/.env.example
+!/.gitignore
+!/README.md
+!/j2f_modulo_usuarios.sql
+
+# Auxiliares del despliegue local: no pertenecen al repositorio original
+/backend/run_local.py
+/backend/requirements-local.txt
+
+# Credenciales y configuracion privada (conservar la plantilla sin secretos)
 .env
 .env.*
 !.env.example
-*.dump
-*.backup
-*.sql.gz
-*.log
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Entornos virtuales y dependencias (se reinstalan con pip y npm ci)
 venv/
 .venv/
 node_modules/
 
-# Backend (Python / Flask)
+# Procesos locales, logs y archivos temporales
+.local-run/
+*.log
+*.pid
+*.tmp
+*.temp
+*.orig
+*.rej
+
+# Bases locales y respaldos (los scripts SQL y migraciones SI se versionan)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.dump
+*.backup
+*.bak
+*.sql.gz
+
+# IDE y sistema operativo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+
+# Python: bytecode, caches y paquetes generados
 __pycache__/
 *.py[cod]
-*.db
-*.sqlite3
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
 
-# Frontend (Angular / Node)
-frontend/dist/
-frontend/out-tsc/
-frontend/.angular/
+# Angular / Node: compilacion y caches
+dist/
+out-tsc/
+.angular/
+.npm/
+.cache/
+.eslintcache
+*.tsbuildinfo
+
+# Resultados de pruebas y cobertura (conservar el codigo de las pruebas)
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml

@@ -121,7 +121,7 @@
 </div>
 
 <!-- Modal Asignar Técnico -->
-<div class="modal-backdrop" *ngIf="showAssignmentModal()" (click)="closeAssignmentModal()">
+<div class="modal-backdrop" *ngIf="showAssignmentModal()">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="assignment-modal-title" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h2 id="assignment-modal-title">Asignar alerta a un Técnico</h2>
@@ -157,7 +157,7 @@
 </div>
 
 <!-- Modal Nueva Alerta -->
-<div class="modal-backdrop" *ngIf="showNewModal()" (click)="closeNewModal()">
+<div class="modal-backdrop" *ngIf="showNewModal()">
   <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h2> Nueva Alerta</h2>

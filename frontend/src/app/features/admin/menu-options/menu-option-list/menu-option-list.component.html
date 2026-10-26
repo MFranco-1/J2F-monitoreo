@@ -67,7 +67,7 @@
 </div>
 
 <!-- Modal -->
-<div class="modal-backdrop" *ngIf="showModal()" (click)="closeModal()">
+<div class="modal-backdrop" *ngIf="showModal()">
   <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h2>{{ editingOption() ? 'Editar Opción' : 'Nueva Opción de Menú' }}</h2>

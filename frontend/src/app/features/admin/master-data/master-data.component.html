@@ -11,7 +11,7 @@
         <td *ngIf="auth.isAdmin()"><div class="action-buttons"><button class="btn-secondary btn-sm" (click)="open(record)">Editar</button><button class="btn-secondary btn-sm" *ngIf="kind==='vehicles'&&!record.gps_devices?.length" (click)="registerGps(record)">Registrar GPS</button><button class="btn-danger btn-sm" (click)="remove(record)">Eliminar</button></div></td></tr>
         <tr *ngIf="!records().length"><td [attr.colspan]="auth.isAdmin() ? 6 : 5"><div class="empty-state"><p>No hay registros</p></div></td></tr></tbody></table></div>
 </div>
-<div class="modal-backdrop" *ngIf="showModal()" (click)="close()"><div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+<div class="modal-backdrop" *ngIf="showModal()"><div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
  <div class="modal-header"><h2>{{editing()?'Editar':'Nuevo'}} registro</h2><button class="modal-close" (click)="close()" aria-label="Cerrar">×</button></div>
  <div class="modal-body"><div class="alert-banner alert-error" *ngIf="error()">{{error()}}</div>
   <ng-container *ngIf="kind==='clients'">

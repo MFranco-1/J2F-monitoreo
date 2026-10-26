@@ -65,7 +65,7 @@
 </div>
 
 <!-- Modal -->
-<div class="modal-backdrop" *ngIf="showModal()" (click)="closeModal()">
+<div class="modal-backdrop" *ngIf="showModal()">
   <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h2>{{ editingUser() ? 'Editar Usuario' : 'Nuevo Usuario' }}</h2>
