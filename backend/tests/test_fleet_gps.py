@@ -73,6 +73,15 @@ class FleetGpsTests(unittest.TestCase):
             self.assertEqual(GpsDevice.query.count(),1)
             self.assertEqual(GpsDevice.query.one().vehicle_id,self.ids[1])
 
+    def test_active_vehicle_of_inactive_client_is_not_given_an_active_gps(self):
+        with self.app.app_context():
+            vehicle = db.session.get(Vehicle, self.ids[0])
+            vehicle.client.state_id = State.query.filter_by(name='Inactivo', type='user').one().id
+            db.session.commit()
+            with db.engine.begin() as connection:
+                self.assertEqual(register_missing_gps(connection, apply=True), [])
+            self.assertEqual(GpsDevice.query.count(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

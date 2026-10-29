@@ -37,6 +37,22 @@ class ClientRegistrationTests(unittest.TestCase):
         self.assertEqual(self.client.get(f"/api/master-data/clients/{record['id']}", headers=self.admin)
                          .get_json()['client']['document_number'], self.data['document_number'])
 
+    def test_internal_identifier_is_preserved_only_when_existing_and_unchanged(self):
+        with self.app.app_context():
+            old = Client(document_type='Código interno', document_number='J2F-001',
+                         business_name='Transportes anteriores', state_id=self.active)
+            db.session.add(old); db.session.commit(); old_id = old.id
+        path = f'/api/master-data/clients/{old_id}'
+        result = self.client.put(path, headers=self.admin, json={
+            'document_type':'Código interno', 'document_number':'J2F-001', 'business_name':'Transportes actualizados'})
+        self.assertEqual(result.status_code, 200, result.get_json())
+        self.assertEqual(result.get_json()['record']['document_number'], 'J2F-001')
+        self.assertEqual(self.create(document_type='Código interno',document_number='J2F-002').status_code,400)
+        self.assertEqual(self.client.put(path,headers=self.admin,json={
+            'document_type':'Código interno','document_number':'J2F-999'}).status_code,400)
+        self.assertEqual(self.client.put(path,headers=self.admin,json={
+            'document_type':'RUC','document_number':'20123456786'}).status_code,200)
+
     def test_external_lookup_endpoint_is_removed(self):
         response = self.client.post('/api/master-data/clients/ruc-lookup', headers=self.admin,
                                     json={'document_number': self.data['document_number']})

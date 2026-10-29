@@ -9,7 +9,7 @@ import sys
 from sqlalchemy import create_engine, select
 from sqlalchemy.exc import SQLAlchemyError
 from app.config import database_url
-from app.models.master_data import Vehicle, GpsDevice
+from app.models.master_data import Client, Vehicle, GpsDevice
 from app.models.state import State
 
 
@@ -26,10 +26,13 @@ def generated_imei(vehicle_id):
 
 
 def register_missing_gps(connection, *, apply=False):
-    vehicles, devices, states = Vehicle.__table__, GpsDevice.__table__, State.__table__
+    vehicles, devices, states, clients = Vehicle.__table__, GpsDevice.__table__, State.__table__, Client.__table__
+    client_states = states.alias('client_states')
     query = (select(vehicles.c.id, vehicles.c.plate, vehicles.c.state_id)
              .join(states, vehicles.c.state_id == states.c.id)
-             .where(states.c.name == "Activo", states.c.type == "user")
+             .join(clients, vehicles.c.client_id == clients.c.id)
+             .join(client_states, clients.c.state_id == client_states.c.id)
+             .where(states.c.name == "Activo", states.c.type == "user", client_states.c.name == 'Activo')
              .order_by(vehicles.c.id))
     if apply:
         query = query.with_for_update(of=vehicles)

@@ -1,16 +1,3 @@
-# En la raiz, permitir solo los elementos del repositorio original
-/*
-!/backend/
-!/frontend/
-!/.env.example
-!/.gitignore
-!/README.md
-!/j2f_modulo_usuarios.sql
-
-# Auxiliares del despliegue local: no pertenecen al repositorio original
-/backend/run_local.py
-/backend/requirements-local.txt
-
 # Credenciales y configuracion privada (conservar la plantilla sin secretos)
 .env
 .env.*
@@ -51,6 +38,7 @@ node_modules/
 *.backup
 *.bak
 *.sql.gz
+backend/backups/
 
 # IDE y sistema operativo
 .vscode/

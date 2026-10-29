@@ -44,3 +44,7 @@
     }
   }
 }
+
+.report-metadata { margin-bottom: var(--spacing-md); padding-bottom: var(--spacing-md); border-bottom: 1px solid var(--border-default); }
+.report-metadata p { margin: 4px 0; font-size: var(--font-size-sm); overflow-wrap: anywhere; }
+.result-header { gap: 12px; flex-wrap: wrap; }

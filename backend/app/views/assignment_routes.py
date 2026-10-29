@@ -60,7 +60,21 @@ def get_technicians():
 @assignment_bp.put("/<int:assignment_id>")
 @jwt_required()
 def update_assignment(assignment_id: int):
-    """PUT /api/assignments/<id> — Actualiza notas o completa una asignación."""
+    """PUT /api/assignments/<id> — Añade una nota (sin reemplazar) o cierra la atención."""
     data = request.get_json(silent=True) or {}
     current_user_id = int(get_jwt_identity())
     return assignment_controller.update_assignment(assignment_id, data, current_user_id)
+
+
+@assignment_bp.get("/<int:assignment_id>/notes")
+@jwt_required()
+def get_assignment_notes(assignment_id: int):
+    """Notas de todo el caso, también de sus asignaciones anteriores."""
+    return assignment_controller.get_assignment_notes(assignment_id)
+
+
+@assignment_bp.post("/<int:assignment_id>/notes")
+@jwt_required()
+def add_assignment_note(assignment_id: int):
+    data = request.get_json(silent=True) or {}
+    return assignment_controller.add_assignment_note(assignment_id, data, int(get_jwt_identity()))

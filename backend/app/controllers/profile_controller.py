@@ -23,7 +23,7 @@ def get_all_profiles():
 
 
 def get_profile_by_id(profile_id):
-    return jsonify({"profile": Profile.query.get_or_404(profile_id).to_dict(include_menus=True)}), 200
+    return jsonify({"profile": db.get_or_404(Profile, profile_id).to_dict(include_menus=True)}), 200
 
 
 def _menus(value):
@@ -54,7 +54,7 @@ def create_profile(data):
 
 
 def update_profile(profile_id, data):
-    profile = Profile.query.get_or_404(profile_id)
+    profile = db.get_or_404(Profile, profile_id)
     name = text_value(data, "name", required=True, limit=100) if "name" in data else profile.name
     state = user_state(data["state_id"]) if "state_id" in data else profile.state
     description = text_value(data, "description", limit=255) if "description" in data else profile.description
@@ -88,7 +88,7 @@ def update_profile(profile_id, data):
 
 
 def delete_profile(profile_id):
-    profile = Profile.query.get_or_404(profile_id)
+    profile = db.get_or_404(Profile, profile_id)
     if (role_name(profile.name) == "administrador"
             and active_admin_count(excluded_profile_id=profile.id) == 0):
         return jsonify({"error": "El sistema debe conservar al menos un Administrador activo"}), 409

@@ -40,7 +40,7 @@ def get_all_menu_options(filters):
 
 
 def get_menu_option_by_id(option_id):
-    return jsonify({"menu_option": MenuOption.query.get_or_404(option_id).to_dict()}), 200
+    return jsonify({"menu_option": db.get_or_404(MenuOption, option_id).to_dict()}), 200
 
 
 def _parent(value, option_id=None):
@@ -84,7 +84,7 @@ def create_menu_option(data, state_id):
 
 
 def update_menu_option(option_id, data):
-    option = MenuOption.query.get_or_404(option_id)
+    option = db.get_or_404(MenuOption, option_id)
     values = {}
     for field, limit in [("name", 100), ("url", 255), ("icon", 100)]:
         if field in data:
@@ -105,7 +105,7 @@ def update_menu_option(option_id, data):
 
 
 def delete_menu_option(option_id):
-    option = MenuOption.query.get_or_404(option_id)
+    option = db.get_or_404(MenuOption, option_id)
     if option.children:
         return jsonify({"error": "No se puede eliminar una opción con sub-opciones"}), 409
     db.session.delete(option)

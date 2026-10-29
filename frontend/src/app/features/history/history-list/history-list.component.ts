@@ -22,7 +22,7 @@ export class HistoryListComponent implements OnInit {
   totalPages = signal(1);
   private historyRequestId = 0;
 
-  filters: any = { page: 1, per_page: 30 };
+  filters: { page: number; per_page: number; action?: string; date_from?: string; date_to?: string } = { page: 1, per_page: 30 };
 
   ngOnInit(): void { this.loadHistory(); }
 
@@ -45,7 +45,7 @@ export class HistoryListComponent implements OnInit {
     });
   }
 
-  applyFilter(field: string, value: string): void {
+  applyFilter(field: 'action' | 'date_from' | 'date_to', value: string): void {
     this.filters[field] = value || undefined;
     this.filters.page = 1;
     this.loadHistory();

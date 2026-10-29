@@ -31,10 +31,23 @@ class History(db.Model):
     def to_dict(self) -> dict:
         detail = self.detail
         metadata = None
+        if self.action == "note_added" and detail:
+            try:
+                candidate = json.loads(detail)
+                if (isinstance(candidate, dict) and candidate.get("kind") == "assignment_note"
+                        and isinstance(candidate.get("text"), str)):
+                    metadata = candidate
+                    detail = candidate["text"]
+            except (TypeError, ValueError):
+                pass  # Auditorías antiguas: conservar literalmente, sin adivinar autores ni contenido.
         if self.action in {"fuel_coordinated", "fuel_confirmed"} and detail:
             try:
                 metadata = json.loads(detail)
+                if not isinstance(metadata, dict):
+                    raise ValueError('El detalle de combustible debe ser un objeto')
                 station = metadata.get("estacion") or {}
+                if not isinstance(station, dict):
+                    raise ValueError('La estación registrada debe ser un objeto')
                 parts = []
                 if station.get("name"):
                     parts.append(f"Estación: {station['name']}")
@@ -45,19 +58,26 @@ class History(db.Model):
                 if metadata.get("observacion"):
                     parts.append(f"Observación: {metadata['observacion']}")
                 detail = ". ".join(parts)
-            except (TypeError, ValueError, json.JSONDecodeError):
+            except (TypeError, ValueError):
                 metadata = None
+        author = {"id": self.user.id, "full_name": self.user.full_name} if self.user else None
+        profile = {"id": self.profile.id, "name": self.profile.name} if self.profile else None
+        if self.action == 'note_added' and metadata:
+            author_snapshot = metadata.get('author')
+            profile_snapshot = metadata.get('profile')
+            if (isinstance(author_snapshot, dict) and author_snapshot.get('id') == self.user_id
+                    and isinstance(author_snapshot.get('full_name'), str)):
+                author = author_snapshot
+            if (isinstance(profile_snapshot, dict) and profile_snapshot.get('id') == self.profile_id
+                    and isinstance(profile_snapshot.get('name'), str)):
+                profile = profile_snapshot
         return {
             "id": self.id,
             "alert_id": self.alert_id,
             "user_id": self.user_id,
             "profile_id": self.profile_id,
-            "profile": ({"id": self.profile.id, "name": self.profile.name} if self.profile else None),
-            "user": (
-                {"id": self.user.id, "full_name": self.user.full_name}
-                if self.user
-                else None
-            ),
+            "profile": profile,
+            "user": author,
             "action": self.action,
             "previous_state": self.previous_state,
             "new_state": self.new_state,

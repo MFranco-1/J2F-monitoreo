@@ -3,7 +3,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { NgFor, NgIf, DatePipe, TitleCasePipe } from '@angular/common';
+import { NgFor, NgIf, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AlertService } from '../../../core/services/alert.service';
 import { AssignmentService } from '../../../core/services/assignment.service';
@@ -14,7 +14,7 @@ import { firstError, validateForm, textError } from '../../../shared/validation'
 @Component({
   selector: 'app-alert-detail',
   standalone: true,
-  imports: [NgFor, NgIf, DatePipe, TitleCasePipe, FormsModule, RouterLink],
+  imports: [NgFor, NgIf, DatePipe, FormsModule, RouterLink],
   templateUrl: './alert-detail.component.html',
   styleUrl: './alert-detail.component.scss',
 })

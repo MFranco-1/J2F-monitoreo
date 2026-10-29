@@ -32,7 +32,7 @@ export interface Alert {
   resolved_at?: string;
   response_time_minutes?: number;
   current_assignee?: UserSummary;
-  history?: any[];
+  history?: import('./assignment.model').HistoryEntry[];
   created_at?: string;
   updated_at?: string;
 }
@@ -41,6 +41,13 @@ export interface UserSummary {
   id: number;
   full_name: string;
   email?: string;
+}
+
+export interface AlertForm {
+  title: string; description: string; priority: AlertPriority;
+  service_type: string; location: string; source: string;
+  client_id: number | null; vehicle_id: number | null;
+  gps_device_id: number | null; event_type_id: number | null;
 }
 
 export interface AlertMetrics {

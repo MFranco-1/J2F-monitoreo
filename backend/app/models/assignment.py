@@ -1,6 +1,6 @@
 """
 models/assignment.py - Modelo Asignación (Assignment)
-Registra qué técnico atiende qué alerta y sus notas de atención.
+Registra qué técnico atiende qué alerta. Las notas nuevas se añaden al historial.
 """
 
 from app.datetime_utils import utcnow, as_utc_naive, iso_utc
@@ -13,7 +13,7 @@ class Assignment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     alert_id = db.Column(db.Integer, db.ForeignKey("alerts.id"), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
-    notes = db.Column(db.Text, nullable=True)
+    notes = db.Column(db.Text, nullable=True)  # Solo compatibilidad: textos heredados, no se sobrescriben.
     # Tipo de asignación: 'manual' | 'auto'
     assignment_type = db.Column(db.String(20), default="manual")
     assigned_at = db.Column(db.DateTime, default=utcnow)

@@ -1,7 +1,7 @@
 // layout/sidebar/sidebar.component.ts
 import { Component, Input, OnInit, OnDestroy, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
-import { NgFor, NgClass, NgIf, NgTemplateOutlet } from '@angular/common';
+import { NgFor, NgIf, NgTemplateOutlet } from '@angular/common';
 
 import { AuthService } from '../../core/services/auth.service';
 import { UserService } from '../../core/services/user.service';
@@ -22,7 +22,7 @@ interface NavItem {
 @Component({
   selector: 'app-sidebar',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, NgFor, NgClass, NgIf, NgTemplateOutlet],
+  imports: [RouterLink, RouterLinkActive, NgFor, NgIf, NgTemplateOutlet],
   templateUrl: './sidebar.component.html',
   styleUrl: './sidebar.component.scss',
 })

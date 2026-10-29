@@ -123,7 +123,7 @@
                 <span class="state-to">{{ entry.new_state }}</span>
               </div>
               <div class="timeline-user" *ngIf="entry.user">
-                 {{ entry.user.full_name }}
+                 {{ entry.user.full_name }}<span *ngIf="entry.profile"> · {{ entry.profile.name }}</span>
               </div>
             </div>
           </div>

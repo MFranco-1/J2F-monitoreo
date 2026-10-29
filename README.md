@@ -1,8 +1,15 @@
 # J2F — Centro de Monitoreo
 
-Aplicación Angular 17.3 + Flask + SQLAlchemy + JWT para monitoreo, preparada para
+Aplicación Angular 22 + Flask + SQLAlchemy + JWT para monitoreo, preparada para
 usuarios multiperfil, menú dinámico y maestros de clientes, vehículos, dispositivos
 GPS y tipos de evento.
+
+Requiere Node compatible con Angular 22: `^22.22.3`, `^24.15.0` o `>=26`;
+se verificó con Node 24.19.0. Mantener `package-lock.json` y usar `npm ci`.
+La interfaz y los flujos se conservan; no se introduce otro framework.
+
+Consultar [trazabilidad de historias](docs/HISTORIAS_Y_VERIFICACION.md) y
+[calidad y explicación del hardcodeo](docs/CALIDAD_Y_HARDCODE.md).
 
 ## Migración segura de PostgreSQL / Neon
 
@@ -54,6 +61,12 @@ perfil activo Administrador. En Datos maestros, Administrador conserva el CRUD;
 Operador y Supervisor consultan el catálogo operativo, y Técnico solo los registros
 vinculados a sus alertas autorizadas y los catálogos necesarios.
 
+En desarrollo las claves de sesión no configuradas se generan aleatoriamente;
+será necesario volver a iniciar sesión al reiniciar. Para sesiones estables entre
+reinicios, exportar claves privadas `SECRET_KEY` y `JWT_SECRET_KEY` de al menos
+32 caracteres. Producción exige ambas y rechaza las claves de la plantilla.
+`HOST` y `PORT` configuran `python run.py`; el host predeterminado es 127.0.0.1.
+
 La pantalla de Datos maestros utiliza `/master-data`: los perfiles con esa opción
 asignada pueden consultarla, mientras que solo Administrador puede modificarla.
 
@@ -86,7 +99,8 @@ al crear o editar. No basta con completar un campo con una letra o símbolos.
 
 - Clientes: RUC de 11 dígitos con prefijo y dígito verificador válidos, DNI de 8, CE de 9 a 12 y pasaporte alfanumérico de
   6 a 12; razón social de al menos 3 caracteres y con letras. No se obliga a usar
-  el sufijo S.A.C. Teléfono de 7 a 15 dígitos, sin letras, espacios ni símbolos;
+  el sufijo S.A.C. Teléfono nacional validado según el país seleccionado y guardado
+  en formato internacional; no se admiten letras ni símbolos en el número nacional;
   correo con formato válido, contacto con letras y dirección de al menos 5 caracteres.
 - Vehículos y GPS: placa alfanumérica de 4 a 8 caracteres con guion opcional,
   IMEI de 15 dígitos, SIM numérica de 7 a 22 y relaciones existentes.
@@ -228,6 +242,50 @@ Tras actualizar archivos, reiniciar un backend sin recarga automática: una
 versión anterior en memoria puede devolver 404 para la ruta de anulación aunque
 el código y la migración actuales estén instalados. Esto no se soluciona ampliando
 los permisos; la anulación sigue reservada al perfil activo Administrador o Supervisor.
+
+## Notas del caso y reasignaciones
+
+En Asignaciones, **Notas del caso** consulta las notas de toda la alerta, incluidas
+las de asignaciones anteriores. Se muestran por separado las notas técnicas,
+las de Supervisión/Administración y las indicaciones iniciales de asignación.
+Cada nota nueva conserva el usuario, perfil activo y fecha/hora registrados por
+Flask; la pantalla muestra la hora de Perú (UTC−5).
+
+El Técnico vigente añade notas técnicas. Supervisor y Administrador añaden sus
+propias observaciones, sin obtener por ello permisos de cierre adicionales.
+Operador conserva consulta e indicaciones al asignar, pero no añade notas de
+atención. El nuevo Técnico puede leer las notas anteriores del caso; una
+asignación anterior, cerrada o anulada queda en consulta de solo lectura.
+Se mantienen los alcances operativos existentes de cada perfil.
+
+Las notas son entradas independientes e inmutables: no hay edición ni borrado;
+una corrección se registra con otra nota. Se pueden añadir varias sin reemplazar
+las anteriores y usar **Actualizar notas** para consultar aportes de otros usuarios.
+El cierre guarda su solución en el historial sin reemplazar las notas.
+
+No se añaden tablas, columnas ni migraciones: se utiliza `history` con acción
+`note_added` y detalle estructurado. `GET /api/assignments/<id>/notes` devuelve
+las notas autorizadas del caso y los textos heredados; `POST` en esa ruta añade
+una nota a la asignación vigente. El `PUT` anterior con `notes` sigue aceptándose,
+pero ahora añade una entrada, no reemplaza un campo. Autor, perfil y fecha no se
+aceptan del cliente. El texto requiere entre 5 y 2000 caracteres con contenido.
+
+Los valores antiguos de `assignments.notes` y sus auditorías se conservan sin
+reescribirlos. Se muestran como registros anteriores: no se atribuye un texto
+heredado al Técnico ni se usa la fecha de asignación como fecha de su creación.
+
+## Reportes y exportaciones (HU-12)
+
+Los resultados conservan filtros, período, fecha de generación y autor real de
+esa generación. El usuario que crea el reporte puede ser diferente de quien
+lo genera. Los resultados antiguos no reciben una atribución inventada.
+
+Administrador y Supervisor pueden consultar/generar y descargar CSV o JSON
+desde el resultado existente. `GET /api/reports/<id>/export?format=csv|json`
+descarga el resultado almacenado sin regenerarlo ni modificar registros.
+Las etiquetas de prioridad se muestran en español; reasignaciones y anulaciones
+se distinguen de resoluciones. La exportación CSV protege los textos que una
+hoja de cálculo podría interpretar como fórmulas.
 
 ## Reversión
 

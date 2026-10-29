@@ -29,7 +29,7 @@ export class UserListComponent implements OnInit {
   searchTerm = '';
   private requestVersion = 0;
 
-  form: any = {
+  form: Pick<User, 'dni' | 'full_name' | 'email' | 'state_id'> & { password: string; profile_ids: number[] } = {
     dni: '', full_name: '', email: '',
     password: '', profile_ids: [] as number[], state_id: this.activeStateId(),
   };

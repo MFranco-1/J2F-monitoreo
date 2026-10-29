@@ -85,7 +85,7 @@ def get_all_alerts(filters: dict) -> tuple:
 
 def get_alert_by_id(alert_id: int) -> tuple:
     """Retorna una alerta específica con su historial completo."""
-    alert = Alert.query.get_or_404(alert_id, description="Alerta no encontrada")
+    alert = db.get_or_404(Alert, alert_id, description="Alerta no encontrada")
     if not may_view_alert(alert, current_user()):
         return jsonify({"error": "No tienes acceso a esta alerta"}), 403
     return jsonify({"alert": alert.to_dict(include_history=True)}), 200
@@ -190,7 +190,7 @@ def cancel_alert(alert_id: int, data: dict, current_user_id: int) -> tuple:
 
 def delete_alert(alert_id: int, current_user_id: int) -> tuple:
     """Elimina una alerta (solo si está cerrada)."""
-    Alert.query.get_or_404(alert_id, description="Alerta no encontrada")
+    db.get_or_404(Alert, alert_id, description="Alerta no encontrada")
     return jsonify({"error": "Las alertas se conservan para mantener la trazabilidad; utiliza Cerrar o Anular"}), 409
 
 

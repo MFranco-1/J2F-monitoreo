@@ -8,14 +8,10 @@ import { AlertService } from '../../core/services/alert.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AlertPriority, FuelStation, MapOpenEvent, MapVehicle, StreetRoute } from '../../shared/models/alert.model';
 import { firstError, validateForm } from '../../shared/validation';
+import { Point, SimulationPosition as Position, LOW_FUEL_THRESHOLD, SIMULATION_SETTINGS,
+         initialPosition, simulatedSpeed, moveAlongRoute, distanceMeters } from './fleet-simulation';
 
 type EventCode = 'SPEEDING' | 'GPS_SIGNAL_LOSS' | 'SOS' | 'LOW_FUEL';
-type Point = { lat: number; lng: number };
-type Position = {
-  segment: number; progress: number; lat: number; lng: number;
-  speed: number; fuel: number; bearing: number; updatedAt: Date;
-  fuelConfirmationAt?: string;
-};
 type StationOption = FuelStation & { roadDistance?: number; route?: StreetRoute };
 type StationTrip = {
   points: Point[]; segment: number; progress: number; arrived: boolean;
@@ -29,6 +25,8 @@ type StationTrip = {
   encapsulation: ViewEncapsulation.None,
 })
 export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
+  readonly lowFuelThreshold = LOW_FUEL_THRESHOLD;
+  readonly triggeredFuelPercent = SIMULATION_SETTINGS.triggeredLowFuelPercent;
   @Output() eventCreated = new EventEmitter<void>();
   readonly auth = inject(AuthService);
   private readonly alerts = inject(AlertService);
@@ -54,6 +52,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   private pendingTrip?: { vehicleId: number; mode: 'station' | 'return' };
   private requestedFuelAlertId?: number;
   private destroyed = false;
+  private profileVersion = 0;
 
   vehicles = signal<MapVehicle[]>([]);
   loading = signal(true);
@@ -79,32 +78,32 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   });
 
   // Los extremos se convierten en geometrías viales reales con el servicio de rutas.
-  private readonly routeEndpoints: [Point, Point][] = [
-    [{ lat: -12.0478, lng: -77.0622 }, { lat: -12.1047, lng: -77.0306 }],
-    [{ lat: -12.0526, lng: -77.1171 }, { lat: -12.0964, lng: -77.0473 }],
-    [{ lat: -12.1177, lng: -77.0357 }, { lat: -12.1738, lng: -76.9870 }],
-  ];
+  private readonly routeEndpoints = SIMULATION_SETTINGS.routes;
 
   ngOnInit(): void {
     const requestedAlert = Number(this.activatedRoute.snapshot.queryParamMap.get('fuel_alert'));
     this.requestedFuelAlertId = Number.isInteger(requestedAlert) && requestedAlert > 0 ? requestedAlert : undefined;
     this.loadRoadRoutes();
     this.loadVehicles(true);
-    this.movementTimer = setInterval(() => this.advance(), 2000);
-    this.eventsTimer = setInterval(() => this.loadVehicles(), 10000);
+    this.movementTimer = setInterval(() => this.advance(), SIMULATION_SETTINGS.movementIntervalMs);
+    this.eventsTimer = setInterval(() => this.loadVehicles(), SIMULATION_SETTINGS.eventsIntervalMs);
     this.auth.profileChanges.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.profileVersion++;
       this.cancelStationRequests();
+      this.vehicles.set([]); this.selectedClientId = null;
+      this.generatingCode.set(null); this.fuelAction.set(null); this.fuelRequests.clear();
       this.selectedVehicle.set(null);
       this.clearStationRoute();
+      this.renderMap();
       this.loadVehicles(true);
     });
   }
 
   ngAfterViewInit(): void {
     this.map = L.map('fleet-map', { zoomControl: true, attributionControl: true })
-      .setView([-12.083, -77.052], 11);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18, attribution: '&copy; OpenStreetMap contributors',
+      .setView(SIMULATION_SETTINGS.center, SIMULATION_SETTINGS.initialZoom);
+    L.tileLayer(SIMULATION_SETTINGS.tileUrl, {
+      maxZoom: SIMULATION_SETTINGS.maxZoom, attribution: '&copy; OpenStreetMap contributors',
     }).addTo(this.map);
     this.simulatedRoutes.addTo(this.map);
     this.markers.addTo(this.map);
@@ -131,7 +130,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loadingRoutes.set(true);
     forkJoin(this.routeEndpoints.map(([start, end]) =>
       this.alerts.getStreetRoute(start.lat, start.lng, end.lat, end.lng).pipe(catchError(() => of(null)))
-    )).subscribe({
+    )).pipe(takeUntil(this.destroy$)).subscribe({
       next: routes => {
         routes.forEach((route, index) => {
           if (!route) return;
@@ -157,9 +156,9 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   loadVehicles(initial = false): void {
     if (initial) this.loading.set(true);
     const requestId = ++this.vehicleRequestId;
-    this.alerts.getMapVehicles().subscribe({
+    this.alerts.getMapVehicles().pipe(takeUntil(this.destroy$)).subscribe({
       next: ({ vehicles }) => {
-        if (requestId !== this.vehicleRequestId) return;
+        if (this.destroyed || requestId !== this.vehicleRequestId) return;
         const selectedId = this.selectedVehicle()?.id;
         const previousVehicles = this.vehicles();
         this.vehicles.set(vehicles);
@@ -171,7 +170,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
           if (previousFuel && !vehicle.open_events.some(event => event.alert_id === previousFuel.alert_id)) {
             // Cerrar o anular un caso no acredita una recarga ni debe recrearlo
             // inmediatamente con el mismo nivel local de la simulación.
-            if (!hasLowFuel && position && position.fuel <= 10) this.suppressedLowFuel.add(vehicle.id);
+            if (!hasLowFuel && position && position.fuel <= LOW_FUEL_THRESHOLD) this.suppressedLowFuel.add(vehicle.id);
             if (selectedId === vehicle.id) { this.cancelStationRequests(); this.clearStationRoute(); }
             const trip = this.stationTrips.get(vehicle.id);
             if (trip?.mode === 'station') {
@@ -180,7 +179,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
             }
           }
           if (position && confirmationAt && position.fuelConfirmationAt !== confirmationAt) {
-            if (!hasLowFuel) position.fuel = 70;
+            if (!hasLowFuel) position.fuel = SIMULATION_SETTINGS.confirmedFuelPercent;
             position.fuelConfirmationAt = confirmationAt;
             position.updatedAt = new Date();
           }
@@ -198,7 +197,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
         this.renderMap(initial);
       },
       error: err => {
-        if (requestId !== this.vehicleRequestId) return;
+        if (this.destroyed || requestId !== this.vehicleRequestId) return;
         this.loading.set(false);
         this.error.set(err?.error?.error || 'No se pudieron actualizar los vehículos autorizados');
       },
@@ -269,29 +268,32 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   }
   manageAlert(id: number): void { this.router.navigate(['/alerts', id]); }
   simulateLowFuel(): void {
+    if (!this.auth.canAssign()) return;
     const vehicle = this.selectedVehicle();
     if (!vehicle || this.lowFuelEvent(vehicle)) return;
     const position = this.positions.get(vehicle.id);
     if (!position) return;
     this.suppressedLowFuel.delete(vehicle.id);
-    position.fuel = 9;
+    position.fuel = SIMULATION_SETTINGS.triggeredLowFuelPercent;
     this.generateEvent('LOW_FUEL', vehicle);
   }
 
   generateEvent(code: EventCode, vehicle = this.selectedVehicle()): void {
     const position = vehicle ? this.positions.get(vehicle.id) : undefined;
-    if (!vehicle || !position || this.generatingCode() ||
+    if (!this.auth.canAssign() || !vehicle || !position || this.generatingCode() ||
         vehicle.open_events.some(event => event.code === code)) return;
-    if (code === 'LOW_FUEL' && position.fuel > 10) return;
-    if (code === 'SPEEDING') position.speed = Math.max(position.speed, 96);
+    if (code === 'LOW_FUEL' && position.fuel > LOW_FUEL_THRESHOLD) return;
+    if (code === 'SPEEDING') position.speed = Math.max(position.speed, SIMULATION_SETTINGS.speedingEventKmh);
     if (code === 'GPS_SIGNAL_LOSS') position.speed = 0;
     this.generatingCode.set(code);
+    const profileVersion = this.profileVersion;
     this.error.set('');
     this.alerts.createMapEvent({
       vehicle_id: vehicle.id, event_code: code, latitude: position.lat,
       longitude: position.lng, speed: position.speed, fuel_percent: code === 'LOW_FUEL' ? position.fuel : undefined,
     }).subscribe({
       next: response => {
+        if (this.destroyed || profileVersion !== this.profileVersion) return;
         const event: MapOpenEvent = {
           alert_id: response.alert.id, code, name: response.alert.event_type?.name || code,
           priority: response.alert.priority, can_coordinate: this.auth.isAdmin(), fuel_status: 'pending',
@@ -312,6 +314,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
         setTimeout(() => this.message.set(''), 4500);
       },
       error: err => {
+        if (this.destroyed || profileVersion !== this.profileVersion) return;
         this.error.set(err?.error?.error || 'No se pudo registrar el evento');
         this.generatingCode.set(null);
         this.fuelRequests.delete(vehicle.id);
@@ -341,7 +344,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
         }
         const candidates = stations
           .sort((a, b) => this.distance(position, { lat: a.latitude, lng: a.longitude }) - this.distance(position, { lat: b.latitude, lng: b.longitude }))
-          .slice(0, 8);
+          .slice(0, SIMULATION_SETTINGS.stationCandidates);
         forkJoin(candidates.map(station =>
           this.alerts.getStreetRoute(position.lat, position.lng, station.latitude, station.longitude, alertId).pipe(
             map(route => ({ ...station, roadDistance: route.distance_meters, route })),
@@ -400,11 +403,12 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
   recordFuel(action: 'coordinate' | 'confirm'): void {
     const vehicle = this.selectedVehicle();
     const event = vehicle ? this.lowFuelEvent(vehicle) : undefined;
-    if (!vehicle || !event) return;
+    if (!vehicle || !event || !event.can_coordinate || this.fuelAction()) return;
     const station = this.selectedStation();
     const observation = this.fuelObservation.trim();
     const vehicleId = vehicle.id;
     const alertId = event.alert_id;
+    const profileVersion = this.profileVersion;
     if (!observation) {
       this.error.set(`La observación es obligatoria para ${action === 'confirm' ? 'confirmar' : 'coordinar'} el abastecimiento.`);
       return;
@@ -415,7 +419,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.alerts.recordFuelAction(event.alert_id, action, observation,
       action === 'coordinate' ? station || undefined : undefined).subscribe({
       next: response => {
-        if (this.destroyed) return;
+        if (this.destroyed || profileVersion !== this.profileVersion) return;
         const originalVehicle = this.vehicles().find(item => item.id === vehicleId) || vehicle;
         const originalEvent = originalVehicle.open_events.find(item => item.alert_id === alertId) || event;
         originalEvent.fuel_status = response.fuel_status;
@@ -428,7 +432,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
         else {
           const position = this.positions.get(vehicleId);
           if (action === 'confirm') {
-            if (position) position.fuel = 70;
+            if (position) position.fuel = SIMULATION_SETTINGS.confirmedFuelPercent;
             if (stillSelected) this.returnToUsualRoute(originalVehicle);
             else if (position) {
               this.stationTrips.set(vehicleId, {
@@ -449,7 +453,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
         this.loadVehicles();
       },
       error: err => {
-        if (this.destroyed) return;
+        if (this.destroyed || profileVersion !== this.profileVersion) return;
         this.fuelAction.set(null);
         if (this.isCurrentFuelSelection(vehicleId, alertId)) {
           this.error.set(err?.error?.error || 'No se pudo registrar el abastecimiento');
@@ -548,16 +552,9 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     if (existing) return existing;
     const route = this.routeFor(vehicle);
     if (!route || route.length < 2) return undefined;
-    const segment = (vehicle.id * 37) % (route.length - 1);
-    const point = route[segment];
     const lowFuel = this.lowFuelEvent(vehicle);
-    const position: Position = {
-      segment, progress: 0, lat: point.lat, lng: point.lng,
-      speed: 38 + (vehicle.id * 7) % 42,
-      fuel: lowFuel && lowFuel.fuel_status !== 'confirmed' ? 8 : 58 + (vehicle.id * 7) % 30,
-      bearing: this.bearing(point, route[segment + 1]), updatedAt: new Date(),
-      fuelConfirmationAt: vehicle.fuel_confirmation?.timestamp,
-    };
+    const position = initialPosition(vehicle.id, route, !!lowFuel && lowFuel.fuel_status !== 'confirmed',
+                                    vehicle.fuel_confirmation?.timestamp);
     this.positions.set(vehicle.id, position);
     return position;
   }
@@ -567,15 +564,15 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.tick++;
     for (const vehicle of this.vehicles()) {
       const position = this.ensurePosition(vehicle);
-      if (position && position.fuel > 10) this.suppressedLowFuel.delete(vehicle.id);
+      if (position && position.fuel > LOW_FUEL_THRESHOLD) this.suppressedLowFuel.delete(vehicle.id);
       if (this.routeRecovery.has(vehicle.id) && !this.stationTrips.has(vehicle.id)) continue;
       if (!position || vehicle.open_events.some(event => event.code === 'GPS_SIGNAL_LOSS')) continue;
       const trip = this.stationTrips.get(vehicle.id);
       if (trip?.arrived) continue;
       const points = trip?.points || this.routeFor(vehicle);
       if (!points?.length) continue;
-      const speed = 38 + ((vehicle.id * 11 + this.tick * 3) % 43);
-      const motion = this.move(trip || position, points, speed * 2 / 3.6, !!trip);
+      const speed = simulatedSpeed(vehicle.id, this.tick);
+      const motion = moveAlongRoute(trip || position, points, speed * SIMULATION_SETTINGS.movementIntervalMs / 1000 / 3.6, !!trip);
       position.lat = motion.lat;
       position.lng = motion.lng;
       position.bearing = motion.bearing;
@@ -595,9 +592,9 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
       } else {
         position.speed = speed;
       }
-      position.fuel = Math.max(0, position.fuel - .015);
+      position.fuel = Math.max(0, position.fuel - SIMULATION_SETTINGS.fuelConsumedPerTick);
       position.updatedAt = new Date();
-      if (this.auth.canAssign() && position.fuel <= 10 &&
+      if (this.auth.canAssign() && position.fuel <= LOW_FUEL_THRESHOLD &&
           !this.suppressedLowFuel.has(vehicle.id) &&
           !vehicle.open_events.some(event => event.code === 'LOW_FUEL') &&
           !this.fuelRequests.has(vehicle.id) && !this.generatingCode()) {
@@ -608,47 +605,11 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     this.renderMap();
   }
 
-  private move(state: { segment: number; progress: number }, points: Point[], meters: number,
-               stopAtEnd: boolean): Point & { bearing: number } {
-    let remaining = meters;
-    while (remaining > 0) {
-      if (state.segment >= points.length - 1) {
-        if (stopAtEnd) break;
-        state.segment = 0;
-        state.progress = 0;
-      }
-      const from = points[state.segment], to = points[state.segment + 1];
-      const distance = Math.max(1, this.distance(from, to));
-      const available = distance * (1 - state.progress);
-      if (remaining < available) {
-        state.progress += remaining / distance;
-        remaining = 0;
-      } else {
-        remaining -= available;
-        state.segment++;
-        state.progress = 0;
-      }
-    }
-    const from = points[Math.min(state.segment, points.length - 1)];
-    const to = points[Math.min(state.segment + 1, points.length - 1)];
-    return {
-      lat: from.lat + (to.lat - from.lat) * state.progress,
-      lng: from.lng + (to.lng - from.lng) * state.progress,
-      bearing: from !== to ? this.bearing(from, to) : 0,
-    };
-  }
-
   private routeFor(vehicle: MapVehicle): Point[] | undefined {
     return this.roadRoutes.get(vehicle.id % this.routeEndpoints.length);
   }
   private distance(a: Point, b: Point): number {
-    const lat = (b.lat - a.lat) * Math.PI / 180;
-    const lng = (b.lng - a.lng) * Math.PI / 180;
-    const center = (a.lat + b.lat) * Math.PI / 360;
-    return 6371000 * Math.hypot(lat, lng * Math.cos(center));
-  }
-  private bearing(a: Point, b: Point): number {
-    return Math.atan2(b.lng - a.lng, b.lat - a.lat) * 180 / Math.PI;
+    return distanceMeters(a, b);
   }
 
   private renderMap(fit = false): void {

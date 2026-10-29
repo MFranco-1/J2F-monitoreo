@@ -25,7 +25,7 @@ def get_all_users(filters):
 
 
 def get_user_by_id(user_id):
-    return jsonify({"user": User.query.get_or_404(user_id).to_dict()}), 200
+    return jsonify({"user": db.get_or_404(User, user_id).to_dict()}), 200
 
 
 def _check_user_fields(data):
@@ -72,7 +72,7 @@ def create_user(data):
 
 def update_user(user_id, data):
     _check_user_fields(data)
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     dni = validate_dni(text_value(data, "dni", required=True, limit=20)) if "dni" in data else user.dni
     name = text_value(data, "full_name", required=True, limit=150) if "full_name" in data else user.full_name
     email = validate_email(text_value(data, "email", required=True, limit=150)) if "email" in data else user.email
@@ -116,7 +116,7 @@ def update_user(user_id, data):
 
 
 def delete_user(user_id):
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     if current_user().id == user.id:
         return jsonify({"error": "No puedes desactivar tu propia cuenta"}), 409
     if has_active_role(user, "administrador") and active_admin_count(excluded_user_id=user.id) == 0:

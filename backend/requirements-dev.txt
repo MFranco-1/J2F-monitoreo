@@ -1,0 +1,3 @@
+-r requirements.txt
+# Herramienta de verificación; no es necesaria para ejecutar la aplicación.
+pip-audit==2.10.1

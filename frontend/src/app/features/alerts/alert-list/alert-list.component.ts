@@ -2,12 +2,12 @@ import { AuthService } from '../../../core/services/auth.service';
 // features/alerts/alert-list/alert-list.component.ts
 import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { interval, Subscription } from 'rxjs';
-import { NgFor, NgIf, DatePipe, TitleCasePipe } from '@angular/common';
+import { NgFor, NgIf, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AlertService } from '../../../core/services/alert.service';
 import { AssignmentService } from '../../../core/services/assignment.service';
-import { Alert, AlertFilters } from '../../../shared/models/alert.model';
+import { Alert, AlertFilters, AlertForm } from '../../../shared/models/alert.model';
 import { MasterDataService } from '../../../core/services/master-data.service';
 import { Client, Vehicle, GpsDevice, EventType } from '../../../shared/models/master-data.model';
 import { firstError, validateForm } from '../../../shared/validation';
@@ -15,7 +15,7 @@ import { firstError, validateForm } from '../../../shared/validation';
 @Component({
   selector: 'app-alert-list',
   standalone: true,
-  imports: [NgFor, NgIf, DatePipe, TitleCasePipe, FormsModule, RouterLink],
+  imports: [NgFor, NgIf, DatePipe, FormsModule, RouterLink],
   templateUrl: './alert-list.component.html',
   styleUrl: './alert-list.component.scss',
 })
@@ -54,7 +54,7 @@ export class AlertListComponent implements OnInit, OnDestroy {
 
   filters: AlertFilters = { page: 1, per_page: 20 };
 
-  newForm: any = {
+  newForm: AlertForm = {
     title: '', description: '', priority: 'medium',
     service_type: '', location: '', source: 'Manual', client_id: null,
     vehicle_id: null, gps_device_id: null, event_type_id: null,
@@ -119,8 +119,8 @@ export class AlertListComponent implements OnInit, OnDestroy {
     });
   }
 
-  applyFilter(field: string, value: string): void {
-    (this.filters as any)[field] = value || undefined;
+  applyFilter(field: 'state' | 'priority' | 'date_from' | 'date_to', value: string): void {
+    this.filters[field] = value || undefined;
     this.filters.page = 1;
     this.loadAlerts();
   }

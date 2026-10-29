@@ -53,6 +53,14 @@ def delete_report(report_id: int):
     return report_controller.delete_report(report_id)
 
 
+@report_bp.get('/<int:report_id>/export')
+@jwt_required()
+@report_viewer_required
+def export_report(report_id: int):
+    """Descarga el resultado persistido; no genera ni modifica datos."""
+    return report_controller.export_report(report_id, request.args.get('format', 'csv'))
+
+
 # --- Endpoints de Historial (bajo /api/reports/history por proximidad semántica) ---
 
 @report_bp.get("/history")

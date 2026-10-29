@@ -28,7 +28,7 @@ export class MenuOptionListComponent implements OnInit {
   successMsg = signal('');
   errorMsg = signal('');
 
-  form: any = {
+  form: { name: string; url: string; parent_id: number | null; order: number; state_id: number; profile_ids: number[] } = {
     name: '', url: '',
     parent_id: null, order: 0, state_id: this.activeStateId(),
     profile_ids: [] as number[],
@@ -63,8 +63,8 @@ export class MenuOptionListComponent implements OnInit {
   openEdit(opt: MenuOption): void {
     this.editingOption.set(opt);
     this.form = {
-      name: opt.name, url: opt.url,
-      parent_id: opt.parent_id, order: opt.order ?? 0, state_id: opt.state_id,
+      name: opt.name, url: opt.url || '',
+      parent_id: opt.parent_id ?? null, order: opt.order ?? 0, state_id: opt.state_id,
       profile_ids: (opt.profiles ?? []).map((p) => p.id),
     };
     this.showModal.set(true);

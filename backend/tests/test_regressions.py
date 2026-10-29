@@ -13,6 +13,15 @@ from client_fixtures import client_fixture
 
 
 class RegressionTests(unittest.TestCase):
+    def test_malformed_legacy_fuel_history_preserves_literal_detail(self):
+        for action in ('fuel_coordinated', 'fuel_confirmed'):
+            for detail in ('[]', 'null', '{"estacion": "Registro anterior"}', '{invalid'):
+                with self.subTest(action=action, detail=detail):
+                    entry = History(action=action, detail=detail)
+                    result = entry.to_dict()
+                    self.assertEqual(result['detail'], detail)
+                    self.assertIsNone(result['metadata'])
+
     def setUp(self):
         self.app = create_app("testing")
         self.client = self.app.test_client()

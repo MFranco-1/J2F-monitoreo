@@ -17,12 +17,13 @@
   <ng-container *ngIf="kind==='clients'">
    <div class="form-row">
     <div class="form-group"><label for="client-document-type">Tipo de documento *</label>
-     <select id="client-document-type" class="form-control" [(ngModel)]="form.document_type"><option value="RUC">RUC</option><option value="DNI">DNI</option><option value="CE">Carné de extranjería</option><option value="PASAPORTE">Pasaporte</option></select>
+     <select id="client-document-type" class="form-control" [(ngModel)]="form.document_type"><option *ngIf="editing()?.document_type==='Código interno'" value="Código interno" disabled>Código interno (registro anterior)</option><option value="RUC">RUC</option><option value="DNI">DNI</option><option value="CE">Carné de extranjería</option><option value="PASAPORTE">Pasaporte</option></select>
+     <small class="text-muted" *ngIf="isInternalDocument()">Identificador anterior, no es un RUC. Se conserva sin cambios o puedes sustituirlo por un documento válido.</small>
      <small class="field-error" *ngIf="fieldErrors()['document_type']">{{fieldErrors()['document_type']}}</small>
     </div>
     <div class="form-group"><label for="client-document">Número *</label>
-     <input id="client-document" class="form-control" [(ngModel)]="form.document_number" [attr.inputmode]="form.document_type==='PASAPORTE'?'text':'numeric'" [maxlength]="form.document_type==='RUC'?11:form.document_type==='DNI'?8:12" [attr.aria-invalid]="!!fieldErrors()['document_number']" aria-describedby="client-document-help">
-     <small id="client-document-help" class="text-muted">{{form.document_type==='RUC'?'Exactamente 11 dígitos':form.document_type==='DNI'?'Exactamente 8 dígitos':form.document_type==='CE'?'De 9 a 12 dígitos':'De 6 a 12 letras o dígitos'}}</small>
+     <input id="client-document" class="form-control" [(ngModel)]="form.document_number" [readonly]="isInternalDocument()" [attr.inputmode]="form.document_type==='PASAPORTE'?'text':'numeric'" [maxlength]="form.document_type==='RUC'?11:form.document_type==='DNI'?8:12" [attr.aria-invalid]="!!fieldErrors()['document_number']" aria-describedby="client-document-help">
+     <small id="client-document-help" class="text-muted">{{isInternalDocument()?'Identificador heredado de solo lectura':form.document_type==='RUC'?'Exactamente 11 dígitos':form.document_type==='DNI'?'Exactamente 8 dígitos':form.document_type==='CE'?'De 9 a 12 dígitos':'De 6 a 12 letras o dígitos'}}</small>
      <small class="field-error" *ngIf="fieldErrors()['document_number']">{{fieldErrors()['document_number']}}</small>
     </div>
    </div>

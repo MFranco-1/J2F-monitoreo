@@ -30,6 +30,13 @@ def create_app(env: str = None) -> Flask:
     jwt.init_app(app)
     CORS(app, origins=app.config.get("CORS_ORIGINS", ["http://localhost:4200"]))
 
+    @app.after_request
+    def response_security(response):
+        response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+        if request.path.startswith('/api/'):
+            response.headers.setdefault('Cache-Control', 'no-store')
+        return response
+
     # Registrar Blueprints (vistas/rutas)
     _register_blueprints(app)
 

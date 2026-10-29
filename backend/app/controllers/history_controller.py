@@ -3,6 +3,7 @@ controllers/history_controller.py - Consultas de Historial de Trazabilidad
 """
 
 from flask import jsonify
+from app import db
 from app.models.history import History
 from app.models.alert import Alert
 from app.validation import integer, date_value, date_range
@@ -11,7 +12,7 @@ from app.security import current_user, may_view_alert, scope_alert_query
 
 def get_history_by_alert(alert_id: int) -> tuple:
     """Retorna el historial completo de una alerta específica."""
-    alert = Alert.query.get_or_404(alert_id, description="Alerta no encontrada")
+    alert = db.get_or_404(Alert, alert_id, description="Alerta no encontrada")
     if not may_view_alert(alert, current_user()):
         return jsonify({"error": "No tienes acceso al historial de esta alerta"}), 403
     entries = (

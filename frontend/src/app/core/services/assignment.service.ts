@@ -2,7 +2,8 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { Assignment, Report, HistoryEntry } from '../../shared/models/assignment.model';
+import { Assignment, AssignmentNotes, Report, ReportForm, HistoryEntry } from '../../shared/models/assignment.model';
+import { User } from '../../shared/models/user.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -30,14 +31,22 @@ export class AssignmentService {
     );
   }
 
-  autoAssign(alertId: number): Observable<{ assignment: Assignment; technician: any; message: string }> {
-    return this.http.post<{ assignment: Assignment; technician: any; message: string }>(
+  autoAssign(alertId: number): Observable<{ assignment: Assignment; technician: User; message: string }> {
+    return this.http.post<{ assignment: Assignment; technician: User; message: string }>(
       `${this.BASE}/assignments/auto-assign`, { alert_id: alertId }
     );
   }
 
   updateAssignment(id: number, data: { notes?: string; complete?: boolean; solution?: string }): Observable<{ assignment: Assignment; message: string }> {
     return this.http.put<{ assignment: Assignment; message: string }>(`${this.BASE}/assignments/${id}`, data);
+  }
+
+  getAssignmentNotes(id: number): Observable<AssignmentNotes> {
+    return this.http.get<AssignmentNotes>(`${this.BASE}/assignments/${id}/notes`);
+  }
+
+  addAssignmentNote(id: number, notes: string): Observable<{ note: HistoryEntry; message: string }> {
+    return this.http.post<{ note: HistoryEntry; message: string }>(`${this.BASE}/assignments/${id}/notes`, { notes });
   }
 
   // --- Reports ---
@@ -49,7 +58,7 @@ export class AssignmentService {
     return this.http.get<{ report: Report }>(`${this.BASE}/reports/${id}`);
   }
 
-  createReport(data: Partial<Report> & { filters?: any }): Observable<{ report: Report; message: string }> {
+  createReport(data: ReportForm): Observable<{ report: Report; message: string }> {
     return this.http.post<{ report: Report; message: string }>(`${this.BASE}/reports/`, data);
   }
 
@@ -61,11 +70,15 @@ export class AssignmentService {
     return this.http.delete<{ message: string }>(`${this.BASE}/reports/${id}`);
   }
 
+  exportReport(id: number, format: 'csv' | 'json'): Observable<Blob> {
+    return this.http.get(`${this.BASE}/reports/${id}/export`, { params: { format }, responseType: 'blob' });
+  }
+
   // --- History ---
   getGlobalHistory(filters: { action?: string; user_id?: number; date_from?: string; date_to?: string; page?: number } = {}): Observable<{ history: HistoryEntry[]; total: number; pages: number }> {
     let params = new HttpParams();
     Object.entries(filters).forEach(([k, v]) => { if (v !== undefined && v !== '') params = params.set(k, String(v)); });
-    return this.http.get<any>(`${this.BASE}/reports/history`, { params });
+    return this.http.get<{ history: HistoryEntry[]; total: number; pages: number }>(`${this.BASE}/reports/history`, { params });
   }
 
   getAlertHistory(alertId: number): Observable<{ history: HistoryEntry[] }> {

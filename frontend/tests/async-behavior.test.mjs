@@ -72,11 +72,221 @@ const { AssignmentListComponent } = load('src/app/features/assignments/assignmen
 const { HistoryListComponent } = load('src/app/features/history/history-list/history-list.component.ts');
 const { MasterDataComponent } = load('src/app/features/admin/master-data/master-data.component.ts');
 const { VehicleMapComponent } = load('src/app/features/dashboard/vehicle-map.component.ts');
+const { ReportListComponent } = load('src/app/features/reports/report-list/report-list.component.ts');
 
 const auth = (admin = false) => ({
   isAdmin: () => admin, isTechnician: () => false, canAssign: () => true,
   canCancelAlert: () => admin,
   currentUser: () => ({ id: 1 }), profileChanges: new rx.Subject(),
+});
+
+function notesSession(role = 'Técnico', id = 2) {
+  return { isAdmin: () => role === 'Administrador', isSupervisor: () => role === 'Supervisor',
+    isTechnician: () => role === 'Técnico', currentUser: () => ({id}), profileChanges: new rx.Subject() };
+}
+const emptyNotes = (can_add = true) => ({ alert_id: 10, notes: [], legacy_notes: [], legacy_audits: [], can_add });
+const activeAssignment = (id = 3, alert_id = 10) => ({id, alert_id, user_id: 2, status: 'En Curso', alert_state: 'En Progreso'});
+
+test('reportes muestran metadatos persistidos, etiquetas españolas y rechazan resultados inválidos', () => {
+  const snapshot={type:'alerts_summary',total_alerts:2,by_priority:{high:2},by_state:{Abierto:2},
+    generated_by:{id:3,full_name:'Supervisora'},generated_at:'2026-10-28T18:00:00Z',filter_labels:{Prioridad:'Alta'}};
+  const pending=new rx.Subject();
+  injections=[{getReportById:()=>pending}, {}, notesSession('Administrador')];
+  const component=new ReportListComponent();
+  component.viewResult({id:5}); pending.next({report:{id:5,name:'Informe de operación',result_json:JSON.stringify(snapshot)}});
+  assert.deepEqual(component.selectedResult(),snapshot); assert.equal(component.selectedReport().id,5);
+  assert.deepEqual(component.priorityCounts(),[['high',2]]); assert.equal(component.priorityLabel('high'),'Alta');
+  assert.deepEqual(component.filterEntries(),[['Prioridad','Alta']]);
+  pending.next({report:{id:5,result_json:'{invalid'}});
+  assert.equal(component.selectedResult(),null); assert.match(component.errorMsg(),/resultado válido/);
+  for(const invalid of [{type:'alerts_summary',by_state:[]},
+    {type:'operator_performance',rows:[null]},{type:'response_times',by_priority:{high:1}}]){
+    component.showResult({id:5,result_json:JSON.stringify(invalid)});
+    assert.equal(component.selectedResult(),null); assert.match(component.errorMsg(),/resultado válido/);
+  }
+  component.ngOnDestroy();
+});
+
+test('reportes descargan el snapshot autorizado sin repetir peticiones durante una descarga', () => {
+  const pending=new rx.Subject(); const requests=[];
+  injections=[{exportReport:(id,format)=>{requests.push({id,format});return pending;}},{},notesSession('Supervisor')];
+  const component=new ReportListComponent(); component.selectedReport.set({id:5,name:'Informe'});
+  const previous=globalThis.document; let clicked=0; const link={click(){clicked++;},href:'',download:''};
+  try {
+    globalThis.document={createElement:()=>link};
+    component.download('csv'); component.download('csv'); assert.equal(requests.length,1);
+    pending.next(new Blob(['Reporte,Cantidad\nPrueba,1'],{type:'text/csv'}));
+    assert.equal(clicked,1); assert.equal(link.download,'reporte-5.csv'); assert.equal(component.exporting(),false);
+  } finally {globalThis.document=previous;component.ngOnDestroy();}
+});
+
+test('Operador no genera ni exporta y cambiar perfil descarta resultados de reportes anteriores', () => {
+  const pending=new rx.Subject(); let requests=0;
+  const session=notesSession('Administrador');
+  injections=[{getReports:()=>rx.of({reports:[]}),getReportById:()=>pending,
+    generateReport:()=>{requests++;return rx.NEVER;},exportReport:()=>{requests++;return rx.NEVER;}},
+    {clients:()=>rx.of({clients:[]}),vehicles:()=>rx.of({vehicles:[]})},session];
+  const component=new ReportListComponent(); component.ngOnInit(); component.viewResult({id:1});
+  session.isAdmin=()=>false; session.profileChanges.next();
+  pending.next({report:{id:1,result_json:JSON.stringify({type:'alerts_summary',total_alerts:1})}});
+  assert.equal(component.selectedResult(),null); component.generateReport(1); component.download('csv');
+  assert.equal(requests,0); assert.deepEqual(component.reports(),[]);
+  component.ngOnDestroy(); assert.equal(session.profileChanges.observers.length,0);
+});
+
+test('filtros de reportes limpian vehículo al cambiar cliente y fechas inválidas no crean informes', () => {
+  let posts=0;
+  injections=[{createReport:()=>{posts++;return rx.NEVER;}},{},notesSession('Administrador')];
+  const component=new ReportListComponent(); component.newForm.filters.vehicle_id=8;
+  component.onClientChange(); assert.equal(component.newForm.filters.vehicle_id,null);
+  component.newForm={...component.newForm,name:'Reporte de operación',date_range_start:'2026-10-28',date_range_end:'2026-10-01'};
+  component.createReport(); assert.equal(posts,0); assert.match(component.errorMsg(),/fecha/i);
+  component.ngOnDestroy();
+});
+
+test('Técnico no puede generar eventos ni alterar el nivel simulado desde los controles', () => {
+  const session={...auth(),canAssign:()=>false,isTechnician:()=>true}; let posts=0;
+  injections=[session,{createMapEvent:()=>{posts++;return rx.NEVER;}},{},{snapshot:{queryParamMap:{get:()=>null}}}];
+  const component=new VehicleMapComponent(); const vehicle={id:1,open_events:[]};
+  component.selectedVehicle.set(vehicle); component.positions.set(1,{fuel:60,speed:30,lat:-12,lng:-77});
+  component.simulateLowFuel(); component.generateEvent('SOS');
+  assert.equal(posts,0); assert.equal(component.positions.get(1).fuel,60);
+});
+
+test('cambiar perfil borra el alcance anterior del mapa e ignora confirmaciones y consultas tardías', () => {
+  const session=auth(true); const loads=[]; const reply=new rx.Subject();
+  injections=[session,{getStreetRoute:()=>rx.of({coordinates:[[-12,-77],[-12.01,-77.01]]}),
+    getMapVehicles:()=>{const r=new rx.Subject();loads.push(r);return r;},recordFuelAction:()=>reply},{},
+    {snapshot:{queryParamMap:{get:()=>null}}}];
+  const component=new VehicleMapComponent(); component.ngOnInit();
+  const event={alert_id:8,code:'LOW_FUEL',can_coordinate:true,fuel_status:'coordinated',fuel_workflow:{}};
+  const vehicle={id:1,client:{id:1},open_events:[event]};
+  loads[0].next({vehicles:[vehicle]}); component.selectedVehicle.set(vehicle);
+  component.fuelObservation='Carga realizada con comprobante'; component.recordFuel('confirm');
+  session.profileChanges.next(); assert.deepEqual(component.vehicles(),[]);
+  loads[0].next({vehicles:[vehicle]}); reply.next({fuel_status:'confirmed',fuel_workflow:{}});
+  loads[1].next({vehicles:[]});
+  assert.deepEqual(component.vehicles(),[]); assert.equal(component.selectedVehicle(),null);
+  assert.equal(component.fuelAction(),null); assert.notEqual(component.positions.get(1).fuel,70);
+  component.ngOnDestroy();
+});
+
+test('notas del caso se abren vacías para escribir y guardan varias entradas sin reemplazar anteriores', () => {
+  const posted = []; const pending = []; const original = {id: 1, detail: 'Observación anterior', metadata:{category:'technical'}};
+  injections = [notesSession(), {
+    getAssignmentNotes: () => rx.of({...emptyNotes(), notes:[original]}),
+    addAssignmentNote: (id, text) => {posted.push({id,text}); const reply = new rx.Subject(); pending.push(reply); return reply;},
+  }];
+  const component = new AssignmentListComponent();
+  component.openNoteModal({...activeAssignment(), notes:'Texto heredado que no debe editarse'});
+  assert.equal(component.noteText,''); assert.equal(component.canAddNote,true);
+  for (const text of ['', '   ', 'A', '...', '123456', 'x'.repeat(2001)]) {
+    component.noteText=text; component.saveNote();
+  }
+  assert.equal(posted.length,0);
+  component.noteText='Se revisó el cableado'; component.saveNote(); component.saveNote();
+  assert.deepEqual(posted,[{id:3,text:'Se revisó el cableado'}]);
+  component.closeNoteModal(); assert.equal(component.showNoteModal(),true);
+  const first = {id:2,detail:'Se revisó el cableado',metadata:{category:'technical'}};
+  pending[0].next({message:'Nota añadida',note:first});
+  assert.equal(component.noteText,''); assert.equal(component.showNoteModal(),true);
+  component.noteText='Se verificó la señal'; component.saveNote();
+  const second = {id:3,detail:'Se verificó la señal',metadata:{category:'technical'}};
+  pending[1].next({message:'Nota añadida',note:second});
+  assert.deepEqual(component.notesFor('technical'),[original,first,second]);
+  component.ngOnDestroy();
+});
+
+test('Supervisor añade observaciones propias pero no cierra; Operador y casos finalizados son solo lectura', () => {
+  for (const [role, canWrite] of [['Administrador',true],['Supervisor',true],['Técnico',true],['Operador',false]]) {
+    let posts=0;
+    injections=[notesSession(role),{getAssignmentNotes:()=>rx.of(emptyNotes()),addAssignmentNote:()=>{posts++;return rx.NEVER;}}];
+    const component=new AssignmentListComponent(); const assignment=activeAssignment();
+    component.openNoteModal(assignment);
+    assert.equal(component.canAddNote,canWrite);
+    assert.equal(component.canEdit(assignment),['Administrador','Técnico'].includes(role));
+    component.noteText='Observación que requiere autorización'; component.saveNote();
+    assert.equal(posts,canWrite?1:0);
+    component.ngOnDestroy();
+  }
+  for (const a of [ {...activeAssignment(),user_id:8}, {...activeAssignment(),status:'Reasignada'},
+      {...activeAssignment(),alert_state:'Cerrado'}, {...activeAssignment(),alert_state:'Anulado'} ]) {
+    injections=[notesSession(),{getAssignmentNotes:()=>rx.of(emptyNotes())}];
+    const component=new AssignmentListComponent(); component.openNoteModal(a);
+    assert.equal(component.showNoteModal(),true); assert.equal(component.canAddNote,false);
+    assert.equal(component.canEdit(a),false); component.ngOnDestroy();
+  }
+});
+
+test('cambiar de caso descarta notas tardías y un fallo de carga no habilita escritura', () => {
+  const replies=[];
+  injections=[notesSession(),{getAssignmentNotes:()=>{const r=new rx.Subject();replies.push(r);return r;}}];
+  const component=new AssignmentListComponent();
+  component.openNoteModal(activeAssignment()); component.openNoteModal(activeAssignment(4,11));
+  replies[0].next({...emptyNotes(),notes:[{id:99,detail:'No mostrar datos del caso anterior'}]});
+  assert.equal(component.caseNotes(),null); assert.equal(component.canAddNote,false);
+  replies[1].error({error:{error:'No hay acceso al caso'}});
+  assert.equal(component.loadingNotes(),false); assert.equal(component.caseNotes(),null);
+  assert.match(component.noteError(),/No hay acceso/);
+  component.loadNotes(); replies[2].next({...emptyNotes(),alert_id:11});
+  assert.equal(component.caseNotes().alert_id,11); assert.equal(component.canAddNote,true);
+  component.ngOnDestroy();
+});
+
+test('cambiar perfil cancela consultas y escrituras de notas sin restaurar datos ni permisos anteriores', () => {
+  const session=notesSession(); const lists=[]; const pending=new rx.Subject();
+  injections=[session,{
+    getAssignments:()=>{const r=new rx.Subject();lists.push(r);return r;},
+    getAssignmentNotes:()=>rx.of(emptyNotes()), addAssignmentNote:()=>pending,
+  }];
+  const component=new AssignmentListComponent(); component.ngOnInit();
+  lists[0].next({assignments:[activeAssignment()]});
+  component.openNoteModal(activeAssignment()); component.noteText='Nota pendiente al cambiar perfil'; component.saveNote();
+  session.isTechnician=()=>false; session.profileChanges.next();
+  pending.next({message:'No restaurar resultado anterior',note:{id:50,detail:'Nota anterior'}});
+  lists[0].next({assignments:[activeAssignment()]});
+  lists[1].next({assignments:[]});
+  assert.equal(component.showNoteModal(),false); assert.equal(component.caseNotes(),null);
+  assert.equal(component.savingNote(),false); assert.equal(component.noteText,'');
+  assert.deepEqual(component.assignments(),[]); assert.equal(component.successMsg(),'');
+  component.ngOnDestroy(); assert.equal(session.profileChanges.observers.length,0);
+});
+
+test('un cambio de asignación rechazado conserva el borrador y deja notas en solo lectura', () => {
+  injections=[notesSession(),{getAssignmentNotes:()=>rx.of(emptyNotes()),
+    addAssignmentNote:()=>rx.throwError(()=>({status:409,error:{error:'La asignación ya no está vigente'}}))}];
+  const component=new AssignmentListComponent(); component.openNoteModal(activeAssignment());
+  component.noteText='Observación aún no guardada'; component.saveNote();
+  assert.match(component.noteError(),/no está vigente/); assert.equal(component.savingNote(),false);
+  assert.equal(component.noteText,'Observación aún no guardada'); assert.equal(component.canAddNote,false);
+  component.ngOnDestroy();
+});
+
+test('cierre sigue separado de las notas y evita envíos duplicados mientras está pendiente', () => {
+  const pending=new rx.Subject(); const writes=[];
+  injections=[notesSession(),{updateAssignment:(id,body)=>{writes.push({id,body});return pending;},getAssignments:()=>rx.of({assignments:[]})}];
+  const component=new AssignmentListComponent(); component.openCloseModal(activeAssignment());
+  component.solutionText='Se restableció la señal del dispositivo'; component.completeAssignment(); component.completeAssignment();
+  assert.equal(writes.length,1); assert.equal(writes[0].body.notes,undefined);
+  component.closeCloseModal(); assert.equal(component.showCloseModal(),true);
+  pending.next({message:'Atención cerrada'});
+  assert.equal(component.closing(),false); assert.equal(component.showCloseModal(),false);
+  component.ngOnDestroy();
+});
+
+test('servicio de notas usa consulta por caso y POST sin autor o fecha suministrados por el cliente', () => {
+  const {AssignmentService}=load('src/app/core/services/assignment.service.ts');
+  const requests=[];
+  const service=new AssignmentService({get:url=>{requests.push({method:'GET',url});return rx.EMPTY;},
+    post:(url,body)=>{requests.push({method:'POST',url,body});return rx.EMPTY;}});
+  service.getAssignmentNotes(3).subscribe(); service.addAssignmentNote(3,'Revisión documentada').subscribe();
+  assert.match(requests[0].url,/\/api\/assignments\/3\/notes$/);
+  assert.equal(requests[0].method,'GET'); assert.equal(requests[1].method,'POST');
+  assert.deepEqual(requests[1].body,{notes:'Revisión documentada'});
+  const html=fs.readFileSync(path.join(root,'src/app/features/assignments/assignment-list/assignment-list.component.html'),'utf8');
+  assert.match(html,/note\.user\?\.full_name/); assert.match(html,/note\.profile\?\.name/);
+  assert.match(html,/HH:mm:ss/); assert.match(html,/No se acredita su autor ni su fecha/);
+  assert.doesNotMatch(html,/\[innerHTML\]/);
 });
 
 test('una alerta con solo título o descripción vacía no se envía', () => {
@@ -557,7 +767,7 @@ test('el mapa rechaza observaciones aisladas sin registrar abastecimiento', () =
     snapshot: { queryParamMap: { get: () => null } },
   }];
   const component = new VehicleMapComponent();
-  component.selectedVehicle.set({ id: 1, open_events: [{ code: 'LOW_FUEL', alert_id: 1 }] });
+  component.selectedVehicle.set({ id: 1, open_events: [{ code: 'LOW_FUEL', alert_id: 1, can_coordinate: true }] });
   component.fuelObservation = 'A';
   component.recordFuel('confirm');
   assert.equal(requests, 0);
@@ -639,7 +849,7 @@ test('cambiar perfil cierra el formulario y no habilita CRUD para el operador', 
 test('Registrar GPS preselecciona el vehículo y distingue sin equipo de IMEI registrado', () => {
   injections = [{list: () => rx.of({gps_devices:[]})}, {}, auth(true)];
   const component = new MasterDataComponent();
-  const vehicle = {id:8, plate:'GPS-008', gps_devices:[]};
+  const vehicle = {id:8, client_id:1, state_id:1, plate:'GPS-008', gps_devices:[]};
   assert.equal(component.gpsLabel(vehicle), 'Sin GPS registrado');
   component.registerGps(vehicle);
   assert.equal(component.kind, 'gps-devices'); assert.equal(component.showModal(), true);

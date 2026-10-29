@@ -105,7 +105,12 @@ def _apply(kind, record, data, creating=False):
                              if creating or "document_type" in data else record.document_type)
             number = (text_value(data, "document_number", required=True, limit=30)
                       if creating or "document_number" in data else record.document_number)
-            document_type, number = validate_document(document_type, number)
+            # El código interno inicial no es un RUC. Puede conservarse sin
+            # cambios al editar otros campos, pero no crearse ni modificarse.
+            preserve_internal = (not creating and record.document_type == 'Código interno'
+                                 and document_type == record.document_type and number == record.document_number)
+            if not preserve_internal:
+                document_type, number = validate_document(document_type, number)
             _unique(Client, "document_number", number, record.id)
             record.document_type, record.document_number = document_type, number
         fields = [("business_name", 180, True), ("contact_name", 150, False),
@@ -267,7 +272,7 @@ def update_record(kind, record_id, data):
 
 
 def delete_record(kind, record_id):
-    record = MODELS[kind].query.get_or_404(record_id, description="Registro no encontrado")
+    record = db.get_or_404(MODELS[kind], record_id, description="Registro no encontrado")
     if kind == "event-types" and record.code in PROTECTED_EVENT_CODES:
         return jsonify({"error": "Este tipo de evento interno no puede eliminarse"}), 409
     related = ((kind == "clients" and record.vehicles.count())

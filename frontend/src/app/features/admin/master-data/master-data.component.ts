@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { forkJoin, Subscription } from 'rxjs';
 import { MasterDataService } from '../../../core/services/master-data.service';
 import { UserService } from '../../../core/services/user.service';
-import { Client, Vehicle, MasterKind } from '../../../shared/models/master-data.model';
+import { Client, Vehicle, MasterKind, MasterForm, MasterRecord } from '../../../shared/models/master-data.model';
 import { State } from '../../../shared/models/user.model';
 import { AuthService } from '../../../core/services/auth.service';
 import { firstError, validateForm } from '../../../shared/validation';
@@ -21,17 +21,17 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     { kind: 'gps-devices', label: 'Dispositivos GPS' }, { kind: 'event-types', label: 'Tipos de evento' },
   ];
   kind: MasterKind = 'clients';
-  records = signal<any[]>([]);
+  records = signal<MasterRecord[]>([]);
   states = signal<State[]>([]);
   clients = signal<Client[]>([]);
   vehicles = signal<Vehicle[]>([]);
   loading = signal(true);
   showModal = signal(false);
   saving = signal(false);
-  editing = signal<any | null>(null);
+  editing = signal<MasterRecord | null>(null);
   error = signal('');
   success = signal('');
-  form: any = {};
+  form: MasterForm = {};
   readonly phoneCountries = phoneCountries();
   fieldErrors = signal<Record<string, string>>({});
   private listRequestId = 0;
@@ -68,7 +68,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     const requestId = ++this.listRequestId;
     this.loading.set(true);
     this.error.set('');
-    this.service.list<any>(kind).subscribe({
+    this.service.list<MasterRecord>(kind).subscribe({
       next: data => {
         if (requestId !== this.listRequestId || kind !== this.kind) return;
         this.records.set(data[kind.replace('-', '_')] || []);
@@ -99,7 +99,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
       });
   }
 
-  blank(): any {
+  blank(): MasterForm {
     const state_id = this.states().find(state => state.name === 'Activo')?.id;
     return this.kind === 'clients' ? { document_type: 'RUC', document_number: '', business_name: '', contact_name: '', phone_country: 'PE', phone: '', email: '', address: '', state_id } :
       this.kind === 'vehicles' ? { client_id: null, plate: '', brand: '', model: '', color: '', vehicle_type: '', state_id } :
@@ -107,7 +107,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
       { code: '', name: '', description: '', default_priority: 'medium', generates_alert: true, expected_action: '', state_id };
   }
 
-  open(record: any = null): void {
+  open(record: MasterRecord | null = null): void {
     if (!this.auth.isAdmin()) return;
     this.editing.set(record);
     this.form = record ? { ...record } : { ...this.blank() };
@@ -121,29 +121,34 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     this.profileSubscription?.unsubscribe();
     this.listRequestId++; this.referenceRequestId++;
   }
-  registerGps(vehicle: Vehicle): void {
+  registerGps(vehicle: MasterRecord): void {
     if (!this.auth.isAdmin()) return;
+    if (!vehicle.plate || !vehicle.client_id) { this.error.set('No se pudo identificar el vehículo'); return; }
+    const linkedVehicle: Vehicle = { ...vehicle, plate: vehicle.plate, client_id: vehicle.client_id };
     // Puede haberse registrado en otro navegador después de cargar referencias.
-    if (!this.vehicles().some(item => item.id === vehicle.id)) this.vehicles.update(items => [...items, vehicle]);
+    if (!this.vehicles().some(item => item.id === vehicle.id)) this.vehicles.update(items => [...items, linkedVehicle]);
     this.select('gps-devices'); this.open(); this.form.vehicle_id = vehicle.id;
   }
-  gpsLabel(vehicle: Vehicle): string {
+  gpsLabel(vehicle: MasterRecord): string {
     const devices = vehicle.gps_devices || [];
     return devices.length ? devices.map(device => `${device.serial_number || device.imei} (${device.state?.name || 'Sin estado'})`).join(', ') : 'Sin GPS registrado';
   }
   normalizeName(field: 'business_name' | 'contact_name'): void {
     if (typeof this.form[field] === 'string') this.form[field] = normalizeClientName(this.form[field]);
   }
+  isInternalDocument(): boolean {
+    return this.editing()?.document_type === 'Código interno' && this.form.document_type === 'Código interno';
+  }
   save(): void {
     if (!this.auth.isAdmin() || this.saving()) return;
-    this.fieldErrors.set(validateForm(this.kind, this.form, !!this.editing()));
+    this.fieldErrors.set(validateForm(this.kind, this.form, !!this.editing(), this.editing() || undefined));
     const error = firstError(this.fieldErrors());
     if (error) { this.error.set(error); return; }
     if (this.kind === 'clients') {
       this.normalizeName('business_name'); this.normalizeName('contact_name');
     }
     const data = { ...this.form };
-    delete data.verification; delete data.verification_json;
+    delete data.verification; Reflect.deleteProperty(data, 'verification_json');
     this.saving.set(true);
     const item = this.editing();
     const request = item ? this.service.update(this.kind, item.id, data) : this.service.create(this.kind, data);
@@ -159,17 +164,17 @@ export class MasterDataComponent implements OnInit, OnDestroy {
       error: err => { this.saving.set(false); this.error.set(err?.error?.error || 'No se pudo guardar'); },
     });
   }
-  remove(record: any): void {
+  remove(record: MasterRecord): void {
     if (!this.auth.isAdmin() || !confirm('¿Eliminar este registro? Si tiene relaciones, deberá cambiarlo a Inactivo.')) return;
     this.service.delete(this.kind, record.id).subscribe({
       next: response => { this.success.set(response.message); this.loadReferences(); this.load(); },
       error: err => this.error.set(err?.error?.error || 'No se pudo eliminar'),
     });
   }
-  title(record: any): string { return this.kind === 'gps-devices' ? record.serial_number || record.imei : record.business_name || record.plate || record.name; }
-  detail(record: any): string {
+  title(record: MasterRecord): string { return (this.kind === 'gps-devices' ? record.serial_number || record.imei : record.business_name || record.plate || record.name) || ''; }
+  detail(record: MasterRecord): string {
     if (this.kind === 'gps-devices') return [record.model, record.imei ? `IMEI ${record.imei}` : ''].filter(Boolean).join(' · ');
-    return this.kind === 'event-types' ? record.description || record.name :
-      record.document_number || [record.brand, record.model].filter(Boolean).join(' ') || record.serial_number || record.code;
+    return this.kind === 'event-types' ? record.description || record.name || '' :
+      record.document_number || [record.brand, record.model].filter(Boolean).join(' ') || record.serial_number || record.code || '';
   }
 }

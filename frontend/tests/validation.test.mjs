@@ -27,6 +27,14 @@ const validClient = {
 const validUser = { dni: '01234567', full_name: 'María Pérez', email: 'maria@empresa.com',
   password: 'Password-123!', profile_ids: [1], state_id: 1 };
 
+test('código interno heredado se conserva al editar pero no permite crear ni cambiar identificadores', () => {
+  const original={...validClient,document_type:'Código interno',document_number:'J2F-001'};
+  assert.equal(firstError(validateForm('clients',original,true,original)),'');
+  assert.ok(validateForm('clients',original,false)['document_type']);
+  assert.ok(validateForm('clients',{...original,document_number:'J2F-999'},true,original)['document_type']);
+  assert.ok(validateForm('clients',{...original,document_type:'RUC'},true,original)['document_number']);
+});
+
 test('clientes rechazan cada dato inválido de la presentación antes de enviar', () => {
   for (const [field, value] of [
     ['document_number', '3000000028254561'], ['document_number', '2012345678h'],

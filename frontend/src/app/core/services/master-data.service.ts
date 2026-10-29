@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
-import { MasterKind, Client, Vehicle, GpsDevice, EventType } from '../../shared/models/master-data.model';
+import { MasterKind, Client, Vehicle, GpsDevice, EventType, MasterForm, MasterRecord } from '../../shared/models/master-data.model';
 
 @Injectable({ providedIn: 'root' })
 export class MasterDataService {
@@ -16,7 +16,7 @@ export class MasterDataService {
   vehicles(clientId?:number, active=true) { return this.list<Vehicle>('vehicles', { client_id:clientId, active }); }
   devices(vehicleId?:number, active=true) { return this.list<GpsDevice>('gps-devices', { vehicle_id:vehicleId, active }); }
   eventTypes(active=true) { return this.list<EventType>('event-types', { active }); }
-  create(kind:MasterKind, data:any) { return this.http.post<{message:string;record:any}>(`${this.base}/${kind}/`, data); }
-  update(kind:MasterKind, id:number, data:any) { return this.http.put<{message:string;record:any}>(`${this.base}/${kind}/${id}`, data); }
+  create(kind:MasterKind, data:MasterForm) { return this.http.post<{message:string;record:MasterRecord}>(`${this.base}/${kind}/`, data); }
+  update(kind:MasterKind, id:number, data:MasterForm) { return this.http.put<{message:string;record:MasterRecord}>(`${this.base}/${kind}/${id}`, data); }
   delete(kind:MasterKind, id:number) { return this.http.delete<{message:string}>(`${this.base}/${kind}/${id}`); }
 }
