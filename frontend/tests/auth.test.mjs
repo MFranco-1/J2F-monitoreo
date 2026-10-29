@@ -397,10 +397,64 @@ test('las mutaciones de menú notifican al sidebar después de completarse', () 
   assert.equal(changes, 3);
 });
 
+test('el menú publica respuestas tardías en una señal y descarta el perfil anterior', () => {
+  const requests = [new rx.Subject(), new rx.Subject(), new rx.Subject()];
+  let active = true,
+    count = 0;
+  injectedAuth = {
+    isAdmin: () => true,
+    isSupervisor: () => false,
+    hasActiveProfile: () => active,
+    profileChanges: new rx.Subject(),
+    menuChanges: new rx.Subject(),
+    getMenuOptions: () => requests[count++],
+  };
+  const sidebar = new SidebarComponent();
+  const visibleRoutes = angular.computed(() =>
+    sidebar
+      .navSections()
+      .flatMap((s) => s.items)
+      .map((i) => i.route),
+  );
+  assert.equal(angular.isSignal(sidebar.navSections), true);
+  sidebar.ngOnInit();
+  try {
+    assert.deepEqual(visibleRoutes(), []);
+    requests[0].next({
+      configured: true,
+      menu_options: [{ id: 1, name: 'Alertas', url: '/alerts', state_id: 1 }],
+    });
+    assert.deepEqual(visibleRoutes(), ['/alerts']);
+    injectedAuth.profileChanges.next();
+    assert.deepEqual(visibleRoutes(), []);
+    requests[0].next({
+      configured: true,
+      menu_options: [{ id: 2, name: 'Usuarios', url: '/admin/users', state_id: 1 }],
+    });
+    assert.deepEqual(visibleRoutes(), []);
+    requests[1].next({
+      configured: true,
+      menu_options: [{ id: 3, name: 'Historial', url: '/history', state_id: 1 }],
+    });
+    assert.deepEqual(visibleRoutes(), ['/history']);
+    injectedAuth.menuChanges.next();
+    requests[2].next({ configured: true, menu_options: [] });
+    assert.deepEqual(visibleRoutes(), []);
+    active = false;
+    injectedAuth.profileChanges.next();
+    assert.deepEqual(visibleRoutes(), []);
+  } finally {
+    sidebar.ngOnDestroy();
+  }
+  assert.equal(injectedAuth.profileChanges.observers.length, 0);
+  assert.equal(injectedAuth.menuChanges.observers.length, 0);
+});
+
 test('el sidebar elige el menú configurado o el respaldo, nunca ambos', () => {
   const render = (response, admin = true) => {
     injectedAuth = {
       isAdmin: () => admin,
+      isSupervisor: () => false,
       hasActiveProfile: () => true,
       profileChanges: new rx.Subject(),
       menuChanges: new rx.Subject(),
@@ -408,7 +462,7 @@ test('el sidebar elige el menú configurado o el respaldo, nunca ambos', () => {
     };
     const sidebar = new SidebarComponent();
     sidebar.ngOnInit();
-    const sections = sidebar.navSections;
+    const sections = sidebar.navSections();
     sidebar.ngOnDestroy();
     return sections;
   };
@@ -449,6 +503,44 @@ test('el sidebar elige el menú configurado o el respaldo, nunca ambos', () => {
       .some((item) => item.route?.startsWith('/admin/')),
     false,
   );
+});
+
+test('la navegación oculta reportes y administración según el rol también en el respaldo', () => {
+  for (const role of ['Administrador', 'Supervisor', 'Operador', 'Técnico']) {
+    for (const configured of [true, false]) {
+      injectedAuth = {
+        isAdmin: () => role === 'Administrador',
+        isSupervisor: () => role === 'Supervisor',
+        hasActiveProfile: () => true,
+        profileChanges: new rx.Subject(),
+        menuChanges: new rx.Subject(),
+        getMenuOptions: () =>
+          rx.of({
+            configured,
+            menu_options: configured
+              ? [
+                  { id: 1, name: 'Alertas', url: '/alerts', state_id: 1 },
+                  { id: 2, name: 'Reportes', url: '/reports', state_id: 1 },
+                  { id: 3, name: 'Usuarios', url: '/admin/users', state_id: 1 },
+                ]
+              : [],
+          }),
+      };
+      const sidebar = new SidebarComponent();
+      sidebar.ngOnInit();
+      try {
+        const routes = sidebar
+          .navSections()
+          .flatMap((s) => s.items)
+          .map((i) => i.route);
+        assert.equal(routes.includes('/alerts'), true);
+        assert.equal(routes.includes('/reports'), ['Administrador', 'Supervisor'].includes(role));
+        assert.equal(routes.includes('/admin/users'), role === 'Administrador');
+      } finally {
+        sidebar.ngOnDestroy();
+      }
+    }
+  }
 });
 
 test('login multiperfil conserva solo el token temporal y permite seleccionar en dashboard', () => {

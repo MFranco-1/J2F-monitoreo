@@ -12,7 +12,7 @@
     </div>
   </a>
   <div class="sidebar-nav">
-    <div class="nav-section" *ngFor="let section of navSections">
+    <div class="nav-section" *ngFor="let section of navSections()">
       <div class="nav-section-title" *ngIf="!collapsed">{{ section.title }}</div>
       <ng-container
         *ngTemplateOutlet="navList; context: { $implicit: section.items }"

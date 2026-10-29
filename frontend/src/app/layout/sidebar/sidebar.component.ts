@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, inject } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { NgFor, NgIf, NgTemplateOutlet } from '@angular/common';
 
@@ -31,6 +31,11 @@ interface NavItem {
   disabled?: boolean;
 }
 
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
 @Component({
   selector: 'app-sidebar',
   standalone: true,
@@ -41,7 +46,7 @@ interface NavItem {
 export class SidebarComponent implements OnInit, OnDestroy {
   @Input() collapsed = false;
 
-  private readonly defaultSections: { title: string; items: NavItem[] }[] = [
+  private readonly defaultSections: NavSection[] = [
     {
       title: 'MONITOREO',
       items: [
@@ -71,7 +76,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
   private auth = inject(AuthService);
   private users = inject(UserService);
   private subscription?: Subscription;
-  navSections: { title: string; items: NavItem[] }[] = [];
+  readonly navSections = signal<NavSection[]>([]);
   private readonly routes = new Set([
     '/dashboard',
     '/alerts',
@@ -99,7 +104,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
     const children = (option.children || [])
       .map((child) => this.menuItem(child, depth + 1))
       .filter((child): child is NavItem => child !== null);
-    if (!this.auth.isAdmin() && route?.startsWith('/admin/') && !children.length) return null;
+    if (!this.canUseRoute(route) && !children.length) return null;
     const icon = option.icon && ICON_PATHS[option.icon] ? option.icon : 'folder';
     return {
       label: option.name,
@@ -111,19 +116,25 @@ export class SidebarComponent implements OnInit, OnDestroy {
     };
   }
 
-  private fallbackSections(): { title: string; items: NavItem[] }[] {
+  private canUseRoute(route?: string): boolean {
+    if (route?.startsWith('/admin/')) return this.auth.isAdmin();
+    if (route === '/reports') return this.auth.isAdmin() || this.auth.isSupervisor();
+    return true;
+  }
+
+  private fallbackSections(): NavSection[] {
     return this.defaultSections
       .map((section) => ({
         ...section,
         items: section.items
-          .filter((item) => this.auth.isAdmin() || !item.route?.startsWith('/admin/'))
+          .filter((item) => this.canUseRoute(item.route))
           .map((item) => ({ ...item })),
       }))
       .filter((section) => section.items.length > 0);
   }
 
-  private configuredSections(options: MenuOption[]): { title: string; items: NavItem[] }[] {
-    const sections: { title: string; items: NavItem[] }[] = [];
+  private configuredSections(options: MenuOption[]): NavSection[] {
+    const sections: NavSection[] = [];
     const standalone = new Map<string, NavItem[]>([
       ['MONITOREO', []],
       ['SEGUIMIENTO', []],
@@ -160,23 +171,24 @@ export class SidebarComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.subscription = merge(of(undefined), this.users.menuChanges, this.auth.profileChanges)
       .pipe(
-        switchMap(() =>
-          this.auth.hasActiveProfile()
+        switchMap(() => {
+          this.navSections.set([]);
+          return this.auth.hasActiveProfile()
             ? this.users.getMenuOptions(false, true).pipe(catchError(() => of(null)))
-            : of(null),
-        ),
+            : of(null);
+        }),
       )
       .subscribe((data) => {
         if (!this.auth.hasActiveProfile()) {
-          this.navSections = [];
+          this.navSections.set([]);
           return;
         }
         const configured = data?.configured ?? !!data?.menu_options.length;
         if (!data || !configured) {
-          this.navSections = this.fallbackSections();
+          this.navSections.set(this.fallbackSections());
           return;
         }
-        this.navSections = this.configuredSections(data.menu_options);
+        this.navSections.set(this.configuredSections(data.menu_options));
       });
   }
 

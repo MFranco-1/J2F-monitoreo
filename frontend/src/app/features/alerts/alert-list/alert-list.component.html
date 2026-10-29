@@ -63,7 +63,14 @@
         <option value="low">Baja</option>
       </select>
     </div>
-    <button id="btn-new-alert" class="btn-primary" (click)="openNewModal()">+ Nueva Alerta</button>
+    <button
+      *ngIf="auth.canAssign()"
+      id="btn-new-alert"
+      class="btn-primary"
+      (click)="openNewModal()"
+    >
+      + Nueva Alerta
+    </button>
   </div>
 
   <!-- Tabla -->
