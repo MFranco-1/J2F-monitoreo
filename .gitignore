@@ -40,6 +40,10 @@ node_modules/
 *.sql.gz
 backend/backups/
 
+# Notas personales conservadas solo en el equipo
+/docs/CALIDAD_Y_HARDCODE.md
+/docs/HISTORIAS_Y_VERIFICACION.md
+
 # IDE y sistema operativo
 .vscode/
 .idea/

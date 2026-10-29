@@ -8,9 +8,6 @@ Requiere Node compatible con Angular 22: `^22.22.3`, `^24.15.0` o `>=26`;
 se verificó con Node 24.19.0. Mantener `package-lock.json` y usar `npm ci`.
 La interfaz y los flujos se conservan; no se introduce otro framework.
 
-Consultar [trazabilidad de historias](docs/HISTORIAS_Y_VERIFICACION.md) y
-[calidad y explicación del hardcodeo](docs/CALIDAD_Y_HARDCODE.md).
-
 ## Migración segura de PostgreSQL / Neon
 
 El código no ejecuta migraciones al arrancar. Antes de desplegarlo, crea un respaldo
