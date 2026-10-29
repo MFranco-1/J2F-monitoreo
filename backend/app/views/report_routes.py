@@ -3,10 +3,10 @@ views/report_routes.py - Endpoints REST para Reportes
 """
 
 from flask import Blueprint, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.controllers import report_controller
-from app.controllers import history_controller
-from app.security import report_viewer_required, admin_required
+from flask_jwt_extended import get_jwt_identity, jwt_required
+
+from app.controllers import history_controller, report_controller
+from app.security import admin_required, report_viewer_required
 
 report_bp = Blueprint("reports", __name__)
 
@@ -53,15 +53,16 @@ def delete_report(report_id: int):
     return report_controller.delete_report(report_id)
 
 
-@report_bp.get('/<int:report_id>/export')
+@report_bp.get("/<int:report_id>/export")
 @jwt_required()
 @report_viewer_required
 def export_report(report_id: int):
     """Descarga el resultado persistido; no genera ni modifica datos."""
-    return report_controller.export_report(report_id, request.args.get('format', 'csv'))
+    return report_controller.export_report(report_id, request.args.get("format", "csv"))
 
 
 # --- Endpoints de Historial (bajo /api/reports/history por proximidad semántica) ---
+
 
 @report_bp.get("/history")
 @jwt_required()

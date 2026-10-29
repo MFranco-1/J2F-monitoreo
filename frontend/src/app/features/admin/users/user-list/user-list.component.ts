@@ -1,4 +1,3 @@
-// features/admin/users/user-list/user-list.component.ts
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { NgFor, NgIf } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -19,7 +18,9 @@ export class UserListComponent implements OnInit {
   users = signal<User[]>([]);
   profiles = signal<Profile[]>([]);
   states = signal<State[]>([]);
-  private activeStateId(): number { return this.states().find(s => s.name === 'Activo')?.id ?? 0; }
+  private activeStateId(): number {
+    return this.states().find((s) => s.name === 'Activo')?.id ?? 0;
+  }
   loading = signal(true);
   showModal = signal(false);
   saving = signal(false);
@@ -29,16 +30,26 @@ export class UserListComponent implements OnInit {
   searchTerm = '';
   private requestVersion = 0;
 
-  form: Pick<User, 'dni' | 'full_name' | 'email' | 'state_id'> & { password: string; profile_ids: number[] } = {
-    dni: '', full_name: '', email: '',
-    password: '', profile_ids: [] as number[], state_id: this.activeStateId(),
+  form: Pick<User, 'dni' | 'full_name' | 'email' | 'state_id'> & {
+    password: string;
+    profile_ids: number[];
+  } = {
+    dni: '',
+    full_name: '',
+    email: '',
+    password: '',
+    profile_ids: [] as number[],
+    state_id: this.activeStateId(),
   };
 
   ngOnInit(): void {
     this.loadUsers();
     this.userService.getProfiles().subscribe({
-      next: ({ profiles, states }) => { this.profiles.set(profiles); this.states.set(states); },
-      error: () => this.errorMsg.set('No se pudieron cargar los perfiles y estados')
+      next: ({ profiles, states }) => {
+        this.profiles.set(profiles);
+        this.states.set(states);
+      },
+      error: () => this.errorMsg.set('No se pudieron cargar los perfiles y estados'),
     });
   }
 
@@ -46,32 +57,58 @@ export class UserListComponent implements OnInit {
     const version = ++this.requestVersion;
     this.loading.set(true);
     this.userService.getUsers({ search: this.searchTerm }).subscribe({
-      next: ({ users }) => { if (version !== this.requestVersion) return; this.users.set(users); this.loading.set(false); },
-      error: (err) => { if (version !== this.requestVersion) return; this.loading.set(false); this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los usuarios'); },
+      next: ({ users }) => {
+        if (version !== this.requestVersion) return;
+        this.users.set(users);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        if (version !== this.requestVersion) return;
+        this.loading.set(false);
+        this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los usuarios');
+      },
     });
   }
 
   openNew(): void {
     this.editingUser.set(null);
-    this.form = { dni: '', full_name: '', email: '', password: '', profile_ids: [] as number[], state_id: this.activeStateId() };
+    this.form = {
+      dni: '',
+      full_name: '',
+      email: '',
+      password: '',
+      profile_ids: [] as number[],
+      state_id: this.activeStateId(),
+    };
     this.showModal.set(true);
   }
 
   openEdit(user: User): void {
     this.editingUser.set(user);
     this.form = {
-      dni: user.dni, full_name: user.full_name, email: user.email,
-      password: '', profile_ids: (user.profiles || (user.profile ? [user.profile] : [])).map(p => p.id), state_id: user.state_id,
+      dni: user.dni,
+      full_name: user.full_name,
+      email: user.email,
+      password: '',
+      profile_ids: (user.profiles || (user.profile ? [user.profile] : [])).map((p) => p.id),
+      state_id: user.state_id,
     };
     this.showModal.set(true);
   }
 
-  closeModal(): void { if (this.saving()) return; this.showModal.set(false); this.errorMsg.set(''); }
+  closeModal(): void {
+    if (this.saving()) return;
+    this.showModal.set(false);
+    this.errorMsg.set('');
+  }
 
   save(): void {
     if (this.saving()) return;
     const error = firstError(validateForm('users', this.form, !!this.editingUser()));
-    if (error) { this.errorMsg.set(error); return; }
+    if (error) {
+      this.errorMsg.set(error);
+      return;
+    }
     this.saving.set(true);
     const editing = this.editingUser();
     const obs = editing
@@ -86,7 +123,10 @@ export class UserListComponent implements OnInit {
         this.loadUsers();
         setTimeout(() => this.successMsg.set(''), 3000);
       },
-      error: (err) => { this.saving.set(false); this.errorMsg.set(err?.error?.error || 'Error al guardar'); },
+      error: (err) => {
+        this.saving.set(false);
+        this.errorMsg.set(err?.error?.error || 'Error al guardar');
+      },
     });
   }
 
@@ -103,8 +143,12 @@ export class UserListComponent implements OnInit {
     });
   }
 
-  onSearch(): void { this.loadUsers(); }
-  profileChecked(profileId: number): boolean { return this.form.profile_ids.includes(profileId); }
+  onSearch(): void {
+    this.loadUsers();
+  }
+  profileChecked(profileId: number): boolean {
+    return this.form.profile_ids.includes(profileId);
+  }
   toggleProfile(profileId: number, checked: boolean): void {
     this.form.profile_ids = checked
       ? Array.from(new Set([...this.form.profile_ids, profileId]))

@@ -1,14 +1,25 @@
 """CRUD de usuarios con validación y baja mediante el estado existente."""
+
 from flask import jsonify
-from werkzeug.exceptions import BadRequest
 from sqlalchemy import func
+from werkzeug.exceptions import BadRequest
+
 from app import db
-from app.models.user import User
-from app.models.state import State
-from app.security import current_user, has_active_role, active_admin_count, role_name
-from app.validation import record_text as text_value, validate_dni, validate_email, user_state, ids_list, validate_password
-from app.models.profile import Profile
 from app.controllers.auth_controller import invalidate_sessions
+from app.models.profile import Profile
+from app.models.state import State
+from app.models.user import User
+from app.security import active_admin_count, current_user, has_active_role, role_name
+from app.validation import (
+    ids_list,
+    user_state,
+    validate_dni,
+    validate_email,
+    validate_password,
+)
+from app.validation import (
+    record_text as text_value,
+)
 
 
 def get_all_users(filters):
@@ -20,7 +31,9 @@ def get_all_users(filters):
         query = query.filter(User.profiles.any(Profile.id == profile_id))
     if filters.get("search"):
         term = f"%{filters['search']}%"
-        query = query.filter(User.full_name.ilike(term) | User.email.ilike(term) | User.dni.ilike(term))
+        query = query.filter(
+            User.full_name.ilike(term) | User.email.ilike(term) | User.dni.ilike(term)
+        )
     return jsonify({"users": [u.to_dict() for u in query.order_by(User.full_name).all()]}), 200
 
 
@@ -29,7 +42,13 @@ def get_user_by_id(user_id):
 
 
 def _check_user_fields(data):
-    unsupported = {"profiles", "first_name", "paternal_last_name", "maternal_last_name", "phone"} & data.keys()
+    unsupported = {
+        "profiles",
+        "first_name",
+        "paternal_last_name",
+        "maternal_last_name",
+        "phone",
+    } & data.keys()
     if unsupported:
         raise BadRequest("Esta base utiliza full_name y profile_ids")
 
@@ -62,8 +81,14 @@ def create_user(data):
         return jsonify({"error": "DNI ya registrado"}), 409
     if User.query.filter(func.lower(User.email) == email).first():
         return jsonify({"error": "Correo ya registrado"}), 409
-    user = User(dni=dni, full_name=name, email=email, profile_id=profiles[0].id,
-                profiles=profiles, state=state)
+    user = User(
+        dni=dni,
+        full_name=name,
+        email=email,
+        profile_id=profiles[0].id,
+        profiles=profiles,
+        state=state,
+    )
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
@@ -73,9 +98,21 @@ def create_user(data):
 def update_user(user_id, data):
     _check_user_fields(data)
     user = db.get_or_404(User, user_id)
-    dni = validate_dni(text_value(data, "dni", required=True, limit=20)) if "dni" in data else user.dni
-    name = text_value(data, "full_name", required=True, limit=150) if "full_name" in data else user.full_name
-    email = validate_email(text_value(data, "email", required=True, limit=150)) if "email" in data else user.email
+    dni = (
+        validate_dni(text_value(data, "dni", required=True, limit=20))
+        if "dni" in data
+        else user.dni
+    )
+    name = (
+        text_value(data, "full_name", required=True, limit=150)
+        if "full_name" in data
+        else user.full_name
+    )
+    email = (
+        validate_email(text_value(data, "email", required=True, limit=150))
+        if "email" in data
+        else user.email
+    )
     state = user_state(data["state_id"]) if "state_id" in data else user.state
     if "profile_ids" in data:
         profiles = _profiles(data["profile_ids"])
@@ -93,12 +130,15 @@ def update_user(user_id, data):
     if current_user().id == user.id and state.name != "Activo":
         return jsonify({"error": "No puedes desactivar tu propia cuenta"}), 409
     proposed_roles = {role_name(profile.name) for profile in profiles}
-    if (has_active_role(user, "administrador")
-            and (state.name != "Activo" or "administrador" not in proposed_roles)
-            and active_admin_count(excluded_user_id=user.id) == 0):
+    if (
+        has_active_role(user, "administrador")
+        and (state.name != "Activo" or "administrador" not in proposed_roles)
+        and active_admin_count(excluded_user_id=user.id) == 0
+    ):
         return jsonify({"error": "El sistema debe conservar al menos un Administrador activo"}), 409
-    if (user.active_assignments_count
-            and (state.name != "Activo" or "tecnico" not in proposed_roles)):
+    if user.active_assignments_count and (
+        state.name != "Activo" or "tecnico" not in proposed_roles
+    ):
         return jsonify({"error": "Reasigna primero las atenciones vigentes del Técnico"}), 409
     if User.query.filter(User.dni == dni, User.id != user_id).first():
         return jsonify({"error": "DNI ya registrado"}), 409
@@ -129,4 +169,6 @@ def delete_user(user_id):
     user.state = inactive
     invalidate_sessions(user)
     db.session.commit()
-    return jsonify({"message": f"Usuario {user.full_name} desactivado; se conserva su historial"}), 200
+    return jsonify(
+        {"message": f"Usuario {user.full_name} desactivado; se conserva su historial"}
+    ), 200

@@ -15,8 +15,12 @@ export class AuthService {
   readonly profileChanges = new Subject<void>();
   readonly currentUser = this._currentUser.asReadonly();
   readonly isAuthenticated = computed(() => !!this._currentUser() && !!this.getToken());
-  readonly requiresProfileSelection = computed(() => !!this._currentUser()?.requires_profile_selection);
-  readonly hasActiveProfile = computed(() => !!this._currentUser()?.profile && !this.requiresProfileSelection());
+  readonly requiresProfileSelection = computed(
+    () => !!this._currentUser()?.requires_profile_selection,
+  );
+  readonly hasActiveProfile = computed(
+    () => !!this._currentUser()?.profile && !this.requiresProfileSelection(),
+  );
   readonly availableProfiles = computed(() => this._currentUser()?.profiles || []);
   readonly isAdmin = computed(() => this.hasRole('administrador'));
   readonly isTechnician = computed(() => this.hasRole('tecnico'));
@@ -26,27 +30,39 @@ export class AuthService {
   readonly canCancelAlert = computed(() => this.isAdmin() || this.isSupervisor());
   readonly roleNames = computed(() => this._currentUser()?.profile?.name || 'Perfil pendiente');
 
-  constructor(private http: HttpClient, private router: Router) {}
+  constructor(
+    private http: HttpClient,
+    private router: Router,
+  ) {}
 
   private hasRole(role: string): boolean {
     const profile = this._currentUser()?.profile;
-    return !!profile && profile.state?.name === 'Activo' &&
-      profile.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() === role;
+    return (
+      !!profile &&
+      profile.state?.name === 'Activo' &&
+      profile.name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase() === role
+    );
   }
 
   login(identifier: string, password: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/login`, { identifier, password }).pipe(
-      tap(response => this.storeResponse(response))
-    );
+    return this.http
+      .post<AuthResponse>(`${environment.apiUrl}/auth/login`, { identifier, password })
+      .pipe(tap((response) => this.storeResponse(response)));
   }
 
   selectProfile(profileId: number): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/select-profile`, { profile_id: profileId }).pipe(
-      tap(response => {
-        this.storeResponse(response);
-        this.profileChanges.next();
-      })
-    );
+    return this.http
+      .post<AuthResponse>(`${environment.apiUrl}/auth/select-profile`, { profile_id: profileId })
+      .pipe(
+        tap((response) => {
+          this.storeResponse(response);
+          this.profileChanges.next();
+        }),
+      );
   }
 
   private storeResponse(response: AuthResponse): void {
@@ -55,8 +71,10 @@ export class AuthService {
     else localStorage.removeItem(this.REFRESH_KEY);
     const user = response.user;
     const current: CurrentUser = {
-      id: user.id, email: user.email, full_name: user.full_name,
-      profile: response.requires_profile_selection ? null : (user.profile || null),
+      id: user.id,
+      email: user.email,
+      full_name: user.full_name,
+      profile: response.requires_profile_selection ? null : user.profile || null,
       profiles: response.profiles || user.profiles || [],
       requires_profile_selection: response.requires_profile_selection,
     };
@@ -66,9 +84,16 @@ export class AuthService {
 
   logout(): void {
     const token = localStorage.getItem(this.REFRESH_KEY) || this.getToken();
-    if (token) this.http.post(`${environment.apiUrl}/auth/logout`, {}, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).subscribe({ error: () => {} });
+    if (token)
+      this.http
+        .post(
+          `${environment.apiUrl}/auth/logout`,
+          {},
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        )
+        .subscribe({ error: () => {} });
     this.endSession();
   }
 
@@ -80,32 +105,47 @@ export class AuthService {
     this.router.navigate(['/login']);
   }
 
-  getToken(): string | null { return localStorage.getItem(this.TOKEN_KEY); }
+  getToken(): string | null {
+    return localStorage.getItem(this.TOKEN_KEY);
+  }
 
   refreshToken(): Observable<{ access_token: string }> {
     if (this.refreshInFlight) return this.refreshInFlight;
     const refreshToken = localStorage.getItem(this.REFRESH_KEY);
     if (!refreshToken) return throwError(() => new Error('No hay sesión definitiva para renovar'));
-    this.refreshInFlight = this.http.post<{ access_token: string }>(
-      `${environment.apiUrl}/auth/refresh`, {},
-      { headers: { Authorization: `Bearer ${refreshToken}` } }
-    ).pipe(
-      tap(({ access_token }) => {
-        if (localStorage.getItem(this.REFRESH_KEY) !== refreshToken) throw new Error('La sesión cambió');
-        localStorage.setItem(this.TOKEN_KEY, access_token);
-      }),
-      finalize(() => { this.refreshInFlight = undefined; }),
-      shareReplay({ bufferSize: 1, refCount: false })
-    );
+    this.refreshInFlight = this.http
+      .post<{ access_token: string }>(
+        `${environment.apiUrl}/auth/refresh`,
+        {},
+        { headers: { Authorization: `Bearer ${refreshToken}` } },
+      )
+      .pipe(
+        tap(({ access_token }) => {
+          if (localStorage.getItem(this.REFRESH_KEY) !== refreshToken)
+            throw new Error('La sesión cambió');
+          localStorage.setItem(this.TOKEN_KEY, access_token);
+        }),
+        finalize(() => {
+          this.refreshInFlight = undefined;
+        }),
+        shareReplay({ bufferSize: 1, refCount: false }),
+      );
     return this.refreshInFlight;
   }
 
   private loadSession(): CurrentUser | null {
     try {
       const value = JSON.parse(localStorage.getItem(this.USER_KEY) || 'null');
-      return value && Number.isInteger(value.id) && typeof value.full_name === 'string'
-        && Array.isArray(value.profiles) && typeof value.requires_profile_selection === 'boolean'
-        && localStorage.getItem(this.TOKEN_KEY) ? value : null;
-    } catch { return null; }
+      return value &&
+        Number.isInteger(value.id) &&
+        typeof value.full_name === 'string' &&
+        Array.isArray(value.profiles) &&
+        typeof value.requires_profile_selection === 'boolean' &&
+        localStorage.getItem(this.TOKEN_KEY)
+        ? value
+        : null;
+    } catch {
+      return null;
+    }
   }
 }

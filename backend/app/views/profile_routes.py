@@ -3,9 +3,10 @@ views/profile_routes.py - Endpoints REST para Perfiles
 """
 
 from flask import Blueprint, request
-from app.security import admin_required
 from flask_jwt_extended import jwt_required
+
 from app.controllers import profile_controller
+from app.security import admin_required
 
 profile_bp = Blueprint("profiles", __name__)
 

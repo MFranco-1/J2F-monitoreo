@@ -3,9 +3,10 @@ models/user.py - Modelo Usuario (User)
 Representa a los usuarios y sus perfiles dentro del sistema.
 """
 
-from app.datetime_utils import utcnow, as_utc_naive, iso_utc
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
+
 from app import db
+from app.datetime_utils import iso_utc, utcnow
 from app.models.profile import user_profile
 
 
@@ -49,12 +50,16 @@ class User(db.Model):
     @property
     def active_assignments_count(self) -> int:
         """Número de alertas activas asignadas a este técnico."""
+        from app.models.alert import TERMINAL_ALERT_STATES, Alert
         from app.models.assignment import Assignment
-        from app.models.alert import Alert, TERMINAL_ALERT_STATES
         from app.models.state import State
+
         return (
             self.assignments.join(Alert)
-            .filter(Assignment.completed_at.is_(None), ~Alert.state.has(State.name.in_(TERMINAL_ALERT_STATES)))
+            .filter(
+                Assignment.completed_at.is_(None),
+                ~Alert.state.has(State.name.in_(TERMINAL_ALERT_STATES)),
+            )
             .count()
         )
 
@@ -74,7 +79,9 @@ class User(db.Model):
         if include_profile:
             selected = active_profile if active_profile is not None else self.profile
             data["profile"] = selected.to_dict() if selected else None
-            data["profiles"] = [profile.to_dict() for profile in sorted(self.profiles, key=lambda p: p.name)]
+            data["profiles"] = [
+                profile.to_dict() for profile in sorted(self.profiles, key=lambda p: p.name)
+            ]
         return data
 
     def __repr__(self) -> str:

@@ -3,8 +3,8 @@ models/state.py - Modelo Estado (State)
 Representa los estados posibles para usuarios y alertas.
 """
 
-from app.datetime_utils import utcnow, as_utc_naive, iso_utc
 from app import db
+from app.datetime_utils import iso_utc, utcnow
 
 
 class State(db.Model):

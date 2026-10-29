@@ -3,8 +3,8 @@ models/profile.py - Modelo Perfil (Profile)
 Representa los roles de usuario dentro del sistema.
 """
 
-from app.datetime_utils import utcnow, as_utc_naive, iso_utc
 from app import db
+from app.datetime_utils import iso_utc, utcnow
 
 # Tabla intermedia Profile <-> MenuOption (Many-to-Many)
 profile_menu_option = db.Table(

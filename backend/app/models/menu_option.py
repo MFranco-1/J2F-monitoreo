@@ -3,8 +3,8 @@ models/menu_option.py - Modelo Opción de Menú (MenuOption)
 Permite configurar dinámicamente el menú lateral de la aplicación.
 """
 
-from app.datetime_utils import utcnow, as_utc_naive, iso_utc
 from app import db
+from app.datetime_utils import iso_utc, utcnow
 from app.models.profile import profile_menu_option
 
 

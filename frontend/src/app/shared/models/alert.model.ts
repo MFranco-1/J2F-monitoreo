@@ -1,4 +1,3 @@
-// shared/models/alert.model.ts
 export type AlertPriority = 'critical' | 'high' | 'medium' | 'low';
 export type AlertStateName = 'Abierto' | 'En Progreso' | 'Cerrado' | 'Escalado' | 'Anulado';
 
@@ -44,10 +43,16 @@ export interface UserSummary {
 }
 
 export interface AlertForm {
-  title: string; description: string; priority: AlertPriority;
-  service_type: string; location: string; source: string;
-  client_id: number | null; vehicle_id: number | null;
-  gps_device_id: number | null; event_type_id: number | null;
+  title: string;
+  description: string;
+  priority: AlertPriority;
+  service_type: string;
+  location: string;
+  source: string;
+  client_id: number | null;
+  vehicle_id: number | null;
+  gps_device_id: number | null;
+  event_type_id: number | null;
 }
 
 export interface AlertMetrics {
@@ -92,7 +97,10 @@ export interface FuelActionRecord {
   observation?: string | null;
   mode: 'station' | 'manual';
   station?: {
-    id?: string | null; name: string; latitude: number; longitude: number;
+    id?: string | null;
+    name: string;
+    latitude: number;
+    longitude: number;
     road_distance?: number;
   } | null;
 }
@@ -103,11 +111,18 @@ export interface FuelWorkflow {
 }
 
 export interface FuelStation {
-  id: string; name: string; brand?: string | null; latitude: number; longitude: number;
+  id: string;
+  name: string;
+  brand?: string | null;
+  latitude: number;
+  longitude: number;
 }
 
 export interface StreetRoute {
-  coordinates: [number, number][]; distance_meters: number; duration_seconds: number; source: string;
+  coordinates: [number, number][];
+  distance_meters: number;
+  duration_seconds: number;
+  source: string;
 }
 
 export interface MapVehicle {

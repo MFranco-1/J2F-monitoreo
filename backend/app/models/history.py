@@ -4,8 +4,9 @@ Registro inmutable de trazabilidad: cada acción sobre una alerta queda registra
 """
 
 import json
-from app.datetime_utils import utcnow, iso_utc
+
 from app import db
+from app.datetime_utils import iso_utc, utcnow
 
 
 class History(db.Model):
@@ -15,11 +16,11 @@ class History(db.Model):
     alert_id = db.Column(db.Integer, db.ForeignKey("alerts.id"), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     profile_id = db.Column(db.Integer, db.ForeignKey("profiles.id"), nullable=True)
-    # Acción realizada: 'created' | 'state_changed' | 'assigned' | 'note_added' | 'escalated' | 'closed'
+    # Acción registrada: creación, asignación, notas, estados o abastecimiento.
     action = db.Column(db.String(50), nullable=False)
     previous_state = db.Column(db.String(100), nullable=True)
     new_state = db.Column(db.String(100), nullable=True)
-    # Información adicional de la acción en formato texto libre
+    # Texto heredado o JSON estructurado de notas y abastecimiento.
     detail = db.Column(db.Text, nullable=True)
     timestamp = db.Column(db.DateTime, default=utcnow, index=True)
 
@@ -34,8 +35,11 @@ class History(db.Model):
         if self.action == "note_added" and detail:
             try:
                 candidate = json.loads(detail)
-                if (isinstance(candidate, dict) and candidate.get("kind") == "assignment_note"
-                        and isinstance(candidate.get("text"), str)):
+                if (
+                    isinstance(candidate, dict)
+                    and candidate.get("kind") == "assignment_note"
+                    and isinstance(candidate.get("text"), str)
+                ):
                     metadata = candidate
                     detail = candidate["text"]
             except (TypeError, ValueError):
@@ -44,10 +48,10 @@ class History(db.Model):
             try:
                 metadata = json.loads(detail)
                 if not isinstance(metadata, dict):
-                    raise ValueError('El detalle de combustible debe ser un objeto')
+                    raise ValueError("El detalle de combustible debe ser un objeto")
                 station = metadata.get("estacion") or {}
                 if not isinstance(station, dict):
-                    raise ValueError('La estación registrada debe ser un objeto')
+                    raise ValueError("La estación registrada debe ser un objeto")
                 parts = []
                 if station.get("name"):
                     parts.append(f"Estación: {station['name']}")
@@ -62,14 +66,20 @@ class History(db.Model):
                 metadata = None
         author = {"id": self.user.id, "full_name": self.user.full_name} if self.user else None
         profile = {"id": self.profile.id, "name": self.profile.name} if self.profile else None
-        if self.action == 'note_added' and metadata:
-            author_snapshot = metadata.get('author')
-            profile_snapshot = metadata.get('profile')
-            if (isinstance(author_snapshot, dict) and author_snapshot.get('id') == self.user_id
-                    and isinstance(author_snapshot.get('full_name'), str)):
+        if self.action == "note_added" and metadata:
+            author_snapshot = metadata.get("author")
+            profile_snapshot = metadata.get("profile")
+            if (
+                isinstance(author_snapshot, dict)
+                and author_snapshot.get("id") == self.user_id
+                and isinstance(author_snapshot.get("full_name"), str)
+            ):
                 author = author_snapshot
-            if (isinstance(profile_snapshot, dict) and profile_snapshot.get('id') == self.profile_id
-                    and isinstance(profile_snapshot.get('name'), str)):
+            if (
+                isinstance(profile_snapshot, dict)
+                and profile_snapshot.get("id") == self.profile_id
+                and isinstance(profile_snapshot.get("name"), str)
+            ):
                 profile = profile_snapshot
         return {
             "id": self.id,

@@ -1,20 +1,15 @@
-<!-- features/assignments/assignment-list/assignment-list.component.html -->
 <div class="admin-page">
   <div class="page-header">
     <h1>Asignaciones de Alertas</h1>
     <p>Seguimiento de técnicos y alertas en atención</p>
   </div>
 
-  <div class="alert-banner alert-success" *ngIf="successMsg()"> {{ successMsg() }}</div>
-  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()"> {{ errorMsg() }}</div>
+  <div class="alert-banner alert-success" *ngIf="successMsg()">{{ successMsg() }}</div>
+  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()">{{ errorMsg() }}</div>
 
   <div class="toolbar">
     <div class="toolbar-left">
-      <button
-        id="btn-toggle-active"
-        class="btn-secondary"
-        (click)="toggleFilter()"
-      >
+      <button id="btn-toggle-active" class="btn-secondary" (click)="toggleFilter()">
         {{ showActiveOnly ? ' Ver Todas' : ' Solo Activas' }}
       </button>
     </div>
@@ -40,28 +35,49 @@
           <td>
             <a [routerLink]="['/alerts', a.alert_id]" class="alert-title-link">#{{ a.alert_id }}</a>
           </td>
-          <td><strong>{{ a.user?.full_name || '—' }}</strong></td>
           <td>
-            <span class="badge" [class]="a.assignment_type === 'auto' ? 'badge-closed' : 'badge-open'">
+            <strong>{{ a.user?.full_name || '—' }}</strong>
+          </td>
+          <td>
+            <span
+              class="badge"
+              [class]="a.assignment_type === 'auto' ? 'badge-closed' : 'badge-open'"
+            >
               {{ a.assignment_type === 'auto' ? ' Auto' : ' Manual' }}
             </span>
           </td>
-          <td class="text-muted">{{ a.assigned_at | date:'dd/MM/yy HH:mm' }}</td>
-          <td class="text-muted">{{ a.completed_at ? (a.completed_at | date:'dd/MM/yy HH:mm') : '—' }}</td>
-          <td>{{ a.response_time_minutes != null ? (a.response_time_minutes + ' min') : '—' }}</td>
+          <td class="text-muted">{{ a.assigned_at | date: 'dd/MM/yy HH:mm' }}</td>
+          <td class="text-muted">
+            {{ a.completed_at ? (a.completed_at | date: 'dd/MM/yy HH:mm') : '—' }}
+          </td>
+          <td>{{ a.response_time_minutes != null ? a.response_time_minutes + ' min' : '—' }}</td>
           <td>
-            <span class="badge" [class]="a.status === 'Anulada' ? 'badge-inactive' : a.completed_at ? 'badge-closed' : 'badge-progress'">
+            <span
+              class="badge"
+              [class]="
+                a.status === 'Anulada'
+                  ? 'badge-inactive'
+                  : a.completed_at
+                    ? 'badge-closed'
+                    : 'badge-progress'
+              "
+            >
               {{ a.status || (a.completed_at ? 'Completada' : 'En Curso') }}
             </span>
           </td>
           <td>
             <div class="action-buttons">
-              <button class="btn-secondary btn-sm" [id]="'btn-note-assignment-' + a.id" (click)="openNoteModal(a)">
-                 Notas del caso
+              <button
+                class="btn-secondary btn-sm"
+                [id]="'btn-note-assignment-' + a.id"
+                (click)="openNoteModal(a)"
+              >
+                Notas del caso
               </button>
               <a
                 class="btn-primary btn-sm"
-                [routerLink]="['/dashboard']" [queryParams]="{fuel_alert: a.alert_id}"
+                [routerLink]="['/dashboard']"
+                [queryParams]="{ fuel_alert: a.alert_id }"
                 *ngIf="!a.completed_at && a.event_type_code === 'LOW_FUEL'"
               >
                 Gestionar abastecimiento
@@ -69,10 +85,11 @@
               <button
                 class="btn-success btn-sm"
                 [id]="'btn-complete-assignment-' + a.id"
-                (click)="openCloseModal(a)" [disabled]="!canEdit(a)"
+                (click)="openCloseModal(a)"
+                [disabled]="!canEdit(a)"
                 *ngIf="!a.completed_at && a.event_type_code !== 'LOW_FUEL'"
               >
-                 Cerrar atención
+                Cerrar atención
               </button>
             </div>
           </td>
@@ -91,53 +108,111 @@
   <div class="modal" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h2>Cerrar atención y alerta</h2>
-      <button class="modal-close" aria-label="Cerrar" (click)="closeCloseModal()" [disabled]="closing()">×</button>
+      <button
+        class="modal-close"
+        aria-label="Cerrar"
+        (click)="closeCloseModal()"
+        [disabled]="closing()"
+      >
+        ×
+      </button>
     </div>
     <div class="modal-body">
       <div class="form-group">
         <label for="solution-text">Solución aplicada *</label>
-        <textarea id="solution-text" class="form-control" [(ngModel)]="solutionText" rows="5"
-          maxlength="2000" [disabled]="closing()" placeholder="Describe la acción realizada y el resultado obtenido"></textarea>
+        <textarea
+          id="solution-text"
+          class="form-control"
+          [(ngModel)]="solutionText"
+          rows="5"
+          maxlength="2000"
+          [disabled]="closing()"
+          placeholder="Describe la acción realizada y el resultado obtenido"
+        ></textarea>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn-secondary" (click)="closeCloseModal()" [disabled]="closing()">Cancelar</button>
-      <button id="btn-confirm-close" class="btn-success" (click)="completeAssignment()"
-        [disabled]="closing() || !solutionText.trim()">{{ closing() ? 'Cerrando...' : 'Cerrar atención' }}</button>
+      <button class="btn-secondary" (click)="closeCloseModal()" [disabled]="closing()">
+        Cancelar
+      </button>
+      <button
+        id="btn-confirm-close"
+        class="btn-success"
+        (click)="completeAssignment()"
+        [disabled]="closing() || !solutionText.trim()"
+      >
+        {{ closing() ? 'Cerrando...' : 'Cerrar atención' }}
+      </button>
     </div>
   </div>
 </div>
 
 <!-- Modal Nota -->
 <div class="modal-backdrop" *ngIf="showNoteModal()">
-  <div class="modal case-notes-modal" role="dialog" aria-modal="true" aria-labelledby="case-notes-title" (click)="$event.stopPropagation()">
+  <div
+    class="modal case-notes-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="case-notes-title"
+    (click)="$event.stopPropagation()"
+  >
     <div class="modal-header">
       <h2 id="case-notes-title">Notas del caso #{{ editingAssignment()?.alert_id }}</h2>
-      <button class="modal-close" aria-label="Cerrar" (click)="closeNoteModal()" [disabled]="savingNote()">×</button>
+      <button
+        class="modal-close"
+        aria-label="Cerrar"
+        (click)="closeNoteModal()"
+        [disabled]="savingNote()"
+      >
+        ×
+      </button>
     </div>
     <div class="modal-body">
-      <p class="notes-help">Las notas se conservan al reasignar el caso. No se editan ni eliminan; para corregir información, añade una nota. Horas de Perú (UTC−5).</p>
+      <p class="notes-help">
+        Las notas se conservan al reasignar el caso. No se editan ni eliminan; para corregir
+        información, añade una nota. Horas de Perú (UTC−5).
+      </p>
       <div class="alert-banner alert-error" role="alert" *ngIf="noteError()">{{ noteError() }}</div>
       <p *ngIf="loadingNotes()" role="status">Cargando notas del caso...</p>
-      <button class="btn-secondary btn-sm" *ngIf="!loadingNotes() && !caseNotes()" (click)="loadNotes()">Reintentar carga</button>
+      <button
+        class="btn-secondary btn-sm"
+        *ngIf="!loadingNotes() && !caseNotes()"
+        (click)="loadNotes()"
+      >
+        Reintentar carga
+      </button>
       <ng-container *ngIf="caseNotes() as data">
-        <p class="notes-help" *ngIf="!data.notes.length">Todavía no hay notas nuevas registradas.</p>
+        <p class="notes-help" *ngIf="!data.notes.length">
+          Todavía no hay notas nuevas registradas.
+        </p>
         <ng-container *ngFor="let group of noteGroups">
-          <section class="notes-group" *ngIf="notesFor(group.category).length" [attr.aria-label]="group.title">
+          <section
+            class="notes-group"
+            *ngIf="notesFor(group.category).length"
+            [attr.aria-label]="group.title"
+          >
             <h3>{{ group.title }}</h3>
             <article class="case-note" *ngFor="let note of notesFor(group.category)">
               <div class="note-heading">
                 <strong>{{ note.user?.full_name || 'Autor no disponible' }}</strong>
                 <span>{{ note.profile?.name || 'Perfil no disponible' }}</span>
-                <time [attr.datetime]="note.timestamp">{{ note.timestamp | date:'dd/MM/yyyy HH:mm:ss':'-0500' }}</time>
+                <time [attr.datetime]="note.timestamp">{{
+                  note.timestamp | date: 'dd/MM/yyyy HH:mm:ss' : '-0500'
+                }}</time>
               </div>
               <p class="note-content">{{ note.detail }}</p>
             </article>
           </section>
         </ng-container>
-        <section class="notes-group legacy-notes" *ngIf="data.legacy_notes.length || data.legacy_audits.length">
+        <section
+          class="notes-group legacy-notes"
+          *ngIf="data.legacy_notes.length || data.legacy_audits.length"
+        >
           <h3>Registros anteriores</h3>
-          <p class="notes-help">Estos textos provienen del campo anterior o de registros automáticos. No se acredita su autor ni su fecha de creación. Las auditorías indican quién hizo el cambio y cuándo.</p>
+          <p class="notes-help">
+            Estos textos provienen del campo anterior o de registros automáticos. No se acredita su
+            autor ni su fecha de creación. Las auditorías indican quién hizo el cambio y cuándo.
+          </p>
           <article class="case-note" *ngFor="let legacy of data.legacy_notes">
             <strong>Texto anterior de la asignación #{{ legacy.assignment_id }}</strong>
             <p class="note-content">{{ legacy.detail }}</p>
@@ -145,26 +220,63 @@
           <details *ngIf="data.legacy_audits.length">
             <summary>Auditoría de cambios anteriores ({{ data.legacy_audits.length }})</summary>
             <article class="case-note" *ngFor="let audit of data.legacy_audits">
-              <div class="note-heading"><strong>{{ audit.user?.full_name || 'Autor no disponible' }}</strong>
+              <div class="note-heading">
+                <strong>{{ audit.user?.full_name || 'Autor no disponible' }}</strong>
                 <span>{{ audit.profile?.name || 'Perfil no disponible' }}</span>
-                <time [attr.datetime]="audit.timestamp">{{ audit.timestamp | date:'dd/MM/yyyy HH:mm:ss':'-0500' }}</time>
+                <time [attr.datetime]="audit.timestamp">{{
+                  audit.timestamp | date: 'dd/MM/yyyy HH:mm:ss' : '-0500'
+                }}</time>
               </div>
               <p class="note-content">{{ audit.detail }}</p>
             </article>
           </details>
         </section>
-        <p class="notes-help" *ngIf="!canAddNote">Consulta de solo lectura. Solo el técnico vigente, Supervisor o Administrador pueden añadir notas a una asignación activa de un caso pendiente.</p>
+        <p class="notes-help" *ngIf="!canAddNote">
+          Consulta de solo lectura. Solo el técnico vigente, Supervisor o Administrador pueden
+          añadir notas a una asignación activa de un caso pendiente.
+        </p>
       </ng-container>
       <div class="form-group new-case-note" *ngIf="canAddNote">
-        <label for="note-text">{{ auth.isTechnician() ? 'Nueva nota técnica' : 'Nueva nota de supervisión / administración' }} *</label>
-        <textarea id="note-text" class="form-control" [(ngModel)]="noteText" rows="3" maxlength="2000" [disabled]="savingNote()"
-          placeholder="Describe la observación o acción realizada (mínimo 5 caracteres)"></textarea>
+        <label for="note-text"
+          >{{
+            auth.isTechnician()
+              ? 'Nueva nota técnica'
+              : 'Nueva nota de supervisión / administración'
+          }}
+          *</label
+        >
+        <textarea
+          id="note-text"
+          class="form-control"
+          [(ngModel)]="noteText"
+          rows="3"
+          maxlength="2000"
+          [disabled]="savingNote()"
+          placeholder="Describe la observación o acción realizada (mínimo 5 caracteres)"
+        ></textarea>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn-secondary" (click)="closeNoteModal()" [disabled]="savingNote()">Cerrar</button>
-      <button class="btn-secondary" *ngIf="caseNotes()" (click)="loadNotes()" [disabled]="savingNote() || loadingNotes()">Actualizar notas</button>
-      <button id="btn-save-note" class="btn-primary" *ngIf="canAddNote" (click)="saveNote()" [disabled]="savingNote() || !noteText.trim()">{{ savingNote() ? 'Guardando...' : 'Añadir nota' }}</button>
+      <button class="btn-secondary" (click)="closeNoteModal()" [disabled]="savingNote()">
+        Cerrar
+      </button>
+      <button
+        class="btn-secondary"
+        *ngIf="caseNotes()"
+        (click)="loadNotes()"
+        [disabled]="savingNote() || loadingNotes()"
+      >
+        Actualizar notas
+      </button>
+      <button
+        id="btn-save-note"
+        class="btn-primary"
+        *ngIf="canAddNote"
+        (click)="saveNote()"
+        [disabled]="savingNote() || !noteText.trim()"
+      >
+        {{ savingNote() ? 'Guardando...' : 'Añadir nota' }}
+      </button>
     </div>
   </div>
 </div>

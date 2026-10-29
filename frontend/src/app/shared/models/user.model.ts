@@ -1,4 +1,3 @@
-// shared/models/user.model.ts
 export interface State {
   id: number;
   name: string;

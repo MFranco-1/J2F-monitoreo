@@ -3,11 +3,11 @@ views/menu_routes.py - Endpoints REST para Opciones de Menú
 """
 
 from flask import Blueprint, request
-from app.security import admin_required
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
+
 from app.controllers import menu_controller
 from app.models.state import State
-
+from app.security import admin_required
 
 menu_bp = Blueprint("menu", __name__)
 
@@ -16,8 +16,10 @@ menu_bp = Blueprint("menu", __name__)
 @jwt_required()
 def get_menu_options():
     """GET /api/menu-options — Lista opciones de menú. ?parent_only=true para solo raíces."""
-    filters = {"parent_only": request.args.get("parent_only", "").lower() == "true",
-               "navigation": request.args.get("navigation", "").lower() == "true"}
+    filters = {
+        "parent_only": request.args.get("parent_only", "").lower() == "true",
+        "navigation": request.args.get("navigation", "").lower() == "true",
+    }
     return menu_controller.get_all_menu_options(filters)
 
 

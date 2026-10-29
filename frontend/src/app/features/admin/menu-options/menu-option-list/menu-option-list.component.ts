@@ -1,4 +1,3 @@
-// features/admin/menu-options/menu-option-list/menu-option-list.component.ts
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { NgFor, NgIf } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -20,7 +19,9 @@ export class MenuOptionListComponent implements OnInit {
   profiles = signal<Profile[]>([]);
   parentOptions = signal<MenuOption[]>([]);
   states = signal<State[]>([]);
-  private activeStateId(): number { return this.states().find(s => s.name === 'Activo')?.id ?? 0; }
+  private activeStateId(): number {
+    return this.states().find((s) => s.name === 'Activo')?.id ?? 0;
+  }
   loading = signal(true);
   showModal = signal(false);
   saving = signal(false);
@@ -28,9 +29,19 @@ export class MenuOptionListComponent implements OnInit {
   successMsg = signal('');
   errorMsg = signal('');
 
-  form: { name: string; url: string; parent_id: number | null; order: number; state_id: number; profile_ids: number[] } = {
-    name: '', url: '',
-    parent_id: null, order: 0, state_id: this.activeStateId(),
+  form: {
+    name: string;
+    url: string;
+    parent_id: number | null;
+    order: number;
+    state_id: number;
+    profile_ids: number[];
+  } = {
+    name: '',
+    url: '',
+    parent_id: null,
+    order: 0,
+    state_id: this.activeStateId(),
     profile_ids: [] as number[],
   };
 
@@ -43,34 +54,56 @@ export class MenuOptionListComponent implements OnInit {
     this.userService.getMenuOptions().subscribe({
       next: ({ menu_options }) => {
         this.menuOptions.set(menu_options);
-        this.parentOptions.set(menu_options.filter(option => !option.parent_id && !option.url?.trim()));
+        this.parentOptions.set(
+          menu_options.filter((option) => !option.parent_id && !option.url?.trim()),
+        );
         this.loading.set(false);
       },
-      error: (err) => { this.loading.set(false); this.errorMsg.set(err?.error?.error || 'No se pudieron cargar las opciones'); },
+      error: (err) => {
+        this.loading.set(false);
+        this.errorMsg.set(err?.error?.error || 'No se pudieron cargar las opciones');
+      },
     });
     this.userService.getProfiles().subscribe({
-      next: ({ profiles, states }) => { this.profiles.set(profiles); this.states.set(states); },
-      error: () => this.errorMsg.set('No se pudieron cargar los perfiles y estados')
+      next: ({ profiles, states }) => {
+        this.profiles.set(profiles);
+        this.states.set(states);
+      },
+      error: () => this.errorMsg.set('No se pudieron cargar los perfiles y estados'),
     });
   }
 
   openNew(): void {
     this.editingOption.set(null);
-    this.form = { name: '', url: '', parent_id: null, order: 0, state_id: this.activeStateId(), profile_ids: [] };
+    this.form = {
+      name: '',
+      url: '',
+      parent_id: null,
+      order: 0,
+      state_id: this.activeStateId(),
+      profile_ids: [],
+    };
     this.showModal.set(true);
   }
 
   openEdit(opt: MenuOption): void {
     this.editingOption.set(opt);
     this.form = {
-      name: opt.name, url: opt.url || '',
-      parent_id: opt.parent_id ?? null, order: opt.order ?? 0, state_id: opt.state_id,
+      name: opt.name,
+      url: opt.url || '',
+      parent_id: opt.parent_id ?? null,
+      order: opt.order ?? 0,
+      state_id: opt.state_id,
       profile_ids: (opt.profiles ?? []).map((p) => p.id),
     };
     this.showModal.set(true);
   }
 
-  closeModal(): void { if (this.saving()) return; this.showModal.set(false); this.errorMsg.set(''); }
+  closeModal(): void {
+    if (this.saving()) return;
+    this.showModal.set(false);
+    this.errorMsg.set('');
+  }
 
   toggleProfile(profileId: number): void {
     const ids: number[] = this.form.profile_ids;
@@ -86,7 +119,10 @@ export class MenuOptionListComponent implements OnInit {
   save(): void {
     if (this.saving()) return;
     const error = firstError(validateForm('menu-options', this.form));
-    if (error) { this.errorMsg.set(error); return; }
+    if (error) {
+      this.errorMsg.set(error);
+      return;
+    }
     this.saving.set(true);
     const editing = this.editingOption();
     const obs = editing
@@ -101,7 +137,10 @@ export class MenuOptionListComponent implements OnInit {
         this.loadData();
         setTimeout(() => this.successMsg.set(''), 3000);
       },
-      error: (err) => { this.saving.set(false); this.errorMsg.set(err?.error?.error || 'Error al guardar'); },
+      error: (err) => {
+        this.saving.set(false);
+        this.errorMsg.set(err?.error?.error || 'Error al guardar');
+      },
     });
   }
 

@@ -3,9 +3,10 @@ views/user_routes.py - Endpoints REST para Usuarios
 """
 
 from flask import Blueprint, request
-from app.security import admin_required
 from flask_jwt_extended import jwt_required
+
 from app.controllers import user_controller
+from app.security import admin_required
 
 user_bp = Blueprint("users", __name__)
 

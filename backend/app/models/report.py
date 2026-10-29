@@ -3,8 +3,8 @@ models/report.py - Modelo Reporte (Report)
 Almacena metadatos de los informes generados por el sistema.
 """
 
-from app.datetime_utils import utcnow, as_utc_naive, iso_utc
 from app import db
+from app.datetime_utils import iso_utc, utcnow
 
 
 class Report(db.Model):
@@ -12,15 +12,16 @@ class Report(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
-    # 'alerts_summary' | 'operator_performance' | 'response_times' | 'custom'
+    # Tipos admitidos por los generadores de reportes.
     type = db.Column(db.String(50), nullable=False)
     description = db.Column(db.Text, nullable=True)
     # Filtros aplicados al reporte (guardados como JSON string)
     filters_json = db.Column(db.Text, nullable=True)
     date_range_start = db.Column(db.DateTime, nullable=True)
     date_range_end = db.Column(db.DateTime, nullable=True)
+    # Creador del reporte; el autor de cada generación se conserva en result_json.
     generated_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
-    # Resultado del reporte en JSON (para reportes pequeños) o ruta a archivo
+    # Resultado persistido con filtros, autor y fecha de generación.
     result_json = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=utcnow)
 

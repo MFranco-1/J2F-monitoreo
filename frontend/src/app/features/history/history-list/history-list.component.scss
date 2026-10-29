@@ -1,2 +1,9 @@
-/* features/history/history-list/history-list.component.scss */
-.admin-page { max-width: 1400px; }
+.admin-page {
+  max-width: 1400px;
+}
+.history-detail {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

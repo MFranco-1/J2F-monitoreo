@@ -1,12 +1,11 @@
-<!-- features/alerts/alert-detail/alert-detail.component.html -->
 <div class="alert-detail-page" *ngIf="!loading()">
   <div class="page-header">
     <h1>Detalle de Alerta #{{ alert()?.id }}</h1>
     <p>{{ alert()?.title }}</p>
   </div>
 
-  <div class="alert-banner alert-success" *ngIf="successMsg()"> {{ successMsg() }}</div>
-  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()"> {{ errorMsg() }}</div>
+  <div class="alert-banner alert-success" *ngIf="successMsg()">{{ successMsg() }}</div>
+  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()">{{ errorMsg() }}</div>
 
   <div class="detail-grid" *ngIf="alert()">
     <!-- Panel izquierdo: info + acciones -->
@@ -22,10 +21,24 @@
           </span>
         </div>
         <div class="info-grid">
-          <div class="info-item"><span class="info-label">Cliente</span><span>{{ alert()?.client?.business_name || 'No especificado' }}</span></div>
-          <div class="info-item"><span class="info-label">Vehículo</span><span *ngIf="alert()?.vehicle as vehicle">{{ vehicle.plate }} · {{ vehicle.brand || '' }} {{ vehicle.model || '' }}</span><span *ngIf="!alert()?.vehicle">No especificado</span></div>
-          <div class="info-item"><span class="info-label">Dispositivo GPS</span><span>{{ alert()?.gps_device?.imei || 'No especificado' }}</span></div>
-          <div class="info-item"><span class="info-label">Tipo de evento</span><span>{{ alert()?.event_type?.name || 'No especificado' }}</span></div>
+          <div class="info-item">
+            <span class="info-label">Cliente</span
+            ><span>{{ alert()?.client?.business_name || 'No especificado' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Vehículo</span
+            ><span *ngIf="alert()?.vehicle as vehicle"
+              >{{ vehicle.plate }} · {{ vehicle.brand || '' }} {{ vehicle.model || '' }}</span
+            ><span *ngIf="!alert()?.vehicle">No especificado</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Dispositivo GPS</span
+            ><span>{{ alert()?.gps_device?.imei || 'No especificado' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Tipo de evento</span
+            ><span>{{ alert()?.event_type?.name || 'No especificado' }}</span>
+          </div>
           <div class="info-item">
             <span class="info-label">Tipo de Servicio</span>
             <span>{{ alert()?.service_type || '—' }}</span>
@@ -40,7 +53,7 @@
           </div>
           <div class="info-item">
             <span class="info-label">Abierta el</span>
-            <span>{{ alert()?.opened_at | date:'dd/MM/yyyy HH:mm' }}</span>
+            <span>{{ alert()?.opened_at | date: 'dd/MM/yyyy HH:mm' }}</span>
           </div>
           <div class="info-item" *ngIf="alert()?.response_time_minutes != null">
             <span class="info-label">Tiempo de resolución</span>
@@ -60,23 +73,29 @@
         <!-- Auto-asignar -->
         <button
           class="btn-primary"
-          (click)="autoAssign()" [disabled]="!auth.canAssign() || !!alert()!.current_assignee"
+          (click)="autoAssign()"
+          [disabled]="!auth.canAssign() || !!alert()!.current_assignee"
           *ngIf="!alert()?.current_assignee && !isTerminal"
           id="btn-auto-assign-detail"
         >
-           Auto-asignar Técnico
+          Auto-asignar Técnico
         </button>
       </div>
 
       <div class="card state-change-card" *ngIf="isFuelAlert && !isTerminal">
         <h3>Abastecimiento</h3>
         <p>La alerta se cierra únicamente al confirmar el abastecimiento documentado.</p>
-        <a class="btn-primary" [routerLink]="['/dashboard']" [queryParams]="{fuel_alert: alert()?.id}">Gestionar abastecimiento en el mapa</a>
+        <a
+          class="btn-primary"
+          [routerLink]="['/dashboard']"
+          [queryParams]="{ fuel_alert: alert()?.id }"
+          >Gestionar abastecimiento en el mapa</a
+        >
       </div>
 
       <!-- Cambio de Estado -->
       <div class="card state-change-card" *ngIf="transitions.length > 0 && canAttend">
-        <h3> Cambiar Estado</h3>
+        <h3>Cambiar Estado</h3>
         <div class="form-group">
           <label for="new-state">Nuevo Estado</label>
           <select id="new-state" class="form-control" [(ngModel)]="newStateName">
@@ -85,9 +104,20 @@
           </select>
         </div>
         <div class="form-group">
-          <label for="state-notes">{{ newStateName === 'Cerrado' ? 'Solución aplicada *' : 'Notas (opcional)' }}</label>
-          <textarea id="state-notes" class="form-control" [(ngModel)]="stateNotes" rows="2"
-            [placeholder]="newStateName === 'Cerrado' ? 'Describe la solución aplicada...' : 'Observaciones del cambio...'"></textarea>
+          <label for="state-notes">{{
+            newStateName === 'Cerrado' ? 'Solución aplicada *' : 'Notas (opcional)'
+          }}</label>
+          <textarea
+            id="state-notes"
+            class="form-control"
+            [(ngModel)]="stateNotes"
+            rows="2"
+            [placeholder]="
+              newStateName === 'Cerrado'
+                ? 'Describe la solución aplicada...'
+                : 'Observaciones del cambio...'
+            "
+          ></textarea>
         </div>
         <button id="btn-change-state" class="btn-primary" (click)="changeState()">
           Aplicar Cambio de Estado
@@ -95,26 +125,44 @@
       </div>
       <div class="card state-change-card" *ngIf="canCancel">
         <h3>Anular alerta</h3>
-        <p>Para casos creados por error o duplicados. Se conserva el historial y se finalizan las asignaciones pendientes sin contar una resolución.</p>
+        <p>
+          Para casos creados por error o duplicados. Se conserva el historial y se finalizan las
+          asignaciones pendientes sin contar una resolución.
+        </p>
         <div class="form-group">
           <label for="cancellation-reason">Motivo de anulación *</label>
-          <textarea id="cancellation-reason" class="form-control" [(ngModel)]="cancellationReason" rows="3" maxlength="1000" [disabled]="cancelling()" placeholder="Explica por qué no corresponde atender este caso..."></textarea>
+          <textarea
+            id="cancellation-reason"
+            class="form-control"
+            [(ngModel)]="cancellationReason"
+            rows="3"
+            maxlength="1000"
+            [disabled]="cancelling()"
+            placeholder="Explica por qué no corresponde atender este caso..."
+          ></textarea>
         </div>
-        <button id="btn-cancel-alert" class="btn-danger" (click)="cancelAlert()" [disabled]="cancelling()">{{ cancelling() ? 'Anulando...' : 'Anular alerta' }}</button>
+        <button
+          id="btn-cancel-alert"
+          class="btn-danger"
+          (click)="cancelAlert()"
+          [disabled]="cancelling()"
+        >
+          {{ cancelling() ? 'Anulando...' : 'Anular alerta' }}
+        </button>
       </div>
     </div>
 
     <!-- Panel derecho: historial -->
     <div class="detail-right">
       <div class="card history-card">
-        <h3> Historial de Trazabilidad</h3>
+        <h3>Historial de Trazabilidad</h3>
         <div class="history-timeline">
           <div class="timeline-item" *ngFor="let entry of history()">
             <div class="timeline-dot"></div>
             <div class="timeline-content">
               <div class="timeline-header">
                 <span class="timeline-action">{{ getActionLabel(entry.action) }}</span>
-                <span class="timeline-time">{{ entry.timestamp | date:'dd/MM HH:mm' }}</span>
+                <span class="timeline-time">{{ entry.timestamp | date: 'dd/MM HH:mm' }}</span>
               </div>
               <div class="timeline-detail" *ngIf="entry.detail">{{ entry.detail }}</div>
               <div class="timeline-state" *ngIf="entry.previous_state && entry.new_state">
@@ -123,7 +171,8 @@
                 <span class="state-to">{{ entry.new_state }}</span>
               </div>
               <div class="timeline-user" *ngIf="entry.user">
-                 {{ entry.user.full_name }}<span *ngIf="entry.profile"> · {{ entry.profile.name }}</span>
+                {{ entry.user.full_name
+                }}<span *ngIf="entry.profile"> · {{ entry.profile.name }}</span>
               </div>
             </div>
           </div>

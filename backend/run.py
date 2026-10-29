@@ -8,6 +8,7 @@ app = create_app()
 
 if __name__ == "__main__":
     from init_db import main as verify_database
+
     if verify_database() != 0:
         raise SystemExit(1)
     app.run(

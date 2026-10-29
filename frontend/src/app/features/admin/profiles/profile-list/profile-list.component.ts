@@ -1,4 +1,3 @@
-// features/admin/profiles/profile-list/profile-list.component.ts
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { NgFor, NgIf } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -18,7 +17,9 @@ export class ProfileListComponent implements OnInit {
 
   profiles = signal<Profile[]>([]);
   states = signal<State[]>([]);
-  private activeStateId(): number { return this.states().find(s => s.name === 'Activo')?.id ?? 0; }
+  private activeStateId(): number {
+    return this.states().find((s) => s.name === 'Activo')?.id ?? 0;
+  }
   loading = signal(true);
   showModal = signal(false);
   saving = signal(false);
@@ -26,7 +27,6 @@ export class ProfileListComponent implements OnInit {
   successMsg = signal('');
   errorMsg = signal('');
 
-  // Form model
   form: Partial<Profile> & { state_id: number } = {
     name: '',
     description: '',
@@ -45,7 +45,10 @@ export class ProfileListComponent implements OnInit {
         this.profiles.set(profiles);
         this.loading.set(false);
       },
-      error: (err) => { this.loading.set(false); this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los perfiles'); },
+      error: (err) => {
+        this.loading.set(false);
+        this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los perfiles');
+      },
     });
   }
 
@@ -74,7 +77,10 @@ export class ProfileListComponent implements OnInit {
   save(): void {
     if (this.saving()) return;
     const error = firstError(validateForm('profiles', this.form));
-    if (error) { this.errorMsg.set(error); return; }
+    if (error) {
+      this.errorMsg.set(error);
+      return;
+    }
     this.saving.set(true);
     const editing = this.editingProfile();
     const obs = editing
@@ -89,7 +95,10 @@ export class ProfileListComponent implements OnInit {
         this.loadProfiles();
         setTimeout(() => this.successMsg.set(''), 3000);
       },
-      error: (err) => { this.saving.set(false); this.errorMsg.set(err?.error?.error || 'Error al guardar'); },
+      error: (err) => {
+        this.saving.set(false);
+        this.errorMsg.set(err?.error?.error || 'Error al guardar');
+      },
     });
   }
 

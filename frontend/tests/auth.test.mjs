@@ -16,8 +16,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let injectedAuth;
 const cache = new Map();
 const imports = {
-  '@angular/core': { ...angular, Component: () => value => value,
-    Injectable: () => value => value, inject: () => injectedAuth },
+  '@angular/core': {
+    ...angular,
+    Component: () => (value) => value,
+    Injectable: () => (value) => value,
+    inject: () => injectedAuth,
+  },
   '@angular/common': {},
   '@angular/common/http': http,
   '@angular/forms': {},
@@ -31,16 +35,22 @@ function load(relative) {
   const module = { exports: {} };
   cache.set(filename, module.exports);
   const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
-      experimentalDecorators: true }
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      experimentalDecorators: true,
+    },
   }).outputText;
-  const require = id => {
+  const require = (id) => {
     if (imports[id]) return imports[id];
     if (id.startsWith('.')) return load(path.resolve(path.dirname(filename), id + '.ts'));
     throw new Error('Import no previsto: ' + id);
   };
   vm.runInThisContext('(function(require,module,exports){' + compiled + '\n})', { filename })(
-    require, module, module.exports);
+    require,
+    module,
+    module.exports,
+  );
   cache.set(filename, module.exports);
   return module.exports;
 }
@@ -48,44 +58,74 @@ const { AuthService } = load('src/app/core/services/auth.service.ts');
 const { authInterceptor } = load('src/app/core/interceptors/auth.interceptor.ts');
 const { UserService } = load('src/app/core/services/user.service.ts');
 const { SidebarComponent } = load('src/app/layout/sidebar/sidebar.component.ts');
-const { MenuOptionListComponent } = load('src/app/features/admin/menu-options/menu-option-list/menu-option-list.component.ts');
+const { MenuOptionListComponent } = load(
+  'src/app/features/admin/menu-options/menu-option-list/menu-option-list.component.ts',
+);
 const { environment } = load('src/environments/environment.ts');
 
 function setup() {
   const storage = new Map([
-    ['j2f_access_token', 'old-access'], ['j2f_refresh_token', 'actual-refresh'],
-    ['j2f_user', JSON.stringify({ id: 2, email: 'test@example.invalid', full_name: 'Prueba',
-      profile: { id: 2, name: 'Técnico', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } },
-      profiles: [{ id: 2, name: 'Técnico', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } }],
-      requires_profile_selection: false })]
+    ['j2f_access_token', 'old-access'],
+    ['j2f_refresh_token', 'actual-refresh'],
+    [
+      'j2f_user',
+      JSON.stringify({
+        id: 2,
+        email: 'test@example.invalid',
+        full_name: 'Prueba',
+        profile: {
+          id: 2,
+          name: 'Técnico',
+          state_id: 17,
+          state: { id: 17, name: 'Activo', type: 'user' },
+        },
+        profiles: [
+          { id: 2, name: 'Técnico', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } },
+        ],
+        requires_profile_selection: false,
+      }),
+    ],
   ]);
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
-    getItem: key => storage.get(key) ?? null,
-    setItem: (key, value) => storage.set(key, String(value)),
-    removeItem: key => storage.delete(key)
-  }});
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, String(value)),
+      removeItem: (key) => storage.delete(key),
+    },
+  });
   const pending = [];
   const navigations = [];
-  const backend = request => {
+  const backend = (request) => {
     const response = new rx.Subject();
     pending.push({ request, response });
     return response;
   };
-  const request = (method, url, body, options = {}) => rx.defer(() => {
-    const req = new http.HttpRequest(method, url, body, { headers: new http.HttpHeaders(options.headers || {}) });
-    return authInterceptor(req, backend).pipe(rx.map(event => event.body));
-  });
+  const request = (method, url, body, options = {}) =>
+    rx.defer(() => {
+      const req = new http.HttpRequest(method, url, body, {
+        headers: new http.HttpHeaders(options.headers || {}),
+      });
+      return authInterceptor(req, backend).pipe(rx.map((event) => event.body));
+    });
   const client = { post: (url, body, options) => request('POST', url, body, options) };
-  const auth = new AuthService(client, { navigate: value => navigations.push(value) });
+  const auth = new AuthService(client, { navigate: (value) => navigations.push(value) });
   injectedAuth = auth;
   const success = (index, body) => {
     pending[index].response.next(new http.HttpResponse({ body }));
     pending[index].response.complete();
   };
-  const fail = (index, status) => pending[index].response.error(new http.HttpErrorResponse({ status }));
-  return { auth, pending, navigations, success, fail,
-    get: route => request('GET', environment.apiUrl + route, null),
-    outside: url => request('GET', url, null) };
+  const fail = (index, status) =>
+    pending[index].response.error(new http.HttpErrorResponse({ status }));
+  return {
+    auth,
+    pending,
+    navigations,
+    success,
+    fail,
+    get: (route) => request('GET', environment.apiUrl + route, null),
+    outside: (url) => request('GET', url, null),
+  };
 }
 
 test('conserva el refresh token explícito en Authorization', () => {
@@ -99,8 +139,8 @@ test('conserva el refresh token explícito en Authorization', () => {
 test('dos respuestas 401 comparten una renovación y reintentan con el token nuevo', () => {
   const t = setup();
   const results = [];
-  t.get('/alerts/').subscribe(value => results.push(value));
-  t.get('/reports/').subscribe(value => results.push(value));
+  t.get('/alerts/').subscribe((value) => results.push(value));
+  t.get('/reports/').subscribe((value) => results.push(value));
   t.fail(0, 401);
   t.fail(1, 401);
   assert.equal(t.pending.length, 3);
@@ -134,7 +174,7 @@ test('no envía credenciales a dominios externos', () => {
 test('un refresh rechazado termina la sesión sin nuevas peticiones en bucle', () => {
   const t = setup();
   const errors = [];
-  t.get('/alerts/').subscribe({ error: error => errors.push(error.status) });
+  t.get('/alerts/').subscribe({ error: (error) => errors.push(error.status) });
   t.fail(0, 401);
   t.fail(1, 401);
   assert.equal(t.pending.length, 2);
@@ -145,7 +185,7 @@ test('un refresh rechazado termina la sesión sin nuevas peticiones en bucle', (
 test('una renovación pendiente no restaura una sesión ya cerrada', () => {
   const t = setup();
   const errors = [];
-  t.auth.refreshToken().subscribe({ error: error => errors.push(error.message) });
+  t.auth.refreshToken().subscribe({ error: (error) => errors.push(error.message) });
   t.auth.endSession();
   t.success(0, { access_token: 'obsolete-response' });
   assert.equal(t.auth.getToken(), null);
@@ -155,7 +195,7 @@ test('una renovación pendiente no restaura una sesión ya cerrada', () => {
 test('un 403 en el reintento no elimina una sesión válida', () => {
   const t = setup();
   const errors = [];
-  t.get('/users/').subscribe({ error: error => errors.push(error.status) });
+  t.get('/users/').subscribe({ error: (error) => errors.push(error.status) });
   t.fail(0, 401);
   t.success(1, { access_token: 'new-access' });
   t.fail(2, 403);
@@ -164,15 +204,34 @@ test('un 403 en el reintento no elimina una sesión válida', () => {
   assert.equal(t.navigations.length, 0);
 });
 
-
 test('login conserva el perfil único sin asumir que Activo tiene id 1', () => {
   const t = setup();
   t.auth.login('prueba', 'clave').subscribe();
-  t.success(0, { access_token: 'login-access', refresh_token: 'login-refresh',
+  t.success(0, {
+    access_token: 'login-access',
+    refresh_token: 'login-refresh',
     requires_profile_selection: false,
-    profiles: [{ id: 4, name: 'Administrador', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } }],
-    user: { id: 3, email: 'test@example.invalid', full_name: 'Prueba', profile_id: 4,
-      profile: { id: 4, name: 'Administrador', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } } } });
+    profiles: [
+      {
+        id: 4,
+        name: 'Administrador',
+        state_id: 17,
+        state: { id: 17, name: 'Activo', type: 'user' },
+      },
+    ],
+    user: {
+      id: 3,
+      email: 'test@example.invalid',
+      full_name: 'Prueba',
+      profile_id: 4,
+      profile: {
+        id: 4,
+        name: 'Administrador',
+        state_id: 17,
+        state: { id: 17, name: 'Activo', type: 'user' },
+      },
+    },
+  });
   assert.equal(t.auth.currentUser().profile.id, 4);
   assert.equal(t.auth.isAdmin(), true);
   assert.equal(t.auth.isTechnician(), false);
@@ -184,11 +243,30 @@ test('login conserva el perfil único sin asumir que Activo tiene id 1', () => {
 test('un perfil inactivo no concede permisos en la interfaz', () => {
   const t = setup();
   t.auth.login('prueba', 'clave').subscribe();
-  t.success(0, { access_token: 'login-access', refresh_token: 'login-refresh',
+  t.success(0, {
+    access_token: 'login-access',
+    refresh_token: 'login-refresh',
     requires_profile_selection: false,
-    profiles: [{ id: 1, name: 'Administrador', state_id: 29, state: { id: 29, name: 'Inactivo', type: 'user' } }],
-    user: { id: 3, email: 'test@example.invalid', full_name: 'Prueba',
-      profile: { id: 1, name: 'Administrador', state_id: 29, state: { id: 29, name: 'Inactivo', type: 'user' } } } });
+    profiles: [
+      {
+        id: 1,
+        name: 'Administrador',
+        state_id: 29,
+        state: { id: 29, name: 'Inactivo', type: 'user' },
+      },
+    ],
+    user: {
+      id: 3,
+      email: 'test@example.invalid',
+      full_name: 'Prueba',
+      profile: {
+        id: 1,
+        name: 'Administrador',
+        state_id: 29,
+        state: { id: 29, name: 'Inactivo', type: 'user' },
+      },
+    },
+  });
   assert.equal(t.auth.isAdmin(), false);
   assert.equal(t.auth.isTechnician(), false);
   assert.equal(t.auth.isOperator(), false);
@@ -207,10 +285,25 @@ test('el perfil Técnico se reconoce al restaurar una sesión', () => {
 test('el perfil Operador asigna alertas pero no actúa como Técnico', () => {
   const t = setup();
   t.auth.login('operador', 'clave').subscribe();
-  const profile = { id: 3, name: 'Operador', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } };
-  t.success(0, { access_token: 'operator-access', refresh_token: 'operator-refresh',
-    requires_profile_selection: false, profiles: [profile],
-    user: { id: 4, email: 'operator@example.invalid', full_name: 'Operador Prueba', profile, profiles: [profile] } });
+  const profile = {
+    id: 3,
+    name: 'Operador',
+    state_id: 17,
+    state: { id: 17, name: 'Activo', type: 'user' },
+  };
+  t.success(0, {
+    access_token: 'operator-access',
+    refresh_token: 'operator-refresh',
+    requires_profile_selection: false,
+    profiles: [profile],
+    user: {
+      id: 4,
+      email: 'operator@example.invalid',
+      full_name: 'Operador Prueba',
+      profile,
+      profiles: [profile],
+    },
+  });
   assert.equal(t.auth.isOperator(), true);
   assert.equal(t.auth.isTechnician(), false);
   assert.equal(t.auth.canAssign(), true);
@@ -219,10 +312,25 @@ test('el perfil Operador asigna alertas pero no actúa como Técnico', () => {
 test('el perfil Supervisor puede asignar sin actuar como Técnico', () => {
   const t = setup();
   t.auth.login('supervisor', 'clave').subscribe();
-  const profile = { id: 4, name: 'Supervisor', state_id: 17, state: { id: 17, name: 'Activo', type: 'user' } };
-  t.success(0, { access_token: 'supervisor-access', refresh_token: 'supervisor-refresh',
-    requires_profile_selection: false, profiles: [profile],
-    user: { id: 5, email: 'supervisor@example.invalid', full_name: 'Supervisor Prueba', profile, profiles: [profile] } });
+  const profile = {
+    id: 4,
+    name: 'Supervisor',
+    state_id: 17,
+    state: { id: 17, name: 'Activo', type: 'user' },
+  };
+  t.success(0, {
+    access_token: 'supervisor-access',
+    refresh_token: 'supervisor-refresh',
+    requires_profile_selection: false,
+    profiles: [profile],
+    user: {
+      id: 5,
+      email: 'supervisor@example.invalid',
+      full_name: 'Supervisor Prueba',
+      profile,
+      profiles: [profile],
+    },
+  });
   assert.equal(t.auth.isSupervisor(), true);
   assert.equal(t.auth.isOperator(), false);
   assert.equal(t.auth.isTechnician(), false);
@@ -235,21 +343,40 @@ test('solo Administrador y Supervisor activos pueden anular, también en cuentas
     const profile = { id: 11, name, state: { name: 'Activo' } };
     const supervisor = { id: 12, name: 'Supervisor', state: { name: 'Activo' } };
     t.auth.login('nueva', 'clave').subscribe();
-    t.success(0, { access_token: 'new', refresh_token: 'refresh', requires_profile_selection: false,
-      profiles: [profile, supervisor], user: { id: 50, full_name: 'Usuario nuevo', profile, profiles: [profile, supervisor] } });
+    t.success(0, {
+      access_token: 'new',
+      refresh_token: 'refresh',
+      requires_profile_selection: false,
+      profiles: [profile, supervisor],
+      user: { id: 50, full_name: 'Usuario nuevo', profile, profiles: [profile, supervisor] },
+    });
     assert.equal(t.auth.canCancelAlert(), ['Administrador', 'Supervisor'].includes(name));
     profile.state.name = 'Inactivo';
     // Una sesión restaurada relee el estado y no conserva facultades del perfil inactivo.
-    localStorage.setItem('j2f_user', JSON.stringify({ id: 50, full_name: 'Usuario nuevo', profile,
-      profiles: [profile, supervisor], requires_profile_selection: false }));
+    localStorage.setItem(
+      'j2f_user',
+      JSON.stringify({
+        id: 50,
+        full_name: 'Usuario nuevo',
+        profile,
+        profiles: [profile, supervisor],
+        requires_profile_selection: false,
+      }),
+    );
     assert.equal(new AuthService({}, {}).canCancelAlert(), false);
   }
 });
 
 test('una sesión incompleta anterior requiere iniciar sesión de nuevo', () => {
   setup();
-  localStorage.setItem('j2f_user', JSON.stringify({ id: 3, full_name: 'Anterior',
-    profiles: [{ id: 1, name: 'Administrador', state_id: 1 }] }));
+  localStorage.setItem(
+    'j2f_user',
+    JSON.stringify({
+      id: 3,
+      full_name: 'Anterior',
+      profiles: [{ id: 1, name: 'Administrador', state_id: 1 }],
+    }),
+  );
   const auth = new AuthService({}, { navigate: () => {} });
   assert.equal(auth.isAuthenticated(), false);
   assert.equal(auth.isAdmin(), false);
@@ -285,11 +412,23 @@ test('el sidebar elige el menú configurado o el respaldo, nunca ambos', () => {
     sidebar.ngOnDestroy();
     return sections;
   };
-  const dynamic = render(rx.of({ configured: true, menu_options: [
-    { id: 1, name: 'MONITOREO', url: null, icon: 'folder', state_id: 1, children: [
-      { id: 2, name: 'Alertas configuradas', url: '/alerts', icon: 'alerts', state_id: 1 }
-    ] }
-  ] }));
+  const dynamic = render(
+    rx.of({
+      configured: true,
+      menu_options: [
+        {
+          id: 1,
+          name: 'MONITOREO',
+          url: null,
+          icon: 'folder',
+          state_id: 1,
+          children: [
+            { id: 2, name: 'Alertas configuradas', url: '/alerts', icon: 'alerts', state_id: 1 },
+          ],
+        },
+      ],
+    }),
+  );
   assert.equal(dynamic.length, 1);
   assert.equal(dynamic[0].title, 'MONITOREO');
   assert.equal(dynamic[0].items[0].label, 'Alertas configuradas');
@@ -298,26 +437,51 @@ test('el sidebar elige el menú configurado o el respaldo, nunca ambos', () => {
   assert.equal(render(rx.throwError(() => new Error('API no disponible'))).length, 3);
   assert.deepEqual(render(rx.of({ configured: true, menu_options: [] })), []);
   const nonAdminFallback = render(rx.of({ configured: false, menu_options: [] }), false);
-  assert.equal(nonAdminFallback.flatMap(section => section.items)
-    .some(item => item.route === '/master-data'), true);
-  assert.equal(nonAdminFallback.flatMap(section => section.items)
-    .some(item => item.route?.startsWith('/admin/')), false);
+  assert.equal(
+    nonAdminFallback
+      .flatMap((section) => section.items)
+      .some((item) => item.route === '/master-data'),
+    true,
+  );
+  assert.equal(
+    nonAdminFallback
+      .flatMap((section) => section.items)
+      .some((item) => item.route?.startsWith('/admin/')),
+    false,
+  );
 });
 
 test('login multiperfil conserva solo el token temporal y permite seleccionar en dashboard', () => {
   const t = setup();
   t.auth.login('prueba', 'clave').subscribe();
-  const profiles = [{ id: 1, name: 'Administrador', state: { name: 'Activo' } },
-                    { id: 2, name: 'Técnico', state: { name: 'Activo' } }];
-  t.success(0, { access_token: 'temporary', requires_profile_selection: true, profiles,
-    user: { id: 3, email: 'multi@example.invalid', full_name: 'Usuario Multi', profiles } });
+  const profiles = [
+    { id: 1, name: 'Administrador', state: { name: 'Activo' } },
+    { id: 2, name: 'Técnico', state: { name: 'Activo' } },
+  ];
+  t.success(0, {
+    access_token: 'temporary',
+    requires_profile_selection: true,
+    profiles,
+    user: { id: 3, email: 'multi@example.invalid', full_name: 'Usuario Multi', profiles },
+  });
   assert.equal(t.auth.requiresProfileSelection(), true);
   assert.equal(t.auth.hasActiveProfile(), false);
   assert.equal(localStorage.getItem('j2f_refresh_token'), null);
   t.auth.selectProfile(2).subscribe();
   assert.ok(t.pending[1].request.url.endsWith('/auth/select-profile'));
-  t.success(1, { access_token: 'final', refresh_token: 'refresh-final', requires_profile_selection: false,
-    profiles, user: { id: 3, email: 'multi@example.invalid', full_name: 'Usuario Multi', profile: profiles[1], profiles } });
+  t.success(1, {
+    access_token: 'final',
+    refresh_token: 'refresh-final',
+    requires_profile_selection: false,
+    profiles,
+    user: {
+      id: 3,
+      email: 'multi@example.invalid',
+      full_name: 'Usuario Multi',
+      profile: profiles[1],
+      profiles,
+    },
+  });
   assert.equal(t.auth.currentUser().profile.id, 2);
   assert.equal(t.auth.isTechnician(), true);
   assert.equal(t.auth.isOperator(), false);
@@ -325,10 +489,22 @@ test('login multiperfil conserva solo el token temporal y permite seleccionar en
 });
 
 test('la interfaz requerida está integrada sin pantalla ni modal de selección adicional', () => {
-  const dashboard = fs.readFileSync(path.join(root, 'src/app/features/dashboard/dashboard.component.html'), 'utf8');
-  const dashboardTs = fs.readFileSync(path.join(root, 'src/app/features/dashboard/dashboard.component.ts'), 'utf8');
-  const users = fs.readFileSync(path.join(root, 'src/app/features/admin/users/user-list/user-list.component.html'), 'utf8');
-  const alerts = fs.readFileSync(path.join(root, 'src/app/features/alerts/alert-list/alert-list.component.html'), 'utf8');
+  const dashboard = fs.readFileSync(
+    path.join(root, 'src/app/features/dashboard/dashboard.component.html'),
+    'utf8',
+  );
+  const dashboardTs = fs.readFileSync(
+    path.join(root, 'src/app/features/dashboard/dashboard.component.ts'),
+    'utf8',
+  );
+  const users = fs.readFileSync(
+    path.join(root, 'src/app/features/admin/users/user-list/user-list.component.html'),
+    'utf8',
+  );
+  const alerts = fs.readFileSync(
+    path.join(root, 'src/app/features/alerts/alert-list/alert-list.component.html'),
+    'utf8',
+  );
   const routes = fs.readFileSync(path.join(root, 'src/app/app.routes.ts'), 'utf8');
   assert.match(dashboard, /Bienvenido, \{\{ auth\.currentUser\(\)\?\.full_name \}\}/);
   assert.match(dashboard, /profile-selector/);
@@ -339,7 +515,10 @@ test('la interfaz requerida está integrada sin pantalla ni modal de selección 
   assert.match(alerts, /Todos los clientes|filter-client|filter-vehicle/);
   assert.match(alerts, /auth\.canAssign\(\)|assignment-technician|Reasignar/);
   assert.match(routes, /path: 'master-data'[\s\S]*activeProfileGuard/);
-  const masters = fs.readFileSync(path.join(root, 'src/app/features/admin/master-data/master-data.component.html'), 'utf8');
+  const masters = fs.readFileSync(
+    path.join(root, 'src/app/features/admin/master-data/master-data.component.html'),
+    'utf8',
+  );
   assert.match(masters, /\*ngIf="auth\.isAdmin\(\)"/);
   assert.doesNotMatch(routes, /select-profile/);
 });
@@ -348,7 +527,14 @@ test('el CRUD muestra todas las opciones, incluso sin ruta, inactivas o sin acce
   const parent = { id: 9, name: 'MONITOREO', url: null, parent_id: null, state_id: 1 };
   const child = { id: 3, name: 'Panel de control', url: '/dashboard', parent_id: 9, state_id: 1 };
   const contacts = { id: 13, name: 'CONTACTOS', url: '', parent_id: 9, state_id: 1 };
-  const inactive = { id: 14, name: 'Archivo', url: '   ', parent_id: null, state_id: 2, profiles: [] };
+  const inactive = {
+    id: 14,
+    name: 'Archivo',
+    url: '   ',
+    parent_id: null,
+    state_id: 2,
+    profiles: [],
+  };
   const pending = { id: 15, name: 'Consulta', url: '/consulta', parent_id: 9, state_id: 1 };
   injectedAuth = {
     getMenuOptions: () => rx.of({ menu_options: [parent, child, contacts, inactive, pending] }),
@@ -356,20 +542,40 @@ test('el CRUD muestra todas las opciones, incluso sin ruta, inactivas o sin acce
   };
   const component = new MenuOptionListComponent();
   component.loadData();
-  assert.deepEqual(component.menuOptions().map(option => option.name),
-    ['MONITOREO', 'Panel de control', 'CONTACTOS', 'Archivo', 'Consulta']);
-  assert.deepEqual(component.parentOptions().map(option => option.name), ['MONITOREO', 'Archivo']);
+  assert.deepEqual(
+    component.menuOptions().map((option) => option.name),
+    ['MONITOREO', 'Panel de control', 'CONTACTOS', 'Archivo', 'Consulta'],
+  );
+  assert.deepEqual(
+    component.parentOptions().map((option) => option.name),
+    ['MONITOREO', 'Archivo'],
+  );
   assert.equal(component.loading(), false);
 });
 
 test('una opción sin ruta se puede seleccionar para editar o solicitar su eliminación', () => {
-  const contact = { id: 13, name: 'CONTACTOS', url: '', parent_id: 9, order: 0, state_id: 1, profiles: [{ id: 1 }] };
-  const updates = [], deletions = [];
+  const contact = {
+    id: 13,
+    name: 'CONTACTOS',
+    url: '',
+    parent_id: 9,
+    order: 0,
+    state_id: 1,
+    profiles: [{ id: 1 }],
+  };
+  const updates = [],
+    deletions = [];
   injectedAuth = {
     getMenuOptions: () => rx.of({ menu_options: [contact] }),
     getProfiles: () => rx.of({ profiles: [], states: [{ id: 1, name: 'Activo' }] }),
-    updateMenuOption: (id, data) => { updates.push({ id, data }); return rx.EMPTY; },
-    deleteMenuOption: id => { deletions.push(id); return rx.EMPTY; },
+    updateMenuOption: (id, data) => {
+      updates.push({ id, data });
+      return rx.EMPTY;
+    },
+    deleteMenuOption: (id) => {
+      deletions.push(id);
+      return rx.EMPTY;
+    },
   };
   const component = new MenuOptionListComponent();
   component.loadData();

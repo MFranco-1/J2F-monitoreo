@@ -1,4 +1,3 @@
-// layout/shell/shell.component.ts
 import { Component, signal, computed, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';

@@ -86,19 +86,24 @@ export class AssignmentListComponent implements OnInit, OnDestroy {
     const version = ++this.listVersion;
     this.listRequest?.unsubscribe();
     this.loading.set(true);
-    this.listRequest = this.assignmentService.getAssignments({ active_only: this.showActiveOnly }).subscribe({
-      next: ({ assignments }) => {
-        if (this.destroyed || version !== this.listVersion) return;
-        this.assignments.set(assignments);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        if (this.destroyed || version !== this.listVersion) return;
-        this.assignments.set([]);
-        this.loading.set(false);
-        this.errorMsg.set(err?.error?.error || 'No se pudieron cargar los datos. Comprueba la conexión con el servidor.');
-      },
-    });
+    this.listRequest = this.assignmentService
+      .getAssignments({ active_only: this.showActiveOnly })
+      .subscribe({
+        next: ({ assignments }) => {
+          if (this.destroyed || version !== this.listVersion) return;
+          this.assignments.set(assignments);
+          this.loading.set(false);
+        },
+        error: (err) => {
+          if (this.destroyed || version !== this.listVersion) return;
+          this.assignments.set([]);
+          this.loading.set(false);
+          this.errorMsg.set(
+            err?.error?.error ||
+              'No se pudieron cargar los datos. Comprueba la conexión con el servidor.',
+          );
+        },
+      });
   }
 
   toggleFilter(): void {
@@ -127,64 +132,97 @@ export class AssignmentListComponent implements OnInit, OnDestroy {
     this.noteError.set('');
     this.loadingNotes.set(true);
     this.notesRequest = this.assignmentService.getAssignmentNotes(assignment.id).subscribe({
-      next: result => {
+      next: (result) => {
         if (this.destroyed || version !== this.notesVersion) return;
         this.caseNotes.set(result);
         this.loadingNotes.set(false);
       },
-      error: err => {
+      error: (err) => {
         if (this.destroyed || version !== this.notesVersion) return;
         this.loadingNotes.set(false);
-        this.noteError.set(err?.error?.error || 'No se pudieron cargar las notas del caso. Vuelve a intentarlo.');
+        this.noteError.set(
+          err?.error?.error || 'No se pudieron cargar las notas del caso. Vuelve a intentarlo.',
+        );
       },
     });
   }
 
   notesFor(category: string) {
-    return this.caseNotes()?.notes.filter(note => note.metadata?.category === category) ?? [];
+    return this.caseNotes()?.notes.filter((note) => note.metadata?.category === category) ?? [];
   }
 
   get canAddNote(): boolean {
     const assignment = this.editingAssignment();
-    return !!assignment && !!this.caseNotes()?.can_add && !this.loadingNotes() &&
-      this.isCurrent(assignment) && (this.auth.isAdmin() || this.auth.isSupervisor() ||
-        (this.auth.isTechnician() && assignment.user_id === this.auth.currentUser()?.id));
+    return (
+      !!assignment &&
+      !!this.caseNotes()?.can_add &&
+      !this.loadingNotes() &&
+      this.isCurrent(assignment) &&
+      (this.auth.isAdmin() ||
+        this.auth.isSupervisor() ||
+        (this.auth.isTechnician() && assignment.user_id === this.auth.currentUser()?.id))
+    );
   }
 
   saveNote(): void {
     const a = this.editingAssignment();
     if (!a || !this.canAddNote || this.savingNote()) return;
-    const error = textError(this.noteText, { label: 'Nota', min: 5, max: 2000, letters: 2, required: true });
-    if (error) { this.noteError.set(error); return; }
+    const error = textError(this.noteText, {
+      label: 'Nota',
+      min: 5,
+      max: 2000,
+      letters: 2,
+      required: true,
+    });
+    if (error) {
+      this.noteError.set(error);
+      return;
+    }
     const version = this.notesVersion;
     this.noteError.set('');
     this.savingNote.set(true);
-    this.writeRequest = this.assignmentService.addAssignmentNote(a.id, this.noteText.trim()).subscribe({
-      next: ({ message, note }) => {
-        if (this.destroyed || version !== this.notesVersion) return;
-        this.caseNotes.update(current => current ? { ...current, notes: [...current.notes, note] } : current);
-        this.noteText = '';
-        this.savingNote.set(false);
-        this.successMsg.set(message);
-      },
-      error: err => {
-        if (this.destroyed || version !== this.notesVersion) return;
-        this.savingNote.set(false);
-        this.noteError.set(err?.error?.error || 'No se pudo añadir la nota. Comprueba las notas antes de reintentar.');
-        if (err?.status === 403 || err?.status === 409) {
-          this.caseNotes.update(current => current ? { ...current, can_add: false } : current);
-        }
-      },
-    });
+    this.writeRequest = this.assignmentService
+      .addAssignmentNote(a.id, this.noteText.trim())
+      .subscribe({
+        next: ({ message, note }) => {
+          if (this.destroyed || version !== this.notesVersion) return;
+          this.caseNotes.update((current) =>
+            current ? { ...current, notes: [...current.notes, note] } : current,
+          );
+          this.noteText = '';
+          this.savingNote.set(false);
+          this.successMsg.set(message);
+        },
+        error: (err) => {
+          if (this.destroyed || version !== this.notesVersion) return;
+          this.savingNote.set(false);
+          this.noteError.set(
+            err?.error?.error ||
+              'No se pudo añadir la nota. Comprueba las notas antes de reintentar.',
+          );
+          if (err?.status === 403 || err?.status === 409) {
+            this.caseNotes.update((current) =>
+              current ? { ...current, can_add: false } : current,
+            );
+          }
+        },
+      });
   }
 
   private isCurrent(a: Assignment): boolean {
-    return !a.completed_at && !['Cerrado', 'Anulado'].includes(a.alert_state || '') &&
-      !['Completada', 'Reasignada', 'Anulada'].includes(a.status || '');
+    return (
+      !a.completed_at &&
+      !['Cerrado', 'Anulado'].includes(a.alert_state || '') &&
+      !['Completada', 'Reasignada', 'Anulada'].includes(a.status || '')
+    );
   }
 
   canEdit(a: Assignment): boolean {
-    return this.isCurrent(a) && (this.auth.isAdmin() || (this.auth.isTechnician() && a.user_id === this.auth.currentUser()?.id));
+    return (
+      this.isCurrent(a) &&
+      (this.auth.isAdmin() ||
+        (this.auth.isTechnician() && a.user_id === this.auth.currentUser()?.id))
+    );
   }
 
   openCloseModal(a: Assignment): void {
@@ -195,7 +233,9 @@ export class AssignmentListComponent implements OnInit, OnDestroy {
     this.showCloseModal.set(true);
   }
 
-  closeCloseModal(): void { if (!this.closing()) this.resetDialogs(); }
+  closeCloseModal(): void {
+    if (!this.closing()) this.resetDialogs();
+  }
 
   completeAssignment(): void {
     const assignment = this.editingAssignment();
@@ -204,25 +244,37 @@ export class AssignmentListComponent implements OnInit, OnDestroy {
       this.errorMsg.set('Debes registrar la solución aplicada');
       return;
     }
-    const error = textError(this.solutionText, { label: 'Solución', min: 5, max: 2000, letters: 2, required: true });
-    if (error) { this.errorMsg.set(error); return; }
+    const error = textError(this.solutionText, {
+      label: 'Solución',
+      min: 5,
+      max: 2000,
+      letters: 2,
+      required: true,
+    });
+    if (error) {
+      this.errorMsg.set(error);
+      return;
+    }
     const version = this.notesVersion;
     this.closing.set(true);
-    this.writeRequest = this.assignmentService.updateAssignment(assignment.id, {
-      complete: true, solution: this.solutionText.trim(),
-    }).subscribe({
-      next: ({ message }) => {
-        if (this.destroyed || version !== this.notesVersion) return;
-        this.closing.set(false);
-        this.successMsg.set(message);
-        this.closeCloseModal();
-        this.loadAssignments();
-      },
-      error: err => {
-        if (this.destroyed || version !== this.notesVersion) return;
-        this.closing.set(false);
-        this.errorMsg.set(err?.error?.error || 'No se pudo cerrar la atención');
-      },
-    });
+    this.writeRequest = this.assignmentService
+      .updateAssignment(assignment.id, {
+        complete: true,
+        solution: this.solutionText.trim(),
+      })
+      .subscribe({
+        next: ({ message }) => {
+          if (this.destroyed || version !== this.notesVersion) return;
+          this.closing.set(false);
+          this.successMsg.set(message);
+          this.closeCloseModal();
+          this.loadAssignments();
+        },
+        error: (err) => {
+          if (this.destroyed || version !== this.notesVersion) return;
+          this.closing.set(false);
+          this.errorMsg.set(err?.error?.error || 'No se pudo cerrar la atención');
+        },
+      });
   }
 }

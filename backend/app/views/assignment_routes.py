@@ -3,9 +3,10 @@ views/assignment_routes.py - Endpoints REST para Asignaciones
 """
 
 from flask import Blueprint, request
-from app.security import assignment_manager_required
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import get_jwt_identity, jwt_required
+
 from app.controllers import assignment_controller
+from app.security import assignment_manager_required
 
 assignment_bp = Blueprint("assignments", __name__)
 

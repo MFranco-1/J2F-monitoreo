@@ -3,7 +3,8 @@ views/auth_routes.py - Endpoints de Autenticación
 """
 
 from flask import Blueprint, request
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import jwt_required
+
 from app.controllers import auth_controller
 
 auth_bp = Blueprint("auth", __name__)

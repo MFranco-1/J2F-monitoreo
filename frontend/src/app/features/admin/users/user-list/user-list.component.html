@@ -1,13 +1,13 @@
-<!-- features/admin/users/user-list/user-list.component.html -->
-<!-- Vista de Usuarios Registrados - basada en wireframe image_2.png -->
 <div class="admin-page">
   <div class="page-header">
     <h1>Usuarios Registrados</h1>
     <p>Gestión de usuarios y perfiles del sistema</p>
   </div>
 
-  <div class="alert-banner alert-success" *ngIf="successMsg()"> {{ successMsg() }}</div>
-  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg() && !showModal()"> {{ errorMsg() }}</div>
+  <div class="alert-banner alert-success" *ngIf="successMsg()">{{ successMsg() }}</div>
+  <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg() && !showModal()">
+    {{ errorMsg() }}
+  </div>
 
   <div class="toolbar">
     <div class="toolbar-left">
@@ -19,7 +19,14 @@
         placeholder="Buscar por nombre, DNI o correo..."
       />
     </div>
-    <button id="btn-new-user" class="btn-primary" [disabled]="states().length === 0" (click)="openNew()">+ Nuevo</button>
+    <button
+      id="btn-new-user"
+      class="btn-primary"
+      [disabled]="states().length === 0"
+      (click)="openNew()"
+    >
+      + Nuevo
+    </button>
   </div>
 
   <div class="table-container">
@@ -37,11 +44,17 @@
       </thead>
       <tbody>
         <tr *ngFor="let user of users()">
-          <td><code>{{ user.dni }}</code></td>
-          <td><strong>{{ user.full_name }}</strong></td>
+          <td>
+            <code>{{ user.dni }}</code>
+          </td>
+          <td>
+            <strong>{{ user.full_name }}</strong>
+          </td>
           <td class="text-muted">{{ user.email }}</td>
           <td>
-            <span class="badge badge-open" *ngFor="let profile of user.profiles || []">{{ profile.name }}</span>
+            <span class="badge badge-open" *ngFor="let profile of user.profiles || []">{{
+              profile.name
+            }}</span>
             <span class="text-muted" *ngIf="!user.profiles?.length">Sin perfil</span>
           </td>
           <td>
@@ -49,8 +62,21 @@
           </td>
           <td>
             <div class="action-buttons">
-              <button class="btn-secondary btn-sm" [id]="'btn-edit-user-' + user.id" (click)="openEdit(user)">Editar</button>
-              <button class="btn-danger btn-sm" [id]="'btn-delete-user-' + user.id" (click)="delete(user)" [disabled]="user.state?.name === 'Inactivo'">Desactivar</button>
+              <button
+                class="btn-secondary btn-sm"
+                [id]="'btn-edit-user-' + user.id"
+                (click)="openEdit(user)"
+              >
+                Editar
+              </button>
+              <button
+                class="btn-danger btn-sm"
+                [id]="'btn-delete-user-' + user.id"
+                (click)="delete(user)"
+                [disabled]="user.state?.name === 'Inactivo'"
+              >
+                Desactivar
+              </button>
             </div>
           </td>
         </tr>
@@ -72,33 +98,70 @@
       <button class="modal-close" aria-label="Cerrar" (click)="closeModal()">×</button>
     </div>
     <div class="modal-body">
-      <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()"> {{ errorMsg() }}</div>
+      <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()">{{ errorMsg() }}</div>
       <div class="form-row">
         <div class="form-group">
           <label for="u-dni">DNI *</label>
-          <input id="u-dni" class="form-control" [(ngModel)]="form.dni" maxlength="8" inputmode="numeric" placeholder="12345678" />
+          <input
+            id="u-dni"
+            class="form-control"
+            [(ngModel)]="form.dni"
+            maxlength="8"
+            inputmode="numeric"
+            placeholder="12345678"
+          />
         </div>
         <div class="form-group">
           <label for="u-name">Nombre completo *</label>
-          <input id="u-name" class="form-control" [(ngModel)]="form.full_name" maxlength="150" placeholder="Nombre completo" />
+          <input
+            id="u-name"
+            class="form-control"
+            [(ngModel)]="form.full_name"
+            maxlength="150"
+            placeholder="Nombre completo"
+          />
         </div>
       </div>
       <div class="form-group">
         <label for="u-email">Correo Electrónico *</label>
-        <input id="u-email" type="email" maxlength="150" class="form-control" [(ngModel)]="form.email" placeholder="juan@empresa.com" />
+        <input
+          id="u-email"
+          type="email"
+          maxlength="150"
+          class="form-control"
+          [(ngModel)]="form.email"
+          placeholder="juan@empresa.com"
+        />
       </div>
       <div class="form-group">
-        <label for="u-pass">{{ editingUser() ? 'Nueva Contraseña (dejar vacío para no cambiar)' : 'Contraseña *' }}</label>
-        <input id="u-pass" type="password" minlength="8" maxlength="128" class="form-control" [(ngModel)]="form.password" placeholder="••••••••" />
+        <label for="u-pass">{{
+          editingUser() ? 'Nueva Contraseña (dejar vacío para no cambiar)' : 'Contraseña *'
+        }}</label>
+        <input
+          id="u-pass"
+          type="password"
+          minlength="8"
+          maxlength="128"
+          class="form-control"
+          [(ngModel)]="form.password"
+          placeholder="••••••••"
+        />
         <small class="text-muted">Entre 8 y 128 caracteres.</small>
       </div>
       <div class="form-group">
         <label>Perfiles activos *</label>
         <div class="profile-checkboxes">
-          <label class="checkbox-item" *ngFor="let profile of profiles()" [class.disabled]="profile.state?.name !== 'Activo'">
-            <input type="checkbox" [checked]="profileChecked(profile.id)"
-                   [disabled]="profile.state?.name !== 'Activo'"
-                   (change)="toggleProfile(profile.id, $any($event.target).checked)" />
+          <label
+            class="checkbox-item"
+            *ngFor="let profile of profiles()"
+            [class.disabled]="profile.state?.name !== 'Activo'"
+          >
+            <input
+              type="checkbox"
+              [checked]="profileChecked(profile.id)"
+              [disabled]="profile.state?.name !== 'Activo'"
+              (change)="toggleProfile(profile.id, $any($event.target).checked)"
+            />
             {{ profile.name }}{{ profile.state?.name !== 'Activo' ? ' (Inactivo)' : '' }}
           </label>
         </div>
@@ -114,7 +177,12 @@
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" (click)="closeModal()">Cancelar</button>
-      <button id="btn-save-user" class="btn-primary" (click)="save()" [disabled]="saving() || states().length === 0">
+      <button
+        id="btn-save-user"
+        class="btn-primary"
+        (click)="save()"
+        [disabled]="saving() || states().length === 0"
+      >
         {{ editingUser() ? 'Guardar Cambios' : 'Crear Usuario' }}
       </button>
     </div>

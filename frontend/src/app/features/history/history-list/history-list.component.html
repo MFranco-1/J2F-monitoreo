@@ -1,4 +1,3 @@
-<!-- features/history/history-list/history-list.component.html -->
 <div class="admin-page">
   <div class="page-header">
     <h1>Historial de Trazabilidad</h1>
@@ -8,7 +7,11 @@
   <div class="alert-banner alert-error" role="alert" *ngIf="errorMsg()">{{ errorMsg() }}</div>
   <div class="toolbar">
     <div class="toolbar-left">
-      <select class="filter-select" (change)="applyFilter('action', $any($event.target).value)" id="filter-action">
+      <select
+        class="filter-select"
+        (change)="applyFilter('action', $any($event.target).value)"
+        id="filter-action"
+      >
         <option value="">Todas las acciones</option>
         <option value="created">Creadas</option>
         <option value="state_changed">Cambio de Estado</option>
@@ -18,8 +21,18 @@
         <option value="closed">Cerradas</option>
         <option value="cancelled">Anuladas</option>
       </select>
-      <input type="date" class="filter-select" (change)="applyFilter('date_from', $any($event.target).value)" id="filter-date-from" />
-      <input type="date" class="filter-select" (change)="applyFilter('date_to', $any($event.target).value)" id="filter-date-to" />
+      <input
+        type="date"
+        class="filter-select"
+        (change)="applyFilter('date_from', $any($event.target).value)"
+        id="filter-date-from"
+      />
+      <input
+        type="date"
+        class="filter-select"
+        (change)="applyFilter('date_to', $any($event.target).value)"
+        id="filter-date-to"
+      />
     </div>
   </div>
 
@@ -39,14 +52,16 @@
       </thead>
       <tbody>
         <tr *ngFor="let entry of history()">
-          <td class="text-muted">{{ entry.timestamp | date:'dd/MM/yy HH:mm:ss' }}</td>
+          <td class="text-muted">{{ entry.timestamp | date: 'dd/MM/yy HH:mm:ss' }}</td>
           <td>
-            <a [href]="'/alerts/' + entry.alert_id" class="alert-title-link">#{{ entry.alert_id }}</a>
+            <a [href]="'/alerts/' + entry.alert_id" class="alert-title-link"
+              >#{{ entry.alert_id }}</a
+            >
           </td>
           <td>{{ getActionLabel(entry.action) }}</td>
           <td class="text-muted">{{ entry.previous_state || '—' }}</td>
           <td>{{ entry.new_state || '—' }}</td>
-          <td class="text-muted" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          <td class="text-muted history-detail">
             {{ entry.detail || '—' }}
           </td>
           <td>{{ entry.user?.full_name || 'Sistema' }}</td>
@@ -61,8 +76,16 @@
   </div>
 
   <div class="pagination" *ngIf="totalPages() > 1">
-    <button class="btn-secondary btn-sm" (click)="prevPage()" [disabled]="filters.page === 1">← Anterior</button>
+    <button class="btn-secondary btn-sm" (click)="prevPage()" [disabled]="filters.page === 1">
+      ← Anterior
+    </button>
     <span>Página {{ filters.page }} / {{ totalPages() }}</span>
-    <button class="btn-secondary btn-sm" (click)="nextPage()" [disabled]="filters.page === totalPages()">Siguiente →</button>
+    <button
+      class="btn-secondary btn-sm"
+      (click)="nextPage()"
+      [disabled]="filters.page === totalPages()"
+    >
+      Siguiente →
+    </button>
   </div>
 </div>

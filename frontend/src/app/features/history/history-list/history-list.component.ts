@@ -1,4 +1,3 @@
-// features/history/history-list/history-list.component.ts
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { NgFor, NgIf, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -22,9 +21,17 @@ export class HistoryListComponent implements OnInit {
   totalPages = signal(1);
   private historyRequestId = 0;
 
-  filters: { page: number; per_page: number; action?: string; date_from?: string; date_to?: string } = { page: 1, per_page: 30 };
+  filters: {
+    page: number;
+    per_page: number;
+    action?: string;
+    date_from?: string;
+    date_to?: string;
+  } = { page: 1, per_page: 30 };
 
-  ngOnInit(): void { this.loadHistory(); }
+  ngOnInit(): void {
+    this.loadHistory();
+  }
 
   loadHistory(): void {
     const requestId = ++this.historyRequestId;
@@ -51,15 +58,31 @@ export class HistoryListComponent implements OnInit {
     this.loadHistory();
   }
 
-  prevPage(): void { if (this.filters.page > 1) { this.filters.page--; this.loadHistory(); } }
-  nextPage(): void { if (this.filters.page < this.totalPages()) { this.filters.page++; this.loadHistory(); } }
+  prevPage(): void {
+    if (this.filters.page > 1) {
+      this.filters.page--;
+      this.loadHistory();
+    }
+  }
+  nextPage(): void {
+    if (this.filters.page < this.totalPages()) {
+      this.filters.page++;
+      this.loadHistory();
+    }
+  }
 
   getActionLabel(action: string): string {
     const map: Record<string, string> = {
-      created: ' Creada', state_changed: ' Estado cambiado',
-      assigned: ' Asignada', escalated: ' Escalada',
-      closed: ' Cerrada', cancelled: ' Anulada', updated: ' Actualizada', note_added: ' Nota',
-      reassigned: ' Reasignada', fuel_coordinated: ' Coordinación de abastecimiento',
+      created: ' Creada',
+      state_changed: ' Estado cambiado',
+      assigned: ' Asignada',
+      escalated: ' Escalada',
+      closed: ' Cerrada',
+      cancelled: ' Anulada',
+      updated: ' Actualizada',
+      note_added: ' Nota',
+      reassigned: ' Reasignada',
+      fuel_coordinated: ' Coordinación de abastecimiento',
       fuel_confirmed: ' Abastecimiento confirmado',
     };
     return map[action] ?? action;

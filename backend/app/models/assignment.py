@@ -3,8 +3,8 @@ models/assignment.py - Modelo Asignación (Assignment)
 Registra qué técnico atiende qué alerta. Las notas nuevas se añaden al historial.
 """
 
-from app.datetime_utils import utcnow, as_utc_naive, iso_utc
 from app import db
+from app.datetime_utils import as_utc_naive, iso_utc, utcnow
 
 
 class Assignment(db.Model):
@@ -13,7 +13,9 @@ class Assignment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     alert_id = db.Column(db.Integer, db.ForeignKey("alerts.id"), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
-    notes = db.Column(db.Text, nullable=True)  # Solo compatibilidad: textos heredados, no se sobrescriben.
+    notes = db.Column(
+        db.Text, nullable=True
+    )  # Solo compatibilidad: textos heredados, no se sobrescriben.
     # Tipo de asignación: 'manual' | 'auto'
     assignment_type = db.Column(db.String(20), default="manual")
     assigned_at = db.Column(db.DateTime, default=utcnow)
@@ -36,10 +38,21 @@ class Assignment(db.Model):
             self.response_time_minutes = round(delta.total_seconds() / 60, 2)
 
     def to_dict(self) -> dict:
-        siblings = self.alert.assignments.order_by(Assignment.assigned_at, Assignment.id).all() if self.alert else []
+        siblings = (
+            self.alert.assignments.order_by(Assignment.assigned_at, Assignment.id).all()
+            if self.alert
+            else []
+        )
         is_latest = bool(siblings and siblings[-1].id == self.id)
-        status = ("En Curso" if self.completed_at is None else "Reasignada" if not is_latest else
-                  "Anulada" if self.alert.state.name == "Anulado" else "Completada")
+        status = (
+            "En Curso"
+            if self.completed_at is None
+            else "Reasignada"
+            if not is_latest
+            else "Anulada"
+            if self.alert.state.name == "Anulado"
+            else "Completada"
+        )
         return {
             "id": self.id,
             "alert_id": self.alert_id,
@@ -52,8 +65,9 @@ class Assignment(db.Model):
             "response_time_minutes": self.response_time_minutes,
             "status": status,
             "alert_state": self.alert.state.name if self.alert and self.alert.state else None,
-            "event_type_code": (self.alert.event_type.code
-                                if self.alert and self.alert.event_type else None),
+            "event_type_code": (
+                self.alert.event_type.code if self.alert and self.alert.event_type else None
+            ),
         }
 
     def __repr__(self) -> str:

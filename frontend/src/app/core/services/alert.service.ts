@@ -1,8 +1,16 @@
-// core/services/alert.service.ts
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { Alert, AlertMetrics, AlertsResponse, AlertFilters, FuelStation, FuelWorkflow, MapVehicle, StreetRoute } from '../../shared/models/alert.model';
+import {
+  Alert,
+  AlertMetrics,
+  AlertsResponse,
+  AlertFilters,
+  FuelStation,
+  FuelWorkflow,
+  MapVehicle,
+  StreetRoute,
+} from '../../shared/models/alert.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
@@ -33,7 +41,10 @@ export class AlertService {
     return this.http.post<{ alert: Alert; message: string }>(this.BASE + '/', data);
   }
 
-  updateAlert(id: number, data: Partial<Alert> & { state_name?: string; notes?: string }): Observable<{ alert: Alert; message: string }> {
+  updateAlert(
+    id: number,
+    data: Partial<Alert> & { state_name?: string; notes?: string },
+  ): Observable<{ alert: Alert; message: string }> {
     return this.http.put<{ alert: Alert; message: string }>(`${this.BASE}/${id}`, data);
   }
 
@@ -42,7 +53,9 @@ export class AlertService {
   }
 
   cancelAlert(id: number, reason: string): Observable<{ alert: Alert; message: string }> {
-    return this.http.post<{ alert: Alert; message: string }>(`${this.BASE}/${id}/cancel`, { reason });
+    return this.http.post<{ alert: Alert; message: string }>(`${this.BASE}/${id}/cancel`, {
+      reason,
+    });
   }
 
   getMapVehicles(clientId?: number): Observable<{ vehicles: MapVehicle[] }> {
@@ -60,31 +73,58 @@ export class AlertService {
     fuel_percent?: number;
   }): Observable<{ message: string; created: boolean; alert: Alert }> {
     return this.http.post<{ message: string; created: boolean; alert: Alert }>(
-      `${this.BASE}/map/events`, data
+      `${this.BASE}/map/events`,
+      data,
     );
   }
 
   getFuelStations(alertId: number, latitude: number, longitude: number, radius = 3000) {
-    const params = new HttpParams().set('alert_id', alertId).set('latitude', latitude)
-      .set('longitude', longitude).set('radius', radius);
-    return this.http.get<{ stations: FuelStation[]; source: string }>(`${this.BASE}/map/fuel-stations`, { params });
+    const params = new HttpParams()
+      .set('alert_id', alertId)
+      .set('latitude', latitude)
+      .set('longitude', longitude)
+      .set('radius', radius);
+    return this.http.get<{ stations: FuelStation[]; source: string }>(
+      `${this.BASE}/map/fuel-stations`,
+      { params },
+    );
   }
 
-  getStreetRoute(originLat: number, originLng: number, destinationLat: number, destinationLng: number,
-                 alertId?: number) {
-    const params = new HttpParams().set('origin_lat', originLat).set('origin_lng', originLng)
-      .set('destination_lat', destinationLat).set('destination_lng', destinationLng);
+  getStreetRoute(
+    originLat: number,
+    originLng: number,
+    destinationLat: number,
+    destinationLng: number,
+    alertId?: number,
+  ) {
+    const params = new HttpParams()
+      .set('origin_lat', originLat)
+      .set('origin_lng', originLng)
+      .set('destination_lat', destinationLat)
+      .set('destination_lng', destinationLng);
     const scopedParams = alertId ? params.set('alert_id', alertId) : params;
     return this.http.get<StreetRoute>(`${this.BASE}/map/route`, { params: scopedParams });
   }
 
-  recordFuelAction(alertId: number, action: 'coordinate' | 'confirm', observation: string,
-                   station?: FuelStation & { roadDistance?: number }) {
-    const selectedStation = station ? {
-      id: station.id, name: station.name, latitude: station.latitude, longitude: station.longitude,
-      road_distance: station.roadDistance,
-    } : undefined;
-    return this.http.post<{ message: string; fuel_status: 'pending' | 'coordinated' | 'confirmed'; fuel_workflow: FuelWorkflow }>(
-      `${this.BASE}/${alertId}/fuel-actions`, { action, observation, station: selectedStation });
+  recordFuelAction(
+    alertId: number,
+    action: 'coordinate' | 'confirm',
+    observation: string,
+    station?: FuelStation & { roadDistance?: number },
+  ) {
+    const selectedStation = station
+      ? {
+          id: station.id,
+          name: station.name,
+          latitude: station.latitude,
+          longitude: station.longitude,
+          road_distance: station.roadDistance,
+        }
+      : undefined;
+    return this.http.post<{
+      message: string;
+      fuel_status: 'pending' | 'coordinated' | 'confirmed';
+      fuel_workflow: FuelWorkflow;
+    }>(`${this.BASE}/${alertId}/fuel-actions`, { action, observation, station: selectedStation });
   }
 }

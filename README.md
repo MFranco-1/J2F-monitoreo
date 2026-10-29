@@ -1,51 +1,134 @@
-# J2F — Centro de Monitoreo
+# J2F Monitoreo
 
-Aplicación Angular 22 + Flask + SQLAlchemy + JWT para monitoreo, preparada para
-usuarios multiperfil, menú dinámico y maestros de clientes, vehículos, dispositivos
-GPS y tipos de evento.
+Aplicación web para gestionar incidentes de una flota vehicular. Permite registrar
+alertas, asignar técnicos, documentar la atención y consultar su historial y
+reportes desde un panel de monitoreo.
 
-Requiere Node compatible con Angular 22: `^22.22.3`, `^24.15.0` o `>=26`;
-se verificó con Node 24.19.0. Mantener `package-lock.json` y usar `npm ci`.
-La interfaz y los flujos se conservan; no se introduce otro framework.
+El sistema utiliza una base PostgreSQL compartida. Las posiciones, velocidades y
+niveles de combustible del mapa son simulados en cada navegador; las alertas,
+asignaciones, notas y confirmaciones se guardan en la base de datos.
 
-## Migración segura de PostgreSQL / Neon
+## Funcionalidades
 
-El código no ejecuta migraciones al arrancar. Antes de desplegarlo, crea un respaldo
-de Neon y revisa `j2f_modulo_usuarios.sql` y las migraciones incrementales de
-`backend/migrations`. Los scripts no usan `DROP` ni `TRUNCATE` y conservan
-`users.profile_id`, las alertas y los demás datos actuales.
+- Autenticación por DNI o correo y selección del perfil activo en cuentas multiperfil.
+- Usuarios, perfiles y menú lateral configurable.
+- Catálogos de clientes, vehículos, dispositivos GPS y tipos de evento.
+- Alertas con prioridades, estados, filtros e historial.
+- Asignación manual o automática según la carga de los técnicos.
+- Notas independientes con autor, perfil y fecha, conservadas al reasignar el caso.
+- Mapa Leaflet integrado en el dashboard, filtrado por cliente y permisos.
+- Abastecimiento documentado: alerta de combustible, asignación, coordinación,
+  confirmación y cierre.
+- Reportes de alertas, rendimiento y tiempos de atención, con exportación CSV/JSON.
 
-Para aplicar todo desde un único archivo del proyecto:
+## Tecnologías
+
+| Capa | Herramientas |
+| --- | --- |
+| Frontend | Angular 22, TypeScript 6, SCSS, RxJS |
+| Backend | Python 3.12, Flask 3, SQLAlchemy |
+| Base de datos | PostgreSQL; conexión local o alojada en Neon |
+| Autenticación | JWT con autorización por perfil activo |
+| Mapa | Leaflet, teselas OpenStreetMap, rutas OSRM y estaciones Overpass |
+| Pruebas | unittest con SQLite aislada y pruebas de frontend con Node.js |
+| Calidad | Ruff, Prettier y comprobación estricta de TypeScript |
+
+## Estructura
+
+```text
+backend/
+  app/
+    controllers/         Reglas de negocio
+    models/              Entidades y relaciones de SQLAlchemy
+    views/               Rutas HTTP y permisos
+    config.py            Configuración por entorno
+    security.py          Autorización y alcance de consultas
+    testing_fixtures.py  Datos exclusivos de las pruebas SQLite
+    validation.py        Validaciones del backend
+  migrations/            Cambios incrementales de PostgreSQL
+  tests/                 Pruebas de comportamiento y regresión
+  init_db.py             Verificación de la estructura existente, de solo lectura
+  run.py                 Arranque del servidor de desarrollo
+frontend/
+  src/app/
+    core/                Servicios, guards e interceptor de autenticación
+    features/            Pantallas organizadas por funcionalidad
+    layout/              Estructura y navegación
+    shared/              Modelos y validaciones compartidas
+  tests/                 Pruebas de frontend
+.env.example             Plantilla de configuración sin credenciales
+j2f_modulo_usuarios.sql   Migración consolidada para la base existente de J2F
+```
+
+## Requisitos
+
+- Python 3.12 y pip.
+- Node.js compatible con Angular 22: `^22.22.3`, `^24.15.0` o `>=26`.
+- npm 10 o superior.
+- Acceso a una base PostgreSQL de J2F con su esquema base y usuarios configurados.
+- Conexión a Internet para teselas, rutas y consulta de estaciones.
+
+Las versiones de las dependencias se fijan en los archivos de requisitos y en
+`frontend/package-lock.json`.
+
+## Instalación local
+
+### 1. Obtener el código
 
 ```powershell
-$env:DATABASE_URL = '<URL_PRIVADA_DE_NEON>'
+git clone https://github.com/MFranco-1/J2F-monitoreo.git
+cd J2F-monitoreo
+```
+
+### 2. Configurar PostgreSQL
+
+Usar una base local o las credenciales de la base compartida de Neon. Cada equipo
+debe configurar su conexión de forma privada. Git comparte código, no sincroniza
+una base local con Neon.
+
+`j2f_modulo_usuarios.sql` es una migración incremental: requiere las tablas del
+esquema original, como `states`, `users` y `profiles`. No es un volcado completo
+para iniciar una base vacía. Una instalación independiente necesita provisionar
+ese esquema y una cuenta administradora antes de utilizar la aplicación.
+
+En una base existente, revisar los cambios y disponer de un respaldo antes de
+aplicar una migración pendiente:
+
+```powershell
+$env:DATABASE_URL = '<URL_PRIVADA_POSTGRESQL>'
 psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f j2f_modulo_usuarios.sql
 ```
 
-El mismo archivo incorpora tres clientes, cuatro vehículos por cliente y dieciocho
-alertas iniciales identificables mediante la fuente `Carga inicial J2F`. Ejecutarlo
-nuevamente no duplica esos registros.
+El script consolidado incorpora las ampliaciones de `backend/migrations` y datos
+iniciales de flota identificados con la fuente `Carga inicial J2F`. No se ejecuta
+automáticamente al arrancar. Las pruebas no deben ejecutarse contra Neon.
 
-Después, `backend/init_db.py` valida en modo de solo lectura las 14 tablas y sus
-columnas. No crea, altera ni borra datos.
+### 3. Iniciar el backend
 
-## Backend
+Desde la raíz del repositorio:
 
 ```powershell
 cd backend
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-$env:DATABASE_URL = '<URL_PRIVADA_DE_NEON>'
+
+$env:DATABASE_URL = '<URL_PRIVADA_POSTGRESQL>'
+$env:SECRET_KEY = python -c "import secrets; print(secrets.token_urlsafe(48))"
+$env:JWT_SECRET_KEY = python -c "import secrets; print(secrets.token_urlsafe(48))"
+$env:CORS_ORIGINS = 'http://localhost:4200,http://127.0.0.1:4200'
+
 python init_db.py
 python run.py
 ```
 
-La API queda en `http://localhost:5000/api`. Un usuario con un perfil activo entra
-directamente. Con varios perfiles recibe un token temporal restringido, permanece en
-`/dashboard` y elige su perfil allí. El JWT definitivo lleva el único perfil activo.
+La API escucha en `http://localhost:5000/api`. `init_db.py` comprueba las 14 tablas
+y sus columnas requeridas sin alterar datos. `run.py` repite esa verificación
+antes de iniciar Flask. La raíz `/` no contiene una página de inicio.
 
-## Frontend
+### 4. Iniciar el frontend
+
+En otra terminal, desde la raíz del repositorio:
 
 ```powershell
 cd frontend
@@ -53,240 +136,147 @@ npm ci
 npm start
 ```
 
-Abrir `http://localhost:4200`. Las rutas de usuarios, perfiles y menús requieren el
-perfil activo Administrador. En Datos maestros, Administrador conserva el CRUD;
-Operador y Supervisor consultan el catálogo operativo, y Técnico solo los registros
-vinculados a sus alertas autorizadas y los catálogos necesarios.
+Abrir `http://localhost:4200` e ingresar con una cuenta existente. No se publican
+credenciales de acceso a la base compartida ni contraseñas de usuarios.
 
-En desarrollo las claves de sesión no configuradas se generan aleatoriamente;
-será necesario volver a iniciar sesión al reiniciar. Para sesiones estables entre
-reinicios, exportar claves privadas `SECRET_KEY` y `JWT_SECRET_KEY` de al menos
-32 caracteres. Producción exige ambas y rechaza las claves de la plantilla.
-`HOST` y `PORT` configuran `python run.py`; el host predeterminado es 127.0.0.1.
+### Variables de entorno
 
-La pantalla de Datos maestros utiliza `/master-data`: los perfiles con esa opción
-asignada pueden consultarla, mientras que solo Administrador puede modificarla.
+`.env.example` describe las variables disponibles. El backend lee el entorno del
+proceso; no carga automáticamente un archivo `.env`.
 
-La pantalla de alertas muestra todo por defecto. El filtro de cliente carga sus
-vehículos y limita las alertas; el filtro de vehículo limita el resultado a esa unidad.
-Seleccionar `Todos los clientes` restaura la consulta general.
+| Variable | Uso |
+| --- | --- |
+| `DATABASE_URL` | URL PostgreSQL, con TLS cuando corresponda |
+| `SECRET_KEY` | Clave privada de Flask |
+| `JWT_SECRET_KEY` | Clave privada para firmar tokens |
+| `FLASK_ENV` | `development`, `testing` o `production` |
+| `HOST` / `PORT` | Dirección y puerto de Flask; por defecto `127.0.0.1:5000` |
+| `CORS_ORIGINS` | Orígenes HTTP/HTTPS permitidos, separados por comas |
+| `OVERPASS_API_URL` | Servicio para consultar estaciones |
+| `ROUTING_API_URL` | Servicio de rutas viales compatible con OSRM |
+| `MAP_SERVICE_TIMEOUT` | Tiempo de espera de los servicios del mapa, en segundos |
 
-El Supervisor y el Operador revisan las alertas y las asignan o reasignan a los
-Técnicos, de forma manual o automática. El Técnico atiende únicamente sus alertas
-asignadas, registra notas y cambia su estado. El Administrador conserva esas
-capacidades para casos excepcionales.
+Como alternativa a `DATABASE_URL`, se admiten `PGHOST`, `PGPORT`, `PGDATABASE`,
+`PGUSER` y `PGPASSWORD`.
 
-## Pruebas
+En desarrollo se generan claves aleatorias si no se configuraron; al reiniciar,
+esas sesiones dejan de ser válidas. Para conservar sesiones entre reinicios,
+mantener las claves en una configuración privada estable. Producción exige claves
+diferentes de al menos 32 caracteres y una `DATABASE_URL` explícita.
+
+## Roles y permisos
+
+La autorización se aplica en Flask y se refleja en Angular. El acceso al menú
+no concede permisos sobre los endpoints.
+
+| Acción | Administrador | Supervisor | Operador | Técnico |
+| --- | --- | --- | --- | --- |
+| Administrar usuarios, perfiles, menú y catálogos | Sí | No | No | No |
+| Consultar datos operativos | Sí | Sí | Sí | Casos autorizados |
+| Crear alertas y generar eventos del mapa | Sí | Sí | Sí | No |
+| Asignar y reasignar | Sí | Sí | Sí | No |
+| Añadir notas de atención | Sí | Sí | No | Asignación vigente |
+| Atender, coordinar combustible y cerrar | Sí | No | No | Asignación vigente |
+| Anular alertas con motivo | Sí | Sí | No | No |
+| Consultar, generar y exportar reportes | Sí | Sí | No | No |
+| Eliminar reportes | Sí | No | No | No |
+
+El Operador puede registrar indicaciones al asignar. Las notas de atención se
+separan entre Técnico y Supervisión/Administración. Ninguna nota se edita ni se
+elimina: una corrección se añade como otra entrada.
+
+## Reglas de operación
+
+- Las alertas manuales requieren título y descripción con contenido válido.
+  LOW_FUEL exige cliente y vehículo relacionados.
+- Cada alerta tiene como máximo una asignación vigente. Una reasignación conserva
+  el historial y no se cuenta como atención resuelta.
+- El cierre exige solución y completa también la asignación. La anulación requiere
+  motivo, conserva los antecedentes y se distingue del cierre en los reportes.
+- Desactivar un cliente desactiva sus vehículos y GPS en la misma transacción.
+  Un caso LOW_FUEL pendiente bloquea esa baja. La reactivación de los padres
+  no reactiva automáticamente sus descendientes.
+- El backend valida documentos, relaciones, duplicados, textos, fechas y teléfonos.
+  El RUC se comprueba por estructura y dígito de control, sin consulta a SUNAT.
+- Los teléfonos se validan según el país y se guardan en formato internacional.
+  La validación de formato no acredita existencia ni titularidad.
+
+### Mapa y combustible
+
+El mapa consulta vehículos y eventos autorizados cada 10 segundos; el dashboard
+actualiza métricas cada 30 segundos. Las posiciones son simulaciones locales y
+no representan una ubicación GPS compartida entre navegadores.
+
+Una alerta LOW_FUEL se genera con combustible simulado de 10 % o menos. El
+Técnico asignado o Administrador registra la coordinación y confirma el
+abastecimiento con una observación obligatoria. Esa confirmación se conserva en
+el historial y actualiza el nivel simulado al 70 %. No depende de terminar una
+animación. Anular o cerrar un caso por otra vía no demuestra una recarga.
+
+Las estaciones proceden de Overpass y las rutas por calles de OSRM. Ante un fallo,
+se informa el problema y se permite una coordinación manual documentada. No se
+inventan estaciones ni se sustituyen rutas viales por líneas rectas.
+
+Registrar un GPS identifica el equipo, pero no configura su transmisión. La
+recepción de telemetría de dispositivos físicos está fuera del alcance actual.
+
+## Pruebas y calidad
+
+Las pruebas de backend crean su estructura y fixtures únicamente en SQLite
+aislada. No utilizan cuentas ni registros de Neon.
 
 ```powershell
 cd backend
-python -m unittest discover -s tests -v
-
-cd ..\frontend
-npm test
-npm run build
+.\venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\venv\Scripts\python.exe -m unittest discover -s tests -v
+.\venv\Scripts\python.exe -m ruff check .
+.\venv\Scripts\python.exe -m ruff format --check .
+.\venv\Scripts\python.exe -m pip check
+.\venv\Scripts\python.exe -m pip_audit -r requirements.txt --progress-spinner off
 ```
-
-Las pruebas de backend usan SQLite aislada y no acceden a Neon.
-
-## Validación de formularios
-
-Los formularios comprueban los datos antes de enviarlos y Flask vuelve a validarlos
-al crear o editar. No basta con completar un campo con una letra o símbolos.
-
-- Clientes: RUC de 11 dígitos con prefijo y dígito verificador válidos, DNI de 8, CE de 9 a 12 y pasaporte alfanumérico de
-  6 a 12; razón social de al menos 3 caracteres y con letras. No se obliga a usar
-  el sufijo S.A.C. Teléfono nacional validado según el país seleccionado y guardado
-  en formato internacional; no se admiten letras ni símbolos en el número nacional;
-  correo con formato válido, contacto con letras y dirección de al menos 5 caracteres.
-- Vehículos y GPS: placa alfanumérica de 4 a 8 caracteres con guion opcional,
-  IMEI de 15 dígitos, SIM numérica de 7 a 22 y relaciones existentes.
-- Usuarios: DNI, correo, nombre, perfiles y estado válidos; nuevas contraseñas de
-  8 a 128 caracteres. La contraseña vacía al editar conserva la anterior.
-- Perfiles, menús, eventos, alertas y reportes: nombres/títulos de al menos 3
-  caracteres, límites de longitud, códigos, rutas internas, prioridades y fechas
-  válidos. Las observaciones, soluciones y descripciones ingresadas requieren
-  al menos 5 caracteres con contenido, no una letra aislada.
-
-Los campos opcionales pueden quedar vacíos. Se conservan los registros antiguos;
-las actualizaciones parciales validan los campos enviados (el tipo y número de
-documento se validan juntos). El formulario de edición solicita corregir sus
-campos inválidos antes de guardar. No hay borrados ni correcciones automáticas de datos antiguos.
-
-Las reglas de formato no acreditan la existencia del titular, correo, teléfono,
-placa o dispositivo. No hay consultas a SUNAT/RENIEC ni conexión automática a
-equipos GPS: la razón social y demás datos se ingresan manualmente.
-
-## Registro de clientes sin servicios externos
-
-Antes de iniciar esta versión sobre una base existente, aplica únicamente
-`backend/migrations/20261003_client_verification.sql`. Añade una columna nullable
-en `clients`; conserva los datos. `j2f_modulo_usuarios.sql` también la incorpora
-para instalaciones nuevas. No ejecutar pruebas ni reinicializaciones en Neon.
 
 ```powershell
-psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/migrations/20261003_client_verification.sql
+cd frontend
+npm ci
+npm run typecheck
+npm run format:check
+npm test
+npm run build
+npm audit
 ```
 
-El Administrador registra y edita clientes manualmente. Se retiraron el botón de
-consulta RUC, su endpoint, comprobantes y configuración del proveedor. No se necesita
-token, consulta previa ni observación adicional para guardar. Angular y Flask
-mantienen validación de documento, razón social, contacto, teléfono, correo y dirección.
-Los demás perfiles conservan sus permisos de consulta.
+Para aplicar el formato antes de enviar cambios: `ruff format .` desde
+`backend` y `npm run format` desde `frontend`.
 
-La columna de verificación de la versión anterior se conserva únicamente por
-compatibilidad y para no borrar información existente. No se ejecutan cambios de
-esquema ni de datos al retirar la API. Si un registro ya tenía historial y cambia
-su RUC/razón social, se conserva el historial y se invalida la verificación anterior;
-una edición manual nunca queda marcada como consulta externa exitosa. La validación
-local de RUC comprueba formato/control, no acredita inscripción ni razón social.
+## API
 
-## Formato de clientes y teléfonos internacionales
+| Prefijo | Responsabilidad |
+| --- | --- |
+| `/api/auth` | Inicio de sesión, perfil activo, renovación y salida |
+| `/api/users` | Usuarios y estados |
+| `/api/profiles` | Perfiles y accesos |
+| `/api/menu-options` | Navegación configurable |
+| `/api/master-data` | Clientes, vehículos, GPS y eventos |
+| `/api/alerts` | Alertas, métricas, mapa y abastecimiento |
+| `/api/assignments` | Asignaciones, carga de técnicos y notas del caso |
+| `/api/reports` | Reportes, exportaciones e historial |
 
-Al crear o editar, Angular y Flask guardan razón social y persona de contacto con
-primera letra mayúscula y el resto en minúscula, normalizando espacios (por ejemplo,
-`Transportes andinos s.a.c.`). No se permite usar solo `S.A.C.` como razón social.
-No se cambia en bloque ningún nombre ni registro histórico.
+Las rutas protegidas requieren `Authorization: Bearer <token>`. Una petición sin
+sesión devuelve HTTP 401; una sesión sin permiso devuelve HTTP 403.
 
-La dirección admite letras (incluidas tildes y ñ), números ASCII, espacios y
-`. , - / #`. Otros símbolos, controles y saltos de línea se rechazan, no se borran
-silenciosamente. Esta regla es de calidad de datos, no sustituye autorización,
-consultas parametrizadas ni escape de salida.
+## Mantenimiento y despliegue
 
-Teléfono mantiene su carácter opcional. El formulario separa país/prefijo y número
-nacional con código de área, y valida el plan telefónico de cada país usando
-`libphonenumber-js/max`; Flask vuelve a comprobarlo con `phonenumbers`.
-Se guarda en la columna existente `phone` en formato internacional (`+51987654321`);
-`phone_country` es un campo de API derivado del número, no una columna nueva.
-Los números antiguos siguen consultables y se separan al editar si son interpretables.
-Los datos heredados inválidos deben corregirse si se envían en una edición; cambiar
-solo el estado no reescribe ni valida de nuevo los campos no enviados.
+`backend/register_fleet_gps.py` y `backend/reconcile_fleet_states.py` muestran un
+plan de mantenimiento sin escribir por defecto. `--apply` debe usarse solo tras
+revisar el plan. La reconciliación respalda los estados anteriores en
+`backend/backups`, ruta excluida de Git.
 
-No hay API externa, SMS ni verificación de titularidad: un formato válido no prueba
-que el número exista o pertenezca al cliente. Instalar las dependencias actualizadas
-con `pip install -r backend/requirements.txt` en el entorno virtual y `npm ci`
-desde `frontend`. No se necesita una migración de base de datos para estos cambios.
+Para publicar, servir `frontend/dist/j2f-monitoreo-frontend/browser` con un
+servidor que redirija las rutas de Angular a `index.html` y `/api` al backend.
+La compilación de producción usa una URL de API relativa. Flask debe ejecutarse
+con un servidor WSGI de producción, detrás de HTTPS, con orígenes explícitos y
+una cuenta PostgreSQL con los permisos mínimos necesarios.
 
-## Identificación de GPS
-
-GPS vacío significa que no existen equipos registrados dentro del alcance del
-perfil. Los vehículos y las posiciones simuladas del mapa no crean un equipo físico.
-En Vehículos se muestran IMEI y estado de los equipos vinculados, o Sin GPS registrado;
-Registrar GPS abre el formulario existente con el vehículo preseleccionado. El
-Administrador registra IMEI de 15 dígitos único y los datos disponibles del equipo,
-su SIM/proveedor y estado. El mapa muestra el IMEI activo elegido para esa unidad.
-
-Para los vehículos sin hardware, se autorizó poblar registros GPS con identificadores
-generados. `backend/register_fleet_gps.py` muestra el plan y `--apply` lo aplica en
-una transacción. Solo añade un GPS a cada vehículo activo sin equipo registrado;
-no sustituye GPS existentes, ni crea SIM/proveedor, ni modifica alertas o vehículos.
-Es idempotente. Usa serie `GPS-<placa>` y números de 15 dígitos con prefijo `00` y
-control Luhn: son identificadores sintéticos, no IMEI asignados por un fabricante.
-Los nombres visibles son neutros; no se etiquetan como demo en la pantalla.
-
-Registrar un IMEI solo identifica el dispositivo: para telemetría real se necesita
-el equipo instalado, configuración de transmisión y un receptor/proveedor compatible,
-que esta aplicación aún no incorpora. El mapa sigue identificando posiciones como
-simuladas locales del navegador. El Técnico solo consulta unidades/equipos asociados
-a sus casos autorizados y no puede registrar ni editar GPS.
-
-## Anulación de alertas
-
-Aplicar `backend/migrations/20261003_cancel_alerts.sql` en bases existentes.
-Solo añade el estado `Anulado` si falta; no altera alertas ni crea tablas.
-
-Administrador y Supervisor, según el perfil activo del JWT, pueden anular un caso
-pendiente desde su detalle con un motivo obligatorio de 5 a 1000 caracteres.
-Operador, Técnico y perfiles nuevos distintos no tienen ese permiso, aunque se
-les dé acceso al menú. Un usuario nuevo con perfil Supervisor sí conserva las
-facultades de ese rol. No se permite anular alertas cerradas ni repetir la anulación.
-
-El historial conserva autor, perfil, fecha, motivo y estado anterior. Se finalizan
-las asignaciones pendientes sin tiempo de resolución, y el caso deja de aparecer
-como abierto en el mapa. El historial y los reportes distinguen anulación de cierre;
-el rendimiento cuenta las atenciones anuladas por separado. No se borran alertas.
-
-Anular combustible no confirma un abastecimiento ni aumenta el nivel simulado.
-Si termina un caso con combustible todavía bajo, esa simulación local no lo recrea
-automáticamente hasta recuperar un nivel superior a 10 %; generar otro evento de
-combustible de forma explícita sigue disponible. Los recorridos de abastecimiento
-interrumpidos quedan detenidos en su última posición local con retorno recuperable.
-La telemetría local no es compartida entre navegadores.
-
-## Desactivación de flota y mínimos de alertas
-
-Guardar un cliente como Inactivo desactiva también sus vehículos y GPS en la
-misma transacción. Si una unidad tiene un caso LOW_FUEL pendiente, se bloquea
-toda la operación hasta completar el abastecimiento o anular el caso con motivo;
-no se dejan estados parciales. Desactivar un vehículo desactiva sus GPS.
-Reactivar el cliente o vehículo no reactiva automáticamente sus descendientes.
-No se puede activar una unidad con su cliente inactivo, ni un GPS con su vehículo
-o cliente inactivo. Los catálogos activos y el mapa omiten también las unidades
-heredadas cuyo cliente está inactivo, sin borrar datos ni historial.
-
-Crear una alerta manual requiere título y descripción con contenido válido
-(descripción de 5 a 2000 caracteres). No basta un título. Tampoco se permite
-vaciar la descripción mediante una edición. Los casos antiguos sin descripción
-siguen consultables y pueden atenderse o anularse sin una reescritura masiva.
-Los eventos automáticos del mapa conservan sus descripciones generadas.
-
-La carga del selector de técnicos se consulta al abrir la asignación, después
-de asignar o reasignar y cada cinco segundos mientras la ventana permanezca abierta.
-El polling termina al salir de la pantalla; cambiar de perfil descarta consultas
-anteriores. No se calculan cargas sumando contadores locales.
-
-Tras actualizar archivos, reiniciar un backend sin recarga automática: una
-versión anterior en memoria puede devolver 404 para la ruta de anulación aunque
-el código y la migración actuales estén instalados. Esto no se soluciona ampliando
-los permisos; la anulación sigue reservada al perfil activo Administrador o Supervisor.
-
-## Notas del caso y reasignaciones
-
-En Asignaciones, **Notas del caso** consulta las notas de toda la alerta, incluidas
-las de asignaciones anteriores. Se muestran por separado las notas técnicas,
-las de Supervisión/Administración y las indicaciones iniciales de asignación.
-Cada nota nueva conserva el usuario, perfil activo y fecha/hora registrados por
-Flask; la pantalla muestra la hora de Perú (UTC−5).
-
-El Técnico vigente añade notas técnicas. Supervisor y Administrador añaden sus
-propias observaciones, sin obtener por ello permisos de cierre adicionales.
-Operador conserva consulta e indicaciones al asignar, pero no añade notas de
-atención. El nuevo Técnico puede leer las notas anteriores del caso; una
-asignación anterior, cerrada o anulada queda en consulta de solo lectura.
-Se mantienen los alcances operativos existentes de cada perfil.
-
-Las notas son entradas independientes e inmutables: no hay edición ni borrado;
-una corrección se registra con otra nota. Se pueden añadir varias sin reemplazar
-las anteriores y usar **Actualizar notas** para consultar aportes de otros usuarios.
-El cierre guarda su solución en el historial sin reemplazar las notas.
-
-No se añaden tablas, columnas ni migraciones: se utiliza `history` con acción
-`note_added` y detalle estructurado. `GET /api/assignments/<id>/notes` devuelve
-las notas autorizadas del caso y los textos heredados; `POST` en esa ruta añade
-una nota a la asignación vigente. El `PUT` anterior con `notes` sigue aceptándose,
-pero ahora añade una entrada, no reemplaza un campo. Autor, perfil y fecha no se
-aceptan del cliente. El texto requiere entre 5 y 2000 caracteres con contenido.
-
-Los valores antiguos de `assignments.notes` y sus auditorías se conservan sin
-reescribirlos. Se muestran como registros anteriores: no se atribuye un texto
-heredado al Técnico ni se usa la fecha de asignación como fecha de su creación.
-
-## Reportes y exportaciones (HU-12)
-
-Los resultados conservan filtros, período, fecha de generación y autor real de
-esa generación. El usuario que crea el reporte puede ser diferente de quien
-lo genera. Los resultados antiguos no reciben una atribución inventada.
-
-Administrador y Supervisor pueden consultar/generar y descargar CSV o JSON
-desde el resultado existente. `GET /api/reports/<id>/export?format=csv|json`
-descarga el resultado almacenado sin regenerarlo ni modificar registros.
-Las etiquetas de prioridad se muestran en español; reasignaciones y anulaciones
-se distinguen de resoluciones. La exportación CSV protege los textos que una
-hoja de cálculo podría interpretar como fórmulas.
-
-## Reversión
-
-La reversión no debe borrar las tablas nuevas: vuelve a la versión anterior del código
-y conserva columnas y registros compatibles. Antes de una eliminación posterior se
-deben auditar dependencias y respaldar asignaciones multiperfil e historial. Nunca se
-versionan `.env`, contraseñas, URLs privadas ni tokens.
+Mantener las migraciones separadas del arranque. Conservar respaldos y verificar
+compatibilidad antes de un despliegue o una reversión. Las credenciales,
+archivos de ejecución, respaldos y dependencias instaladas no se versionan.

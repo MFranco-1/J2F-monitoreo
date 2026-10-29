@@ -1,11 +1,22 @@
 """CRUD y navegación de las opciones ya existentes, con jerarquía validada."""
+
 from flask import jsonify
 from werkzeug.exceptions import BadRequest
+
 from app import db
 from app.models.menu_option import MenuOption
 from app.models.profile import Profile
-from app.validation import record_text as text_value, integer, ids_list, user_state, validate_menu_url, validate_icon
-from app.security import current_user, current_profile, is_admin
+from app.security import current_profile, current_user, is_admin
+from app.validation import (
+    ids_list,
+    integer,
+    user_state,
+    validate_icon,
+    validate_menu_url,
+)
+from app.validation import (
+    record_text as text_value,
+)
 
 
 def get_all_menu_options(filters):
@@ -25,11 +36,16 @@ def get_all_menu_options(filters):
                     keep.update(chain)
                     break
                 node = active.get(node.parent_id)
+
         def tree(option):
             data = option.to_dict(include_children=False)
-            data["children"] = [tree(child) for child in active.values()
-                                if child.parent_id == option.id and child.id in keep]
+            data["children"] = [
+                tree(child)
+                for child in active.values()
+                if child.parent_id == option.id and child.id in keep
+            ]
             return data
+
         roots = [tree(o) for o in options if o.parent_id is None and o.id in keep]
         return jsonify({"menu_options": roots, "configured": bool(options)}), 200
     if not is_admin(actor):

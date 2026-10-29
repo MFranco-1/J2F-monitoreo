@@ -1,7 +1,9 @@
 """Datos maestros de clientes, vehículos, GPS y tipos de evento."""
+
 import json
+
 from app import db
-from app.datetime_utils import utcnow, iso_utc
+from app.datetime_utils import iso_utc, utcnow
 
 
 class TimestampStateMixin:
@@ -30,14 +32,23 @@ class Client(TimestampStateMixin, db.Model):
 
     def to_dict(self):
         from app.validation import client_phone_country
-        return {"id": self.id, "document_type": self.document_type,
-                "document_number": self.document_number, "business_name": self.business_name,
-                "contact_name": self.contact_name, "phone": self.phone, "email": self.email,
-                "phone_country": client_phone_country(self.phone),
-                "address": self.address, "state_id": self.state_id,
-                "state": self.state.to_dict() if self.state else None,
-                "verification": self.verification,
-                "created_at": iso_utc(self.created_at), "updated_at": iso_utc(self.updated_at)}
+
+        return {
+            "id": self.id,
+            "document_type": self.document_type,
+            "document_number": self.document_number,
+            "business_name": self.business_name,
+            "contact_name": self.contact_name,
+            "phone": self.phone,
+            "email": self.email,
+            "phone_country": client_phone_country(self.phone),
+            "address": self.address,
+            "state_id": self.state_id,
+            "state": self.state.to_dict() if self.state else None,
+            "verification": self.verification,
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
+        }
 
     @property
     def verification(self):
@@ -48,9 +59,14 @@ class Client(TimestampStateMixin, db.Model):
                     return value
             except (TypeError, ValueError):
                 pass
-        return {"status": "pending" if self.document_type.upper() == "RUC" else "not_applicable",
-                "source": "legacy", "observation": "Registro anterior sin verificación documentada",
-                "actor": None, "timestamp": None, "audit": []}
+        return {
+            "status": "pending" if self.document_type.upper() == "RUC" else "not_applicable",
+            "source": "legacy",
+            "observation": "Registro anterior sin verificación documentada",
+            "actor": None,
+            "timestamp": None,
+            "audit": [],
+        }
 
 
 class Vehicle(TimestampStateMixin, db.Model):
@@ -68,12 +84,20 @@ class Vehicle(TimestampStateMixin, db.Model):
     alerts = db.relationship("Alert", back_populates="vehicle", lazy="dynamic")
 
     def to_dict(self, include_client=False):
-        data = {"id": self.id, "client_id": self.client_id, "plate": self.plate,
-                "brand": self.brand, "model": self.model, "color": self.color,
-                "vehicle_type": self.vehicle_type, "state_id": self.state_id,
-                "state": self.state.to_dict() if self.state else None,
-                "gps_devices": [device.to_dict() for device in self.gps_devices.order_by(GpsDevice.id)],
-                "created_at": iso_utc(self.created_at), "updated_at": iso_utc(self.updated_at)}
+        data = {
+            "id": self.id,
+            "client_id": self.client_id,
+            "plate": self.plate,
+            "brand": self.brand,
+            "model": self.model,
+            "color": self.color,
+            "vehicle_type": self.vehicle_type,
+            "state_id": self.state_id,
+            "state": self.state.to_dict() if self.state else None,
+            "gps_devices": [device.to_dict() for device in self.gps_devices.order_by(GpsDevice.id)],
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
+        }
         if include_client:
             data["client"] = self.client.to_dict() if self.client else None
         return data
@@ -93,11 +117,19 @@ class GpsDevice(TimestampStateMixin, db.Model):
     alerts = db.relationship("Alert", back_populates="gps_device", lazy="dynamic")
 
     def to_dict(self, include_vehicle=False):
-        data = {"id": self.id, "vehicle_id": self.vehicle_id, "imei": self.imei,
-                "serial_number": self.serial_number, "model": self.model,
-                "provider": self.provider, "sim_number": self.sim_number,
-                "state_id": self.state_id, "state": self.state.to_dict() if self.state else None,
-                "created_at": iso_utc(self.created_at), "updated_at": iso_utc(self.updated_at)}
+        data = {
+            "id": self.id,
+            "vehicle_id": self.vehicle_id,
+            "imei": self.imei,
+            "serial_number": self.serial_number,
+            "model": self.model,
+            "provider": self.provider,
+            "sim_number": self.sim_number,
+            "state_id": self.state_id,
+            "state": self.state.to_dict() if self.state else None,
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
+        }
         if include_vehicle:
             data["vehicle"] = self.vehicle.to_dict(include_client=True) if self.vehicle else None
         return data
@@ -116,8 +148,16 @@ class EventType(TimestampStateMixin, db.Model):
     alerts = db.relationship("Alert", back_populates="event_type", lazy="dynamic")
 
     def to_dict(self):
-        return {"id": self.id, "code": self.code, "name": self.name,
-                "description": self.description, "default_priority": self.default_priority,
-                "generates_alert": self.generates_alert, "expected_action": self.expected_action,
-                "state_id": self.state_id, "state": self.state.to_dict() if self.state else None,
-                "created_at": iso_utc(self.created_at), "updated_at": iso_utc(self.updated_at)}
+        return {
+            "id": self.id,
+            "code": self.code,
+            "name": self.name,
+            "description": self.description,
+            "default_priority": self.default_priority,
+            "generates_alert": self.generates_alert,
+            "expected_action": self.expected_action,
+            "state_id": self.state_id,
+            "state": self.state.to_dict() if self.state else None,
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
+        }

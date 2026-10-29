@@ -1,4 +1,3 @@
-<!-- features/dashboard/dashboard.component.html -->
 <div class="dashboard">
   <!-- Header -->
   <div class="page-header dashboard-header">
@@ -6,26 +5,39 @@
       <h1>Bienvenido, {{ auth.currentUser()?.full_name }}</h1>
       <p>Panel de control del centro de monitoreo</p>
       <p *ngIf="auth.hasActiveProfile() && !loading()">
-      Última actualización: {{ lastUpdate() | date:'HH:mm:ss' }}
-      <span class="live-badge">{{ connectionError() ? "SIN CONEXIÓN" : "ACTUALIZA CADA 30 S" }}</span>
+        Última actualización: {{ lastUpdate() | date: 'HH:mm:ss' }}
+        <span class="live-badge">{{
+          connectionError() ? 'SIN CONEXIÓN' : 'ACTUALIZA CADA 30 S'
+        }}</span>
       </p>
     </div>
     <div class="profile-selector" *ngIf="auth.availableProfiles().length > 1">
       <label for="active-profile">Perfil activo</label>
-      <select id="active-profile" class="form-control" [(ngModel)]="selectedProfileId"
-              (change)="onProfileChange()" [disabled]="selectingProfile()">
+      <select
+        id="active-profile"
+        class="form-control"
+        [(ngModel)]="selectedProfileId"
+        (change)="onProfileChange()"
+        [disabled]="selectingProfile()"
+      >
         <option [ngValue]="null" disabled>Seleccione un perfil</option>
-        <option *ngFor="let profile of auth.availableProfiles()" [ngValue]="profile.id">{{ profile.name }}</option>
+        <option *ngFor="let profile of auth.availableProfiles()" [ngValue]="profile.id">
+          {{ profile.name }}
+        </option>
       </select>
     </div>
   </div>
 
-  <p class="alert-banner alert-error" role="alert" *ngIf="selectionError()">{{ selectionError() }}</p>
+  <p class="alert-banner alert-error" role="alert" *ngIf="selectionError()">
+    {{ selectionError() }}
+  </p>
   <div class="profile-pending card" *ngIf="auth.requiresProfileSelection()">
     Selecciona un perfil para cargar la información correspondiente
   </div>
 
-  <p class="alert-banner alert-error" role="alert" *ngIf="connectionError()">No se pudo actualizar. Se reintentará automáticamente.</p>
+  <p class="alert-banner alert-error" role="alert" *ngIf="connectionError()">
+    No se pudo actualizar. Se reintentará automáticamente.
+  </p>
 
   <!-- Loading -->
   <div class="loading-overlay" *ngIf="loading()">
@@ -37,7 +49,6 @@
     <div class="metrics-grid">
       <!-- Total -->
       <div class="metric-card total-card">
-        
         <div class="metric-info">
           <div class="metric-label">Total Alertas</div>
           <div class="metric-value">{{ metrics()!.total_alerts }}</div>
@@ -46,10 +57,9 @@
 
       <!-- Abiertas -->
       <div class="metric-card open-card">
-        
         <div class="metric-info">
           <div class="metric-label">Abiertas</div>
-          <div class="metric-value" style="color: #245a8b;">
+          <div class="metric-value">
             {{ metrics()!.by_state['Abierto'] || 0 }}
           </div>
         </div>
@@ -57,10 +67,9 @@
 
       <!-- En Progreso -->
       <div class="metric-card progress-card">
-        
         <div class="metric-info">
           <div class="metric-label">En Progreso</div>
-          <div class="metric-value" style="color: #a85615;">
+          <div class="metric-value">
             {{ metrics()!.by_state['En Progreso'] || 0 }}
           </div>
         </div>
@@ -68,10 +77,9 @@
 
       <!-- Cerradas -->
       <div class="metric-card closed-card">
-        
         <div class="metric-info">
           <div class="metric-label">Cerradas</div>
-          <div class="metric-value" style="color: #1f7256;">
+          <div class="metric-value">
             {{ metrics()!.by_state['Cerrado'] || 0 }}
           </div>
         </div>
@@ -81,15 +89,15 @@
       <div class="metric-card time-card">
         <div class="metric-info">
           <div class="metric-label">Tiempo Prom. Resolución</div>
-          <div class="metric-value" style="color: #7450a7;">
-            {{ metrics()!.avg_response_time_minutes | number:'1.0-1' }}
-            <span style="font-size:14px; font-weight:400;">min</span>
+          <div class="metric-value">
+            {{ metrics()!.avg_response_time_minutes | number: '1.0-1' }}
+            <span class="metric-unit">min</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Gráficos Section -->
+    <!-- Monitoreo y distribución de alertas -->
     <app-vehicle-map (eventCreated)="refreshMetrics()"></app-vehicle-map>
 
     <div class="charts-grid">
@@ -97,10 +105,7 @@
       <div class="card chart-card">
         <h3 class="chart-title">Distribución por Estado</h3>
         <div class="state-bars">
-          <div
-            class="state-bar-item"
-            *ngFor="let entry of getStateEntries()"
-          >
+          <div class="state-bar-item" *ngFor="let entry of getStateEntries()">
             <div class="bar-header">
               <span class="bar-label">{{ entry.name }}</span>
               <span class="bar-count">{{ entry.count }}</span>
@@ -120,7 +125,7 @@
       <!-- Alertas Críticas Abiertas -->
       <div class="card chart-card">
         <h3 class="chart-title">
-           Alertas Críticas Abiertas
+          Alertas Críticas Abiertas
           <span class="chart-badge">{{ metrics()!.critical_open.length }}</span>
         </h3>
         <div class="critical-list">
@@ -135,16 +140,14 @@
             </div>
             <div class="critical-meta">
               <span>{{ alert.service_type || '—' }}</span>
-              <span class="critical-time">{{ alert.opened_at | date:'dd/MM HH:mm' }}</span>
+              <span class="critical-time">{{ alert.opened_at | date: 'dd/MM HH:mm' }}</span>
             </div>
           </div>
           <div class="empty-state" *ngIf="metrics()!.critical_open.length === 0">
-            
             <p>No hay alertas críticas abiertas</p>
           </div>
         </div>
       </div>
     </div>
-
   </ng-container>
 </div>

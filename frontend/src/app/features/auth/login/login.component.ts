@@ -1,4 +1,3 @@
-// features/auth/login/login.component.ts
 import { Component, signal, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -34,9 +33,7 @@ export class LoginComponent {
       next: () => this.router.navigate(['/dashboard']),
       error: (err) => {
         this.loading.set(false);
-        this.errorMsg.set(
-          err?.error?.error || 'Credenciales inválidas. Intenta nuevamente.'
-        );
+        this.errorMsg.set(err?.error?.error || 'Credenciales inválidas. Intenta nuevamente.');
       },
       complete: () => this.loading.set(false),
     });

@@ -1,4 +1,3 @@
-// shared/models/assignment.model.ts
 export interface Assignment {
   id: number;
   alert_id: number;
@@ -57,24 +56,45 @@ export interface Report {
 
 export type ReportType = 'alerts_summary' | 'operator_performance' | 'response_times';
 export interface ReportFilters {
-  client_id?: number | null; vehicle_id?: number | null; user_id?: number | null;
-  priority?: string; state?: string;
+  client_id?: number | null;
+  vehicle_id?: number | null;
+  user_id?: number | null;
+  priority?: string;
+  state?: string;
 }
 export interface ReportForm {
-  name: string; type: ReportType; description: string;
-  date_range_start: string; date_range_end: string; filters: ReportFilters;
+  name: string;
+  type: ReportType;
+  description: string;
+  date_range_start: string;
+  date_range_end: string;
+  filters: ReportFilters;
 }
 export interface ResponseTimeStats {
-  count: number; avg_minutes: number | null; min_minutes: number | null; max_minutes: number | null;
+  count: number;
+  avg_minutes: number | null;
+  min_minutes: number | null;
+  max_minutes: number | null;
 }
 export interface TechnicianPerformance {
-  technician_id: number; technician: string; assigned: number; resolved: number;
-  reassigned: number; cancelled: number; active: number; avg_response_minutes: number | null;
+  technician_id: number;
+  technician: string;
+  assigned: number;
+  resolved: number;
+  reassigned: number;
+  cancelled: number;
+  active: number;
+  avg_response_minutes: number | null;
 }
 export interface ReportResult {
-  type: ReportType; generated_at?: string; generated_by?: { id: number; full_name: string };
+  type: ReportType;
+  generated_at?: string;
+  generated_by?: { id: number; full_name: string };
   date_range?: { start: string | null; end: string | null };
-  filters?: ReportFilters; filter_labels?: Record<string, string>;
-  total_alerts?: number; by_priority?: Record<string, number | ResponseTimeStats>;
-  by_state?: Record<string, number>; rows?: TechnicianPerformance[];
+  filters?: ReportFilters;
+  filter_labels?: Record<string, string>;
+  total_alerts?: number;
+  by_priority?: Record<string, number | ResponseTimeStats>;
+  by_state?: Record<string, number>;
+  rows?: TechnicianPerformance[];
 }

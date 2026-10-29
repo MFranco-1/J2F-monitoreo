@@ -3,8 +3,8 @@ models/alert.py - Modelo Alerta (Alert)
 Entidad central del sistema de monitoreo.
 """
 
-from app.datetime_utils import utcnow, as_utc_naive, iso_utc
 from app import db
+from app.datetime_utils import as_utc_naive, iso_utc, utcnow
 
 TERMINAL_ALERT_STATES = ("Cerrado", "Anulado")
 
@@ -17,16 +17,20 @@ class Alert(db.Model):
     description = db.Column(db.Text, nullable=True)
     # 'critical' | 'high' | 'medium' | 'low'
     priority = db.Column(db.String(20), nullable=False, default="medium", index=True)
-    # Tipo de servicio afectado (ej: Red, Servidor, Aplicación)
+    # Servicio operativo relacionado con la incidencia.
     service_type = db.Column(db.String(100), nullable=True)
     # Lugar / ubicación donde se origina la alerta
     location = db.Column(db.String(200), nullable=True)
-    # Fuente de la alerta (ej: SNMP, Manual, API externa)
+    # Origen del registro: ingreso manual o evento del mapa.
     source = db.Column(db.String(100), nullable=True, default="Manual")
     state_id = db.Column(db.Integer, db.ForeignKey("states.id"), nullable=False, index=True)
     vehicle_id = db.Column(db.Integer, db.ForeignKey("vehicles.id"), nullable=True, index=True)
-    gps_device_id = db.Column(db.Integer, db.ForeignKey("gps_devices.id"), nullable=True, index=True)
-    event_type_id = db.Column(db.Integer, db.ForeignKey("event_types.id"), nullable=True, index=True)
+    gps_device_id = db.Column(
+        db.Integer, db.ForeignKey("gps_devices.id"), nullable=True, index=True
+    )
+    event_type_id = db.Column(
+        db.Integer, db.ForeignKey("event_types.id"), nullable=True, index=True
+    )
     # Usuario que creó la alerta
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     # Tiempos de respuesta
@@ -46,8 +50,12 @@ class Alert(db.Model):
     vehicle = db.relationship("Vehicle", back_populates="alerts")
     gps_device = db.relationship("GpsDevice", back_populates="alerts")
     event_type = db.relationship("EventType", back_populates="alerts")
-    assignments = db.relationship("Assignment", back_populates="alert", lazy="dynamic", cascade="all, delete-orphan")
-    history = db.relationship("History", back_populates="alert", lazy="dynamic", cascade="all, delete-orphan")
+    assignments = db.relationship(
+        "Assignment", back_populates="alert", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    history = db.relationship(
+        "History", back_populates="alert", lazy="dynamic", cascade="all, delete-orphan"
+    )
 
     @property
     def is_terminal(self):
@@ -64,9 +72,11 @@ class Alert(db.Model):
     @property
     def current_assignee(self):
         """Retorna el técnico actualmente asignado a esta alerta."""
-        latest = self.assignments.filter_by(completed_at=None).order_by(
-            db.desc("assigned_at"), db.desc("id")
-        ).first()
+        latest = (
+            self.assignments.filter_by(completed_at=None)
+            .order_by(db.desc("assigned_at"), db.desc("id"))
+            .first()
+        )
         return latest.user if latest else None
 
     def to_dict(self, include_history: bool = False) -> dict:
@@ -85,7 +95,9 @@ class Alert(db.Model):
             "gps_device_id": self.gps_device_id,
             "event_type_id": self.event_type_id,
             "vehicle": self.vehicle.to_dict(include_client=True) if self.vehicle else None,
-            "client": self.vehicle.client.to_dict() if self.vehicle and self.vehicle.client else None,
+            "client": self.vehicle.client.to_dict()
+            if self.vehicle and self.vehicle.client
+            else None,
             "gps_device": self.gps_device.to_dict() if self.gps_device else None,
             "event_type": self.event_type.to_dict() if self.event_type else None,
             "opened_at": iso_utc(self.opened_at),

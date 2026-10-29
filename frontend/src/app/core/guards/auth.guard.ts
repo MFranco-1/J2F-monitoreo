@@ -1,4 +1,3 @@
-// core/guards/auth.guard.ts
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
@@ -27,5 +26,6 @@ export const activeProfileGuard: CanActivateFn = () => {
 export const reportGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   return auth.isAdmin() || auth.isSupervisor()
-    ? true : inject(Router).createUrlTree(['/dashboard']);
+    ? true
+    : inject(Router).createUrlTree(['/dashboard']);
 };

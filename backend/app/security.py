@@ -1,16 +1,22 @@
 """Autorización basada exclusivamente en el perfil activo del JWT."""
-from functools import wraps
+
 import unicodedata
+from functools import wraps
+
 from flask import jsonify
 from flask_jwt_extended import get_jwt, get_jwt_identity
+
 from app import db
 from app.models.user import User
 
 
 def role_name(name):
     value = name or ""
-    return "".join(c for c in unicodedata.normalize("NFD", value.strip().casefold())
-                   if unicodedata.category(c) != "Mn")
+    return "".join(
+        c
+        for c in unicodedata.normalize("NFD", value.strip().casefold())
+        if unicodedata.category(c) != "Mn"
+    )
 
 
 def active_profiles(user):
@@ -72,15 +78,19 @@ def is_supervisor(user, profile=None):
 
 def has_active_role(user, role, *, excluded_profile_id=None):
     """Comprueba un rol activo sin depender del perfil seleccionado en el JWT."""
-    return bool(account_is_active(user) and any(
-        profile.id != excluded_profile_id and role_name(profile.name) == role
-        for profile in active_profiles(user)
-    ))
+    return bool(
+        account_is_active(user)
+        and any(
+            profile.id != excluded_profile_id and role_name(profile.name) == role
+            for profile in active_profiles(user)
+        )
+    )
 
 
 def active_admin_count(*, excluded_user_id=None, excluded_profile_id=None):
     return sum(
-        1 for user in User.query.all()
+        1
+        for user in User.query.all()
         if user.id != excluded_user_id
         and has_active_role(user, "administrador", excluded_profile_id=excluded_profile_id)
     )
@@ -96,8 +106,11 @@ def can_view_reports(user):
 
 def can_cancel_alert(user):
     profile = current_profile(user)
-    return bool(account_is_active(user) and profile
-                and role_name(profile.name) in {"administrador", "supervisor"})
+    return bool(
+        account_is_active(user)
+        and profile
+        and role_name(profile.name) in {"administrador", "supervisor"}
+    )
 
 
 def alert_cancellation_required(fn):
@@ -106,6 +119,7 @@ def alert_cancellation_required(fn):
         if not can_cancel_alert(current_user()):
             return jsonify({"error": "Solo Administrador y Supervisor pueden anular alertas"}), 403
         return fn(*args, **kwargs)
+
     return wrapped
 
 
@@ -131,6 +145,7 @@ def admin_required(fn):
         if not is_admin(current_user()):
             return jsonify({"error": "Esta operación requiere el perfil Administrador"}), 403
         return fn(*args, **kwargs)
+
     return wrapped
 
 
@@ -138,8 +153,11 @@ def assignment_manager_required(fn):
     @wraps(fn)
     def wrapped(*args, **kwargs):
         if not can_assign(current_user()):
-            return jsonify({"error": "Esta operación requiere el perfil Supervisor, Operador o Administrador"}), 403
+            return jsonify(
+                {"error": "Esta operación requiere el perfil Supervisor, Operador o Administrador"}
+            ), 403
         return fn(*args, **kwargs)
+
     return wrapped
 
 
@@ -147,8 +165,11 @@ def report_viewer_required(fn):
     @wraps(fn)
     def wrapped(*args, **kwargs):
         if not can_view_reports(current_user()):
-            return jsonify({"error": "Esta operación requiere el perfil Supervisor o Administrador"}), 403
+            return jsonify(
+                {"error": "Esta operación requiere el perfil Supervisor o Administrador"}
+            ), 403
         return fn(*args, **kwargs)
+
     return wrapped
 
 
@@ -161,6 +182,7 @@ def may_view_alert(alert, user):
 def scope_alert_query(query, user=None):
     """Aplica el alcance operativo al query sin confiar en filtros del cliente."""
     from sqlalchemy import false
+
     from app.models.alert import Alert
     from app.models.assignment import Assignment
 

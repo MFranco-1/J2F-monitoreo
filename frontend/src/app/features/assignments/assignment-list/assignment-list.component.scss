@@ -1,14 +1,58 @@
-/* features/assignments/assignment-list/assignment-list.component.scss */
-.admin-page { max-width: 1400px; }
-.case-notes-modal { max-width: 760px; }
-.notes-help { color: var(--text-secondary, #526779); font-size: 0.875rem; line-height: 1.6; margin: 0 0 16px; }
-.notes-group { margin: 20px 0; }
-.notes-group h3 { font-size: 1rem; margin: 0 0 12px; }
-.case-note { padding: 12px 0; border-bottom: 1px solid var(--border-default); }
-.note-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; font-size: 0.85rem; }
-.note-heading span, .note-heading time { color: var(--text-secondary, #526779); }
-.note-heading time { margin-left: auto; }
-.note-content { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; line-height: 1.6; }
-.legacy-notes summary { cursor: pointer; margin-top: 12px; font-size: 0.875rem; }
-.new-case-note { padding-top: 16px; border-top: 1px solid var(--border-default); }
-@media (max-width: 540px) { .note-heading time { margin-left: 0; flex-basis: 100%; } }
+.admin-page {
+  max-width: 1400px;
+}
+.case-notes-modal {
+  max-width: 760px;
+}
+.notes-help {
+  color: var(--text-secondary, #526779);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+.notes-group {
+  margin: 20px 0;
+}
+.notes-group h3 {
+  font-size: 1rem;
+  margin: 0 0 12px;
+}
+.case-note {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+.note-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font-size: 0.85rem;
+}
+.note-heading span,
+.note-heading time {
+  color: var(--text-secondary, #526779);
+}
+.note-heading time {
+  margin-left: auto;
+}
+.note-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 0 0;
+  line-height: 1.6;
+}
+.legacy-notes summary {
+  cursor: pointer;
+  margin-top: 12px;
+  font-size: 0.875rem;
+}
+.new-case-note {
+  padding-top: 16px;
+  border-top: 1px solid var(--border-default);
+}
+@media (max-width: 540px) {
+  .note-heading time {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}

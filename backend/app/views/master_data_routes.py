@@ -1,8 +1,10 @@
 """Rutas de consulta y mantenimiento de datos maestros."""
+
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
-from app.security import admin_required
+
 from app.controllers import master_data_controller
+from app.security import admin_required
 
 master_data_bp = Blueprint("master_data", __name__)
 
@@ -38,7 +40,9 @@ def create_record(kind):
 def update_record(kind, record_id):
     if kind not in master_data_controller.MODELS:
         return {"error": "Dato maestro no reconocido"}, 404
-    return master_data_controller.update_record(kind, record_id, request.get_json(silent=True) or {})
+    return master_data_controller.update_record(
+        kind, record_id, request.get_json(silent=True) or {}
+    )
 
 
 @master_data_bp.delete("/<kind>/<int:record_id>")

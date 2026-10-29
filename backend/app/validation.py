@@ -1,10 +1,13 @@
 """Validación de las entradas de los CRUD existentes."""
-import re
+
 import math
+import re
 import unicodedata
-import phonenumbers
 from datetime import datetime, timedelta
+
+import phonenumbers
 from werkzeug.exceptions import BadRequest
+
 from app.datetime_utils import as_utc_naive
 
 
@@ -56,24 +59,43 @@ TEXT_RULES = {
 def record_text(data, field, *, required=False, limit=None):
     label, minimum, letters = TEXT_RULES.get(field, (field, 0, 0))
     try:
-        value = text_value(data, field, required=required,
-                           limit=limit if limit is not None else 2000)
+        value = text_value(
+            data, field, required=required, limit=limit if limit is not None else 2000
+        )
     except BadRequest as error:
         raise BadRequest(error.description.replace(field, label)) from None
     if value and field in TEXT_RULES:
         significant = "".join(char.casefold() for char in value if char.isalnum())
-        if (len(value) < minimum or len(significant) < 2
-                or sum(char.isalpha() for char in value) < letters
-                or len(set(significant)) < 2):
-            raise BadRequest(f"{label}: ingresa un dato válido de al menos {minimum} caracteres, no una letra o símbolos aislados")
+        if (
+            len(value) < minimum
+            or len(significant) < 2
+            or sum(char.isalpha() for char in value) < letters
+            or len(set(significant)) < 2
+        ):
+            raise BadRequest(
+                f"{label}: ingresa un dato válido de al menos {minimum} caracteres, no una letra o símbolos aislados"
+            )
         if field in {"contact_name", "full_name"} and any(
-                not (char.isalpha() or char in " .'-") for char in value):
+            not (char.isalpha() or char in " .'-") for char in value
+        ):
             raise BadRequest(f"{label} solo admite letras, espacios, puntos, apóstrofes y guiones")
         if field == "address" and any(
-                not (char.isalpha() or char in "0123456789 .,-/#") for char in value):
-            raise BadRequest("Dirección: solo admite letras (incluidas tildes y ñ), números, espacios y . , - / #")
-        if field == "business_name" and re.sub(r"[^a-z]", "", value.lower()) in {"sa", "sac", "saa", "sacs", "srl", "eirl"}:
-            raise BadRequest("Razón social: ingresa el nombre de la empresa, no solo su forma legal (S.A.C., S.A., etc.)")
+            not (char.isalpha() or char in "0123456789 .,-/#") for char in value
+        ):
+            raise BadRequest(
+                "Dirección: solo admite letras (incluidas tildes y ñ), números, espacios y . , - / #"
+            )
+        if field == "business_name" and re.sub(r"[^a-z]", "", value.lower()) in {
+            "sa",
+            "sac",
+            "saa",
+            "sacs",
+            "srl",
+            "eirl",
+        }:
+            raise BadRequest(
+                "Razón social: ingresa el nombre de la empresa, no solo su forma legal (S.A.C., S.A., etc.)"
+            )
     return value
 
 
@@ -84,19 +106,22 @@ def normalize_client_name(value):
     value = re.sub(r"\s+", " ", value.strip()).lower()
     for index, char in enumerate(value):
         if char.isalpha():
-            return value[:index] + char.upper() + value[index + 1:]
+            return value[:index] + char.upper() + value[index + 1 :]
     return value
 
 
 def validate_client_phone(value, country=None):
     """Valida el plan telefónico del país, no la existencia ni el titular."""
-    if country is not None and (not isinstance(country, str)
-            or country not in phonenumbers.SUPPORTED_REGIONS):
+    if country is not None and (
+        not isinstance(country, str) or country not in phonenumbers.SUPPORTED_REGIONS
+    ):
         raise BadRequest("Teléfono: selecciona un país válido")
     if not value:
         return value
     if not isinstance(value, str) or not re.fullmatch(r"\+?[0-9]{7,15}", value):
-        raise BadRequest("Teléfono: ingresa solo dígitos, sin letras, espacios ni símbolos; el prefijo se elige por país")
+        raise BadRequest(
+            "Teléfono: ingresa solo dígitos, sin letras, espacios ni símbolos; el prefijo se elige por país"
+        )
     try:
         if country or value.startswith("+"):
             parsed = phonenumbers.parse(value, country)
@@ -106,9 +131,12 @@ def validate_client_phone(value, country=None):
             parsed = phonenumbers.parse(value, "PE")
             if not phonenumbers.is_valid_number_for_region(parsed, "PE"):
                 parsed = phonenumbers.parse("+" + value, None)
-        if not phonenumbers.is_valid_number(parsed) or (country and
-                not phonenumbers.is_valid_number_for_region(parsed, country)):
-            raise BadRequest("Teléfono: el número no es válido para el país seleccionado; revisa la longitud y el código de área")
+        if not phonenumbers.is_valid_number(parsed) or (
+            country and not phonenumbers.is_valid_number_for_region(parsed, country)
+        ):
+            raise BadRequest(
+                "Teléfono: el número no es válido para el país seleccionado; revisa la longitud y el código de área"
+            )
         canonical = phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
         if len(canonical) > 16:
             raise BadRequest("Teléfono: máximo 15 dígitos incluyendo el prefijo internacional")
@@ -130,10 +158,12 @@ def client_phone_country(value):
 
 def validate_document(document_type, number):
     document_type = document_type.upper()
-    patterns = {"RUC": (r"[0-9]{11}", "El RUC debe contener exactamente 11 dígitos"),
-                "DNI": (r"[0-9]{8}", "El DNI debe contener exactamente 8 dígitos"),
-                "CE": (r"[0-9]{9,12}", "El carné de extranjería debe contener de 9 a 12 dígitos"),
-                "PASAPORTE": (r"[A-Z0-9]{6,12}", "El pasaporte debe contener de 6 a 12 letras o dígitos")}
+    patterns = {
+        "RUC": (r"[0-9]{11}", "El RUC debe contener exactamente 11 dígitos"),
+        "DNI": (r"[0-9]{8}", "El DNI debe contener exactamente 8 dígitos"),
+        "CE": (r"[0-9]{9,12}", "El carné de extranjería debe contener de 9 a 12 dígitos"),
+        "PASAPORTE": (r"[A-Z0-9]{6,12}", "El pasaporte debe contener de 6 a 12 letras o dígitos"),
+    }
     if document_type not in patterns:
         raise BadRequest("Selecciona un tipo de documento válido: RUC, DNI, CE o PASAPORTE")
     pattern, message = patterns[document_type]
@@ -145,8 +175,11 @@ def validate_document(document_type, number):
 
 def validate_phone(value, *, sim=False):
     if value and not re.fullmatch(r"[0-9]{7,22}" if sim else r"[0-9]{7,15}", value):
-        raise BadRequest("SIM: ingresa de 7 a 22 dígitos, sin letras ni símbolos" if sim else
-                         "Teléfono: ingresa de 7 a 15 dígitos, sin letras, espacios ni símbolos")
+        raise BadRequest(
+            "SIM: ingresa de 7 a 22 dígitos, sin letras ni símbolos"
+            if sim
+            else "Teléfono: ingresa de 7 a 15 dígitos, sin letras, espacios ni símbolos"
+        )
     return value
 
 
@@ -155,8 +188,9 @@ def validate_ruc(value):
         raise BadRequest("El RUC debe contener exactamente 11 dígitos")
     if value[:2] not in {"10", "15", "16", "17", "20"}:
         raise BadRequest("El prefijo del RUC no es válido")
-    weighted_sum = sum(int(digit) * weight for digit, weight in
-                       zip(value[:10], (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)))
+    weighted_sum = sum(
+        int(digit) * weight for digit, weight in zip(value[:10], (5, 4, 3, 2, 7, 6, 5, 4, 3, 2))
+    )
     digit = (11 - weighted_sum % 11) % 10
     if int(value[-1]) != digit:
         raise BadRequest("El dígito verificador del RUC no es válido; comprueba el número")
@@ -165,10 +199,14 @@ def validate_ruc(value):
 
 def validate_plate(value):
     value = value.upper()
-    if (not re.fullmatch(r"[A-Z0-9]{2,4}-?[A-Z0-9]{2,4}", value)
-            or not any(char.isalpha() for char in value)
-            or not any(char.isdigit() for char in value)):
-        raise BadRequest("Placa inválida: usa de 4 a 8 letras y dígitos, con un guion opcional (ej. ABC-123)")
+    if (
+        not re.fullmatch(r"[A-Z0-9]{2,4}-?[A-Z0-9]{2,4}", value)
+        or not any(char.isalpha() for char in value)
+        or not any(char.isdigit() for char in value)
+    ):
+        raise BadRequest(
+            "Placa inválida: usa de 4 a 8 letras y dígitos, con un guion opcional (ej. ABC-123)"
+        )
     return value
 
 
@@ -182,8 +220,11 @@ def validate_code(value, *, serial=False):
     value = value if serial else value.upper()
     pattern = r"[A-Za-z0-9][A-Za-z0-9._/-]{2,79}" if serial else r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*"
     if value and (not re.fullmatch(pattern, value) or (not serial and len(value) < 2)):
-        raise BadRequest("Número de serie inválido: mínimo 3 caracteres alfanuméricos; admite . _ / -" if serial else
-                         "Código inválido: mínimo 2 caracteres; usa letras, dígitos y guiones bajos, comenzando por una letra")
+        raise BadRequest(
+            "Número de serie inválido: mínimo 3 caracteres alfanuméricos; admite . _ / -"
+            if serial
+            else "Código inválido: mínimo 2 caracteres; usa letras, dígitos y guiones bajos, comenzando por una letra"
+        )
     return value
 
 
@@ -195,13 +236,17 @@ def validate_password(value):
 
 def validate_menu_url(value):
     if value and not re.fullmatch(r"/(?:[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*)?", value):
-        raise BadRequest("La ruta del menú debe ser interna, por ejemplo /alerts; no admite espacios ni URLs externas")
+        raise BadRequest(
+            "La ruta del menú debe ser interna, por ejemplo /alerts; no admite espacios ni URLs externas"
+        )
     return value
 
 
 def validate_icon(value):
     if value and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{1,99}", value):
-        raise BadRequest("Ícono inválido: usa un identificador de al menos 2 letras, dígitos o guiones")
+        raise BadRequest(
+            "Ícono inválido: usa un identificador de al menos 2 letras, dígitos o guiones"
+        )
     return value
 
 
@@ -226,8 +271,11 @@ def number_value(value, label, *, minimum=None, maximum=None):
         result = float(value)
     except (ValueError, OverflowError):
         raise BadRequest(f"{label} debe ser un número válido") from None
-    if (not math.isfinite(result) or (minimum is not None and result < minimum)
-            or (maximum is not None and result > maximum)):
+    if (
+        not math.isfinite(result)
+        or (minimum is not None and result < minimum)
+        or (maximum is not None and result > maximum)
+    ):
         raise BadRequest(f"{label} está fuera del rango permitido")
     return result
 
@@ -241,6 +289,7 @@ def ids_list(value, field):
 def user_state(value):
     from app import db
     from app.models.state import State
+
     state = db.session.get(State, integer(value, "state_id"))
     if not state or state.type != "user" or state.name not in {"Activo", "Inactivo"}:
         raise BadRequest("Estado de usuario inválido")
@@ -250,6 +299,7 @@ def user_state(value):
 def profile_value(value):
     from app import db
     from app.models.profile import Profile
+
     profile_id = integer(value, "profile_id", optional=True)
     if profile_id is None:
         return None
@@ -266,10 +316,17 @@ def validate_dni(value):
 
 
 def validate_email(value):
-    if (len(value) > 150 or not re.fullmatch(
-            r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}", value)
-            or value.startswith(".") or ".." in value or ".@" in value
-            or len(value.split("@")[0]) > 64):
+    if (
+        len(value) > 150
+        or not re.fullmatch(
+            r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}",
+            value,
+        )
+        or value.startswith(".")
+        or ".." in value
+        or ".@" in value
+        or len(value.split("@")[0]) > 64
+    ):
         raise BadRequest("Correo electrónico inválido")
     return value.casefold()
 

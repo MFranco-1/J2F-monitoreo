@@ -1,4 +1,5 @@
 """UTC compatible con las columnas DateTime actuales, sin migraciones."""
+
 from datetime import datetime, timezone
 
 

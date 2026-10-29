@@ -3,9 +3,10 @@ views/alert_routes.py - Endpoints REST para Alertas
 """
 
 from flask import Blueprint, request
-from app.security import admin_required, assignment_manager_required, alert_cancellation_required
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import get_jwt_identity, jwt_required
+
 from app.controllers import alert_controller
+from app.security import admin_required, alert_cancellation_required, assignment_manager_required
 
 alert_bp = Blueprint("alerts", __name__)
 
@@ -75,8 +76,10 @@ def create_map_event():
 @jwt_required()
 def get_map_fuel_stations():
     return alert_controller.get_nearby_fuel_stations(
-        request.args.get("latitude"), request.args.get("longitude"), request.args.get("radius"),
-        request.args.get("alert_id")
+        request.args.get("latitude"),
+        request.args.get("longitude"),
+        request.args.get("radius"),
+        request.args.get("alert_id"),
     )
 
 
@@ -84,9 +87,11 @@ def get_map_fuel_stations():
 @jwt_required()
 def get_map_route():
     return alert_controller.get_street_route(
-        request.args.get("origin_lat"), request.args.get("origin_lng"),
-        request.args.get("destination_lat"), request.args.get("destination_lng"),
-        request.args.get("alert_id")
+        request.args.get("origin_lat"),
+        request.args.get("origin_lng"),
+        request.args.get("destination_lat"),
+        request.args.get("destination_lng"),
+        request.args.get("alert_id"),
     )
 
 
@@ -112,7 +117,8 @@ def update_alert(alert_id: int):
 @alert_cancellation_required
 def cancel_alert(alert_id: int):
     return alert_controller.cancel_alert(
-        alert_id, request.get_json(silent=True) or {}, int(get_jwt_identity()))
+        alert_id, request.get_json(silent=True) or {}, int(get_jwt_identity())
+    )
 
 
 @alert_bp.delete("/<int:alert_id>")

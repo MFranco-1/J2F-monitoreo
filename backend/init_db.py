@@ -1,9 +1,12 @@
 """Comprueba la base actual. No crea ni modifica bases, tablas o registros."""
+
 import sys
+
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
+
 from app import db
-from app import models
+from app import models as models
 from app.config import database_url
 
 EXPECTED_TABLES = {
@@ -58,10 +61,15 @@ def main():
                     print(item, file=sys.stderr)
                 print("No se ha modificado la base de datos.", file=sys.stderr)
                 return 1
-        print("Conexión correcta. Las 14 tablas y sus columnas requeridas existen. No se modificaron datos.")
+        print(
+            "Conexión correcta. Las 14 tablas y sus columnas requeridas existen. No se modificaron datos."
+        )
         return 0
     except (SQLAlchemyError, RuntimeError, ValueError):
-        print("No se pudo verificar PostgreSQL. Revisa el servicio, la base y las variables de conexión.", file=sys.stderr)
+        print(
+            "No se pudo verificar PostgreSQL. Revisa el servicio, la base y las variables de conexión.",
+            file=sys.stderr,
+        )
         return 1
     finally:
         if engine is not None:
