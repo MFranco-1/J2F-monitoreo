@@ -133,11 +133,16 @@ En otra terminal, desde la raíz del repositorio:
 ```powershell
 cd frontend
 npm ci
+$env:PORT = '4200'
 npm start
 ```
 
 Abrir `http://localhost:4200` e ingresar con una cuenta existente. No se publican
 credenciales de acceso a la base compartida ni contraseñas de usuarios.
+
+Angular también utiliza la variable `PORT` y le da precedencia sobre su argumento
+de línea de comandos. Configurar `4200` en la terminal del frontend evita heredar
+el puerto `5000` del backend.
 
 ### Variables de entorno
 
