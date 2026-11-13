@@ -25,7 +25,12 @@ from app.validation import record_text as text_value
 
 
 def locked_alert(alert_id):
-    # Todas las escrituras de atención bloquean primero la misma fila de alerta.
+    """Bloquea el caso hasta que termine la transacción.
+
+    Notas, reasignaciones y cierres comparten este bloqueo para no operar
+    simultáneamente sobre el mismo caso. populate_existing actualiza los
+    datos si la sesión ya había cargado la alerta antes de obtenerlo.
+    """
     alert = Alert.query.filter_by(id=alert_id).populate_existing().with_for_update().first()
     if not alert:
         raise NotFound("Alerta no encontrada")
@@ -81,6 +86,8 @@ def create_assignment(data, current_user_id):
     previous = alert.assignments.filter_by(completed_at=None).all()
     if len(previous) == 1 and previous[0].user_id == user.id:
         return jsonify({"error": "La alerta ya está asignada a este técnico"}), 409
+    # Se finaliza la asignación anterior, no la alerta: se conservan sus
+    # notas e historial. El relevo y su trazabilidad comparten el commit.
     for assignment in previous:
         assignment.complete()
         _log(
@@ -112,6 +119,11 @@ def create_assignment(data, current_user_id):
 
 
 def auto_assign(data, current_user_id):
+    """Asigna el caso pendiente al técnico activo con menor carga.
+
+    El ID resuelve los empates de forma determinista. Una asignación
+    vigente impide repetir la operación o reasignar automáticamente.
+    """
     alert = locked_alert(integer(data.get("alert_id"), "alert_id"))
     if alert.is_terminal:
         return jsonify({"error": "No se puede asignar una alerta cerrada o anulada"}), 409
@@ -142,6 +154,11 @@ def auto_assign(data, current_user_id):
 
 
 def get_assignment_notes(assignment_id):
+    """Consulta las notas del caso, incluidas las de técnicos anteriores.
+
+    La lectura histórica no habilita escritura: can_add se calcula según
+    la asignación vigente, el perfil activo y el estado de la alerta.
+    """
     assignment = db.get_or_404(Assignment, assignment_id)
     if not may_view_alert(assignment.alert, current_user()):
         return jsonify({"error": "No tienes acceso a las notas de este caso"}), 403
@@ -195,6 +212,7 @@ def add_assignment_note(assignment_id, data, current_user_id):
 
 
 def _note_permission_error(assignment):
+    """Permite notas de supervisión sin conceder el cierre de la atención."""
     actor = current_user()
     if not (
         is_admin(actor)
@@ -232,6 +250,8 @@ def _append_note(assignment, content, user_id):
         if is_admin(actor) or is_supervisor(actor)
         else "assignment"
     )
+    # Las copias de autor y perfil conservan la atribución aunque cambien
+    # sus nombres. Cada nota es independiente y no reemplaza anteriores.
     note = History(
         alert_id=assignment.alert_id,
         user_id=user_id,

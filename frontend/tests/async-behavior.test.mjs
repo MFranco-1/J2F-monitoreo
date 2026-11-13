@@ -128,6 +128,35 @@ const auth = (admin = false) => ({
   profileChanges: new rx.Subject(),
 });
 
+test('detalle e historial conservan sus etiquetas exactas y las acciones desconocidas', () => {
+  injections = [auth(), {}, {}, {}];
+  const detail = new AlertDetailComponent();
+  injections = [{}];
+  const history = new HistoryListComponent();
+  const commonLabels = [
+    ['created', ' Creada'],
+    ['state_changed', ' Estado cambiado'],
+    ['assigned', ' Asignada'],
+    ['escalated', ' Escalada'],
+    ['closed', ' Cerrada'],
+    ['cancelled', ' Anulada'],
+    ['updated', ' Actualizada'],
+    ['reassigned', ' Reasignada'],
+    ['fuel_coordinated', ' Coordinación de abastecimiento'],
+    ['fuel_confirmed', ' Abastecimiento confirmado'],
+  ];
+  for (const [action, expected] of commonLabels) {
+    assert.equal(detail.getActionLabel(action), expected);
+    assert.equal(history.getActionLabel(action), expected);
+  }
+  assert.equal(detail.getActionLabel('note_added'), ' Nota añadida');
+  assert.equal(history.getActionLabel('note_added'), ' Nota');
+  for (const unknown of ['accion_desconocida', ' Acción heredada ', '']) {
+    assert.equal(detail.getActionLabel(unknown), unknown);
+    assert.equal(history.getActionLabel(unknown), unknown);
+  }
+});
+
 function notesSession(role = 'Técnico', id = 2) {
   return {
     isAdmin: () => role === 'Administrador',

@@ -3,6 +3,7 @@ import { NgFor, NgIf, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AssignmentService } from '../../../core/services/assignment.service';
 import { HistoryEntry } from '../../../shared/models/assignment.model';
+import { getHistoryActionLabel } from '../../../shared/history-labels';
 
 @Component({
   selector: 'app-history-list',
@@ -34,6 +35,7 @@ export class HistoryListComponent implements OnInit {
   }
 
   loadHistory(): void {
+    // Si se cambian filtros o página durante una consulta, solo prevalece la última respuesta.
     const requestId = ++this.historyRequestId;
     this.loading.set(true);
     this.assignmentService.getGlobalHistory(this.filters).subscribe({
@@ -72,19 +74,6 @@ export class HistoryListComponent implements OnInit {
   }
 
   getActionLabel(action: string): string {
-    const map: Record<string, string> = {
-      created: ' Creada',
-      state_changed: ' Estado cambiado',
-      assigned: ' Asignada',
-      escalated: ' Escalada',
-      closed: ' Cerrada',
-      cancelled: ' Anulada',
-      updated: ' Actualizada',
-      note_added: ' Nota',
-      reassigned: ' Reasignada',
-      fuel_coordinated: ' Coordinación de abastecimiento',
-      fuel_confirmed: ' Abastecimiento confirmado',
-    };
-    return map[action] ?? action;
+    return getHistoryActionLabel(action);
   }
 }

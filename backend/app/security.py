@@ -57,6 +57,8 @@ def _has_role(user, accepted_roles, profile=None):
         return profile in active_profiles(user) and role_name(profile.name) in accepted_roles
     actor = current_user()
     if not actor or actor.id != user.id:
+        # Al elegir un técnico destinatario importa su elegibilidad, no
+        # el perfil con el que haya iniciado su propia sesión.
         return any(role_name(item.name) in accepted_roles for item in active_profiles(user))
     selected = current_profile(user)
     if selected:
@@ -97,6 +99,7 @@ def active_admin_count(*, excluded_user_id=None, excluded_profile_id=None):
 
 
 def can_assign(user):
+    """Administrador, Supervisor y Operador reparten la carga técnica."""
     return bool(is_admin(user) or is_supervisor(user) or is_operator(user))
 
 
@@ -105,6 +108,7 @@ def can_view_reports(user):
 
 
 def can_cancel_alert(user):
+    """Solo Administrador o Supervisor activos pueden descartar un caso."""
     profile = current_profile(user)
     return bool(
         account_is_active(user)
@@ -174,6 +178,8 @@ def report_viewer_required(fn):
 
 
 def may_view_alert(alert, user):
+    # El Técnico conserva lectura de sus casos anteriores como antecedente.
+    # La atención exige la asignación vigente y se comprueba por separado.
     if can_view_all_operations(user):
         return True
     return bool(is_technician(user) and alert.assignments.filter_by(user_id=user.id).first())
@@ -190,11 +196,13 @@ def scope_alert_query(query, user=None):
     if can_view_all_operations(user):
         return query
     if is_technician(user):
+        # Unifica el acceso histórico con may_view_alert en las consultas.
         return query.filter(Alert.assignments.any(Assignment.user_id == user.id))
     return query.filter(false())
 
 
 def may_attend(alert, user):
+    """Reserva estados y abastecimiento al Administrador o Técnico vigente."""
     if is_admin(user):
         return True
     assignee = alert.current_assignee

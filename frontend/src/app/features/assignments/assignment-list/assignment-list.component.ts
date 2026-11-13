@@ -67,6 +67,7 @@ export class AssignmentListComponent implements OnInit, OnDestroy {
   }
 
   private resetDialogs(): void {
+    // Invalida el caso anterior para que una respuesta tardía no reponga sus notas o permisos.
     this.notesVersion++;
     this.notesRequest?.unsubscribe();
     this.writeRequest?.unsubscribe();
@@ -83,6 +84,7 @@ export class AssignmentListComponent implements OnInit, OnDestroy {
   }
 
   loadAssignments(): void {
+    // Al cambiar de perfil o filtro, la lista anterior ya no representa el alcance vigente.
     const version = ++this.listVersion;
     this.listRequest?.unsubscribe();
     this.loading.set(true);
@@ -152,6 +154,8 @@ export class AssignmentListComponent implements OnInit, OnDestroy {
   }
 
   get canAddNote(): boolean {
+    // can_add refleja la autorización del servidor, incluso si la asignación
+    // cambió después de cargar la lista. El perfil local no basta para habilitar notas.
     const assignment = this.editingAssignment();
     return (
       !!assignment &&
@@ -218,6 +222,7 @@ export class AssignmentListComponent implements OnInit, OnDestroy {
   }
 
   canEdit(a: Assignment): boolean {
+    // Supervisor puede añadir notas; cerrar queda reservado al Administrador o técnico vigente.
     return (
       this.isCurrent(a) &&
       (this.auth.isAdmin() ||

@@ -209,12 +209,15 @@ def cancel_alert(alert_id: int, data: dict, current_user_id: int) -> tuple:
     alert = locked_alert(alert_id)
     if alert.is_terminal:
         return jsonify({"error": "No se puede anular una alerta cerrada o ya anulada"}), 409
+    # El motivo obligatorio justifica descartar el caso sin una solución.
     reason = text_value(data, "reason", required=True, limit=1000)
     state = State.query.filter_by(name="Anulado", type="alert").first()
     if not state:
         return jsonify({"error": "Falta aplicar la migración del estado Anulado"}), 503
     previous_state = alert.state.name
     ended_at = utcnow()
+    # Se libera la carga sin contar una resolución; cancelled guarda
+    # el motivo, junto con el autor, perfil y cambio de estado.
     for assignment in alert.assignments.filter_by(completed_at=None):
         assignment.completed_at = ended_at
         assignment.response_time_minutes = None
@@ -231,7 +234,7 @@ def cancel_alert(alert_id: int, data: dict, current_user_id: int) -> tuple:
 
 
 def delete_alert(alert_id: int, current_user_id: int) -> tuple:
-    """Elimina una alerta (solo si está cerrada)."""
+    """Rechaza el borrado físico para conservar la trazabilidad del caso."""
     db.get_or_404(Alert, alert_id, description="Alerta no encontrada")
     return jsonify(
         {"error": "Las alertas se conservan para mantener la trazabilidad; utiliza Cerrar o Anular"}
@@ -537,6 +540,7 @@ def get_street_route(
 
 
 def record_fuel_action(alert_id: int, data: dict, user_id: int) -> tuple:
+    # El bloqueo de alerta evita confirmar mientras se reasigna o cierra.
     alert = (
         Alert.query.filter_by(id=alert_id)
         .with_for_update()
@@ -695,9 +699,11 @@ def _external_json(url, data=None):
 
 
 def _change_state(alert: Alert, user_id: int, new_state_name: str, notes: str = None):
-    """
-    Valida y ejecuta la transición de estado de una alerta.
-    Retorna una tupla de error si la transición es inválida, None si es válida.
+    """Valida la transición y registra sus efectos en la misma transacción.
+
+    El llamador valida los permisos y mantiene bloqueada la alerta.
+    Esta función no confirma la transacción: devuelve una tupla de error
+    o None para que el llamador decida entre rollback y commit.
     """
     current_state_name = alert.state.name if alert.state else "Abierto"
     allowed = VALID_TRANSITIONS.get(current_state_name, [])
@@ -710,8 +716,11 @@ def _change_state(alert: Alert, user_id: int, new_state_name: str, notes: str = 
             }
         ), 422
 
+    # El cierre acredita una resolución: closed conserva la solución,
+    # el autor, perfil y estados de la transición.
     if new_state_name == "Cerrado" and not notes:
         return jsonify({"error": "Registra la solución aplicada antes de cerrar la alerta"}), 400
+    # Una solución escrita no sustituye la confirmación de abastecimiento.
     if (
         new_state_name == "Cerrado"
         and alert.event_type
@@ -730,13 +739,13 @@ def _change_state(alert: Alert, user_id: int, new_state_name: str, notes: str = 
     alert.state = new_state
     alert.state_id = new_state.id
 
-    # Registrar timestamps especiales
+    # La primera atención conserva su fecha aunque el caso vuelva a abrirse.
     now = utcnow()
     if new_state_name == "En Progreso" and not alert.acknowledged_at:
         alert.acknowledged_at = now
     if new_state_name == "Cerrado":
         alert.resolved_at = now
-        # Completar asignaciones activas
+        # El caso y sus asignaciones se cierran en la misma transacción.
         for assignment in alert.assignments.filter_by(completed_at=None):
             assignment.complete()
 
@@ -759,7 +768,7 @@ def _log_history(
     new_state: str = None,
     detail: str = None,
 ) -> None:
-    """Crea un registro de historial de trazabilidad."""
+    """Añade la auditoría a la transacción pendiente, sin confirmar cambios."""
     entry = History(
         alert_id=alert_id,
         user_id=user_id,

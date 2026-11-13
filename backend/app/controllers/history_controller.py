@@ -22,6 +22,7 @@ def get_history_by_alert(alert_id: int) -> tuple:
 
 def get_global_history(filters: dict) -> tuple:
     """Retorna el historial global con filtros opcionales."""
+    # Se limita el alcance antes de filtrar: user_id no habilita casos ajenos.
     allowed_alerts = scope_alert_query(Alert.query, current_user()).with_entities(Alert.id)
     query = History.query.filter(History.alert_id.in_(allowed_alerts))
 

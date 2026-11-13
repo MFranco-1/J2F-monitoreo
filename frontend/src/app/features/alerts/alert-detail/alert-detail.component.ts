@@ -9,6 +9,7 @@ import { AssignmentService } from '../../../core/services/assignment.service';
 import { Alert } from '../../../shared/models/alert.model';
 import { HistoryEntry } from '../../../shared/models/assignment.model';
 import { firstError, validateForm, textError } from '../../../shared/validation';
+import { getHistoryActionLabel } from '../../../shared/history-labels';
 
 @Component({
   selector: 'app-alert-detail',
@@ -66,6 +67,7 @@ export class AlertDetailComponent implements OnInit, OnDestroy {
 
   loadAlert(id: number): void {
     this.loading.set(true);
+    // Una carga del perfil anterior no debe restaurar datos al cambiar de perfil o salir.
     const requestId = ++this.requestId;
     this.alertService.getAlertById(id).subscribe({
       next: ({ alert }) => {
@@ -86,6 +88,7 @@ export class AlertDetailComponent implements OnInit, OnDestroy {
   }
 
   get canAttend(): boolean {
+    // Tener acceso de lectura al caso no concede atención: se exige la asignación vigente.
     return (
       !!this.alert() &&
       !this.isTerminal &&
@@ -193,20 +196,7 @@ export class AlertDetailComponent implements OnInit, OnDestroy {
   }
 
   getActionLabel(action: string): string {
-    const labels: Record<string, string> = {
-      created: ' Creada',
-      state_changed: ' Estado cambiado',
-      assigned: ' Asignada',
-      note_added: ' Nota añadida',
-      escalated: ' Escalada',
-      closed: ' Cerrada',
-      updated: ' Actualizada',
-      reassigned: ' Reasignada',
-      cancelled: ' Anulada',
-      fuel_coordinated: ' Coordinación de abastecimiento',
-      fuel_confirmed: ' Abastecimiento confirmado',
-    };
-    return labels[action] ?? action;
+    return getHistoryActionLabel(action, ' Nota añadida');
   }
 
   getPriorityLabel(p: string): string {
