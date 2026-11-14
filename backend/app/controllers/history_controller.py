@@ -3,6 +3,7 @@ controllers/history_controller.py - Consultas de Historial de Trazabilidad
 """
 
 from flask import jsonify
+from sqlalchemy import and_, or_
 
 from app import db
 from app.models.alert import Alert
@@ -26,7 +27,15 @@ def get_global_history(filters: dict) -> tuple:
     allowed_alerts = scope_alert_query(Alert.query, current_user()).with_entities(Alert.id)
     query = History.query.filter(History.alert_id.in_(allowed_alerts))
 
-    if filters.get("action"):
+    if filters.get("action") == "escalated":
+        # Incluye ambos formatos sin reescribir el historial existente.
+        query = query.filter(
+            or_(
+                History.action == "escalated",
+                and_(History.action == "state_changed", History.new_state == "Escalado"),
+            )
+        )
+    elif filters.get("action"):
         query = query.filter_by(action=filters["action"])
     if filters.get("user_id"):
         query = query.filter_by(user_id=integer(filters["user_id"], "user_id"))

@@ -3,6 +3,7 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -1715,6 +1716,104 @@ class RegressionTests(unittest.TestCase):
             [],
         )
         self.assertEqual(self.client.get("/api/reports/", headers=own_headers).status_code, 403)
+
+    def test_history_escalated_filter_includes_current_flow_after_another_state_change(self):
+        technician = self.user()
+        headers = self.headers(self.login("test1@example.invalid")["access_token"])
+        alert_id = self.alert()
+        self.assign(alert_id, technician)
+        escalated_id = None
+        for state in ("Escalado", "En Progreso"):
+            response = self.client.put(
+                f"/api/alerts/{alert_id}",
+                headers=headers,
+                json={"state_name": state, "notes": "Verificacion del historial de atencion"},
+            )
+            self.assertEqual(response.status_code, 200, response.get_json())
+            if state == "Escalado":
+                with self.app.app_context():
+                    entry = History.query.filter_by(
+                        alert_id=alert_id, action="state_changed", new_state="Escalado"
+                    ).one()
+                    escalated_id = entry.id
+
+        response = self.client.get("/api/reports/history?action=escalated", headers=headers)
+        self.assertEqual(response.status_code, 200)
+        result = response.get_json()
+        self.assertEqual(result["total"], 1)
+        self.assertEqual([entry["id"] for entry in result["history"]], [escalated_id])
+        self.assertEqual(result["history"][0]["action"], "state_changed")
+        self.assertEqual(result["history"][0]["new_state"], "Escalado")
+        state_changes = self.client.get(
+            "/api/reports/history?action=state_changed", headers=headers
+        ).get_json()
+        self.assertEqual(state_changes["total"], 3)
+        self.assertIn(escalated_id, [entry["id"] for entry in state_changes["history"]])
+
+    def test_history_escalated_filter_preserves_legacy_scope_dates_author_and_pagination(self):
+        technician = self.user()
+        other = self.user(2)
+        self.user(3)
+        headers = self.headers(self.login("test1@example.invalid")["access_token"])
+        unrelated_headers = self.headers(self.login("test3@example.invalid")["access_token"])
+        own_alert, hidden_alert = self.alert(), self.alert()
+        self.assign(own_alert, technician)
+        self.assign(hidden_alert, other)
+        rows = [
+            (own_alert, "escalated", None, technician, datetime(2026, 11, 13)),
+            (own_alert, "state_changed", "Escalado", other, datetime(2026, 11, 13, 23, 59, 59)),
+            (own_alert, "state_changed", "En Progreso", other, datetime(2026, 11, 13, 12)),
+            (own_alert, "updated", "Escalado", other, datetime(2026, 11, 13, 13)),
+            (hidden_alert, "escalated", None, technician, datetime(2026, 11, 13)),
+            (hidden_alert, "state_changed", "Escalado", other, datetime(2026, 11, 13, 23)),
+            (own_alert, "escalated", None, technician, datetime(2026, 11, 12, 23, 59, 59)),
+            (own_alert, "state_changed", "Escalado", other, datetime(2026, 11, 14)),
+        ]
+        with self.app.app_context():
+            entries = [
+                History(
+                    alert_id=alert_id,
+                    action=action,
+                    new_state=state,
+                    user_id=author,
+                    timestamp=timestamp,
+                )
+                for alert_id, action, state, author, timestamp in rows
+            ]
+            db.session.add_all(entries)
+            db.session.commit()
+            legacy_id, current_id = entries[0].id, entries[1].id
+
+        filters = {
+            "action": "escalated",
+            "date_from": "2026-11-13",
+            "date_to": "2026-11-13",
+            "per_page": 1,
+        }
+        for page, expected in ((1, current_id), (2, legacy_id)):
+            with self.subTest(page=page):
+                response = self.client.get(
+                    "/api/reports/history", headers=headers, query_string={**filters, "page": page}
+                )
+                self.assertEqual(response.status_code, 200)
+                result = response.get_json()
+                self.assertEqual(set(result), {"history", "total", "pages", "current_page"})
+                self.assertEqual(
+                    (result["total"], result["pages"], result["current_page"]), (2, 2, page)
+                )
+                self.assertEqual([entry["id"] for entry in result["history"]], [expected])
+
+        for actor, expected_total in ((self.admin, 4), (unrelated_headers, 0)):
+            response = self.client.get("/api/reports/history", headers=actor, query_string=filters)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.get_json()["total"], expected_total)
+        by_author = self.client.get(
+            "/api/reports/history",
+            headers=headers,
+            query_string={**filters, "user_id": technician},
+        ).get_json()
+        self.assertEqual(by_author["total"], 1)
+        self.assertEqual([entry["id"] for entry in by_author["history"]], [legacy_id])
 
     def test_alert_rejects_inconsistent_client_vehicle_device(self):
         def client(number):
