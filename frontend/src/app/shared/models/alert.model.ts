@@ -1,7 +1,11 @@
-export type AlertPriority = 'critical' | 'high' | 'medium' | 'low';
-export type AlertStateName = 'Abierto' | 'En Progreso' | 'Cerrado' | 'Escalado' | 'Anulado';
+export type AlertPriority = string;
+export type AlertStateName = string;
 
 export interface AlertState {
+  code?: string;
+  is_active?: boolean;
+  is_terminal?: boolean;
+  is_resolution?: boolean;
   id: number;
   name: string;
   type: string;

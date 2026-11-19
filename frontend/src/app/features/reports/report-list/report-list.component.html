@@ -269,21 +269,14 @@
           <label for="r-priority">Prioridad</label
           ><select id="r-priority" class="form-control" [(ngModel)]="newForm.filters.priority">
             <option value="">Todas</option>
-            <option value="critical">Crítica</option>
-            <option value="high">Alta</option>
-            <option value="medium">Media</option>
-            <option value="low">Baja</option>
+            <option *ngFor="let priority of catalog.priorities" [value]="priority.code">{{ priority.label }}</option>
           </select>
         </div>
         <div class="form-group">
           <label for="r-state">Estado</label
           ><select id="r-state" class="form-control" [(ngModel)]="newForm.filters.state">
             <option value="">Todos</option>
-            <option value="Abierto">Abierto</option>
-            <option value="En Progreso">En Progreso</option>
-            <option value="Escalado">Escalado</option>
-            <option value="Cerrado">Cerrado</option>
-            <option value="Anulado">Anulado</option>
+            <option *ngFor="let state of alertStates" [value]="state.name">{{ state.name }}</option>
           </select>
         </div>
       </div>

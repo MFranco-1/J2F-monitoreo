@@ -105,7 +105,7 @@
         </div>
         <div class="form-group">
           <label for="state-notes">{{
-            newStateName === 'Cerrado' ? 'Solución aplicada *' : 'Notas (opcional)'
+            targetIsResolution ? 'Solución aplicada *' : 'Notas (opcional)'
           }}</label>
           <textarea
             id="state-notes"
@@ -113,7 +113,7 @@
             [(ngModel)]="stateNotes"
             rows="2"
             [placeholder]="
-              newStateName === 'Cerrado'
+              targetIsResolution
                 ? 'Describe la solución aplicada...'
                 : 'Observaciones del cambio...'
             "

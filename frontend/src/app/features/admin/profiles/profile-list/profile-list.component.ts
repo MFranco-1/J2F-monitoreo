@@ -1,3 +1,4 @@
+import { runtimeCatalog } from '../../../../core/runtime-catalog';
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { NgFor, NgIf } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -13,12 +14,13 @@ import { firstError, validateForm } from '../../../../shared/validation';
   styleUrl: './profile-list.component.scss',
 })
 export class ProfileListComponent implements OnInit {
+  readonly permissions = runtimeCatalog.permissions;
   private userService = inject(UserService);
 
   profiles = signal<Profile[]>([]);
   states = signal<State[]>([]);
   private activeStateId(): number {
-    return this.states().find((s) => s.name === 'Activo')?.id ?? 0;
+    return this.states().find((s) => s.is_active === true)?.id ?? 0;
   }
   loading = signal(true);
   showModal = signal(false);
@@ -54,13 +56,14 @@ export class ProfileListComponent implements OnInit {
 
   openNew(): void {
     this.editingProfile.set(null);
-    this.form = { name: '', description: '', state_id: this.activeStateId() };
+    this.form = { name: '', description: '', state_id: this.activeStateId(), permissions: [] };
     this.showModal.set(true);
   }
 
   openEdit(profile: Profile): void {
     this.editingProfile.set(profile);
     this.form = {
+      permissions: [...(profile.permissions || [])],
       name: profile.name,
       description: profile.description,
       state_id: profile.state_id,
@@ -72,6 +75,12 @@ export class ProfileListComponent implements OnInit {
     if (this.saving()) return;
     this.showModal.set(false);
     this.errorMsg.set('');
+  }
+
+  togglePermission(code: string, checked: boolean): void {
+    const permissions = new Set(this.form.permissions || []);
+    if (checked) permissions.add(code); else permissions.delete(code);
+    this.form.permissions = [...permissions];
   }
 
   save(): void {
@@ -116,6 +125,6 @@ export class ProfileListComponent implements OnInit {
   }
 
   getStateBadge(profile: Profile): string {
-    return profile.state?.name === 'Activo' ? 'badge-active' : 'badge-inactive';
+    return profile.state?.is_active === true ? 'badge-active' : 'badge-inactive';
   }
 }

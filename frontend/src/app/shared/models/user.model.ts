@@ -3,9 +3,15 @@ export interface State {
   name: string;
   type: string;
   description?: string;
+  code?: string;
+  is_active?: boolean;
+  is_terminal?: boolean;
+  is_resolution?: boolean;
 }
 
 export interface Profile {
+  permissions?: string[];
+  role_code?: string;
   id: number;
   name: string;
   description?: string;

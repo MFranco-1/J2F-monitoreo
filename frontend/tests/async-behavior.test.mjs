@@ -1,3 +1,4 @@
+import { contractFixture, mockPermissions, hydrateCatalog } from './contract-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -26,7 +27,7 @@ const imports = {
     Injectable: () => (value) => value,
     inject: () => {
       if (!injections.length) throw new Error('Falta dependencia de prueba');
-      return injections.shift();
+      return mockPermissions(injections.shift());
     },
   },
   '@angular/common': {
@@ -97,6 +98,7 @@ function load(relative) {
     module,
     module.exports,
   );
+  if (path.basename(filename) === 'runtime-catalog.ts') hydrateCatalog(module.exports);
   cache.set(filename, module.exports);
   return module.exports;
 }
@@ -712,7 +714,7 @@ test('la carga de técnicos se consulta al abrir y después de asignar manual o 
   };
   injections = [auth(true), { getAlerts: () => rx.of({ alerts: [], pages: 1 }) }, assignment, {}];
   const component = new AlertListComponent();
-  const alert = { id: 1, state: { name: 'Abierto' } };
+  const alert = { id: 1, state: contractFixture({ name: 'Abierto' }) };
   component.openAssignmentModal(alert);
   assert.equal(loads.length, 1);
   assert.equal(component.loadingTechnicians(), true);
@@ -785,7 +787,7 @@ test('la ventana refresca cargas cada cinco segundos y detiene polling al destru
     component = new AlertListComponent();
     component.ngOnInit();
     assert.equal(requests, 1);
-    component.openAssignmentModal({ id: 1, state: { name: 'Abierto' } });
+    component.openAssignmentModal({ id: 1, state: contractFixture({ name: 'Abierto' }) });
     assert.equal(requests, 2);
     workload = 3;
     ticks.next();
@@ -828,7 +830,7 @@ test('anulación distingue ruta antigua no disponible de una denegación real de
   const errors = new rx.Subject();
   injections = [auth(true), {}, { cancelAlert: () => errors }, {}];
   const component = new AlertDetailComponent();
-  component.alert.set({ id: 1, state: { name: 'Abierto' } });
+  component.alert.set({ id: 1, state: contractFixture({ name: 'Abierto' }) });
   component.cancellationReason = 'Caso duplicado documentado';
   component.cancelAlert();
   errors.error({ status: 404, error: { error: 'Not Found' } });
@@ -838,7 +840,7 @@ test('anulación distingue ruta antigua no disponible de una denegación real de
   const denied = new rx.Subject();
   injections = [auth(true), {}, { cancelAlert: () => denied }, {}];
   const another = new AlertDetailComponent();
-  another.alert.set({ id: 2, state: { name: 'Abierto' } });
+  another.alert.set({ id: 2, state: contractFixture({ name: 'Abierto' }) });
   another.cancellationReason = 'Caso duplicado documentado';
   another.cancelAlert();
   denied.error({
@@ -887,7 +889,7 @@ test('anular exige permiso, motivo válido y evita solicitudes duplicadas en el 
     {},
   ];
   const component = new AlertDetailComponent();
-  component.alert.set({ id: 12, title: 'Alerta manual', state: { name: 'Abierto' } });
+  component.alert.set({ id: 12, title: 'Alerta manual', state: contractFixture({ name: 'Abierto' }) });
   for (const reason of ['', '   ', 'A', '...', '12345', 'x'.repeat(1001)]) {
     component.cancellationReason = reason;
     component.cancelAlert();
@@ -904,7 +906,7 @@ test('anular exige permiso, motivo válido y evita solicitudes duplicadas en el 
   const history = [{ action: 'cancelled', detail: 'Se trata de un duplicado', user_id: 1 }];
   response.next({
     message: 'Alerta anulada',
-    alert: { id: 12, state: { name: 'Anulado' }, history },
+    alert: { id: 12, state: contractFixture({ name: 'Anulado' }), history },
   });
   assert.equal(component.canCancel, false);
   assert.equal(component.canAttend, false);
@@ -914,7 +916,7 @@ test('anular exige permiso, motivo válido y evita solicitudes duplicadas en el 
   assert.equal(component.cancelling(), false);
   component.cancelAlert();
   assert.equal(requests.length, 1);
-  component.alert.set({ id: 12, state: { name: 'Cerrado' } });
+  component.alert.set({ id: 12, state: contractFixture({ name: 'Cerrado' }) });
   component.cancelAlert();
   assert.equal(requests.length, 1);
 });
@@ -922,7 +924,7 @@ test('anular exige permiso, motivo válido y evita solicitudes duplicadas en el 
 test('cambiar perfil ignora una respuesta tardía de anulación y recarga el alcance', () => {
   const response = new rx.Subject();
   const session = auth(true);
-  const initial = { id: 12, state: { name: 'Abierto' }, history: [] };
+  const initial = { id: 12, state: contractFixture({ name: 'Abierto' }), history: [] };
   injections = [
     session,
     { snapshot: { paramMap: { get: () => '12' } } },
@@ -940,7 +942,7 @@ test('cambiar perfil ignora una respuesta tardía de anulación y recarga el alc
   session.profileChanges.next();
   response.next({
     message: 'No restaurar datos anteriores',
-    alert: { id: 12, state: { name: 'Anulado' } },
+    alert: { id: 12, state: contractFixture({ name: 'Anulado' }) },
   });
   assert.equal(component.canCancel, false);
   assert.equal(component.alert(), initial);
@@ -1384,7 +1386,7 @@ test('los tipos nuevos generan alertas sin ofrecer una casilla en el formulario'
   ];
   const component = new MasterDataComponent();
   component.kind = 'event-types';
-  component.states.set([{ id: 1, name: 'Activo' }]);
+  component.states.set([{ id: 1, name: 'Activo', is_active: true }]);
   component.open();
   Object.assign(component.form, { code: 'ENGINE_START', name: 'Encendido del motor' });
   component.save();
@@ -1718,7 +1720,7 @@ test('Registrar GPS preselecciona el vehículo y distingue sin equipo de IMEI re
   assert.match(
     component.gpsLabel({
       ...vehicle,
-      gps_devices: [{ imei: '860000000000001', state: { name: 'Activo' } }],
+      gps_devices: [{ imei: '860000000000001', state: { name: 'Activo', is_active: true } }],
     }),
     /860000000000001.*Activo/,
   );
@@ -1734,7 +1736,7 @@ test('Registrar GPS preselecciona el vehículo y distingue sin equipo de IMEI re
     component.gpsLabel({
       ...vehicle,
       gps_devices: [
-        { serial_number: 'GPS-ABC-123', imei: '000000000000018', state: { name: 'Activo' } },
+        { serial_number: 'GPS-ABC-123', imei: '000000000000018', state: { name: 'Activo', is_active: true } },
       ],
     }),
     /GPS-ABC-123.*Activo/,

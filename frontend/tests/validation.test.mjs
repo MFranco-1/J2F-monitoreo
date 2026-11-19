@@ -1,3 +1,4 @@
+import { catalogs } from './contract-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -28,8 +29,9 @@ vm.runInThisContext(
       },
     }).outputText +
     '\n})',
-)(clientExports, nodeRequire);
+) (clientExports, (id) => id === '../core/runtime-catalog' ? { runtimeCatalog: catalogs } : nodeRequire(id));
 vm.runInThisContext('(function(exports,require){' + compiled + '\n})')(exports, (id) => {
+  if (id === '../core/runtime-catalog') return { runtimeCatalog: catalogs };
   assert.equal(id, './client-inputs');
   return clientExports;
 });

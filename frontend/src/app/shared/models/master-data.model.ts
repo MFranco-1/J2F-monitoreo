@@ -52,7 +52,7 @@ export interface EventType {
   code: string;
   name: string;
   description?: string;
-  default_priority: 'critical' | 'high' | 'medium' | 'low';
+  default_priority: string;
   generates_alert: boolean;
   expected_action?: string;
   state_id: number;

@@ -1,3 +1,5 @@
+import { priorityLabel as runtimePriorityLabel } from '../../../core/runtime-catalog';
+import { runtimeCatalog } from '../../../core/runtime-catalog';
 import { AuthService } from '../../../core/services/auth.service';
 import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { interval, Subscription } from 'rxjs';
@@ -19,6 +21,8 @@ import { firstError, validateForm } from '../../../shared/validation';
   styleUrl: './alert-list.component.scss',
 })
 export class AlertListComponent implements OnInit, OnDestroy {
+  readonly catalog = runtimeCatalog;
+  readonly alertStates = runtimeCatalog.states.filter(state => state.type === 'alert');
   readonly auth = inject(AuthService);
   private alertService = inject(AlertService);
   private assignmentService = inject(AssignmentService);
@@ -56,7 +60,7 @@ export class AlertListComponent implements OnInit, OnDestroy {
   newForm: AlertForm = {
     title: '',
     description: '',
-    priority: 'medium',
+    priority: runtimeCatalog.parameters['default_priority'],
     service_type: '',
     location: '',
     source: 'Manual',
@@ -157,7 +161,7 @@ export class AlertListComponent implements OnInit, OnDestroy {
     this.newForm = {
       title: '',
       description: '',
-      priority: 'medium',
+      priority: runtimeCatalog.parameters['default_priority'],
       service_type: '',
       location: '',
       source: 'Manual',
@@ -311,7 +315,7 @@ export class AlertListComponent implements OnInit, OnDestroy {
   }
 
   openAssignmentModal(alert: Alert): void {
-    if (!this.auth.canAssign() || ['Cerrado', 'Anulado'].includes(alert.state?.name || '')) return;
+    if (!this.auth.canAssign() || alert.state?.is_terminal === true) return;
     this.assignmentAlert.set(alert);
     this.assignmentForm = { user_id: alert.current_assignee?.id ?? null, notes: '' };
     this.errorMsg.set('');
@@ -364,14 +368,7 @@ export class AlertListComponent implements OnInit, OnDestroy {
   }
 
   getPriorityLabel(p: string): string {
-    return (
-      (
-        { critical: 'Crítica', high: 'Alta', medium: 'Media', low: 'Baja' } as Record<
-          string,
-          string
-        >
-      )[p] || p
-    );
+    return runtimePriorityLabel(p);
   }
 
   getPriorityClass(p: string): string {

@@ -1,3 +1,4 @@
+import { catalogs } from './contract-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -22,12 +23,12 @@ const simulationSource = fs.readFileSync(
 );
 const simulation = {};
 vm.runInThisContext(
-  '(function(exports){' +
+  '(function(exports,require){' +
     ts.transpileModule(simulationSource, {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
     }).outputText +
     '\n})',
-)(simulation);
+) (simulation, () => ({simulationSettings: catalogs.parameters.simulation, lowFuelThreshold: catalogs.parameters.low_fuel_threshold}));
 
 test('la confirmación exige observación pero no espera a la animación', () => {
   assert.match(component, /const observation = this\.fuelObservation\.trim\(\)/);

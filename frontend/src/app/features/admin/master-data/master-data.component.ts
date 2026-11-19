@@ -1,3 +1,4 @@
+import { runtimeCatalog } from '../../../core/runtime-catalog';
 import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
 import { NgFor, NgIf } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -28,6 +29,8 @@ import {
   styleUrl: './master-data.component.scss',
 })
 export class MasterDataComponent implements OnInit, OnDestroy {
+  readonly catalog = runtimeCatalog;
+  readonly alertStates = runtimeCatalog.states.filter(state => state.type === 'alert');
   private readonly service = inject(MasterDataService);
   private readonly users = inject(UserService);
   readonly auth = inject(AuthService);
@@ -127,7 +130,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
   }
 
   blank(): MasterForm {
-    const state_id = this.states().find((state) => state.name === 'Activo')?.id;
+    const state_id = this.states().find((state) => state.is_active === true)?.id;
     return this.kind === 'clients'
       ? {
           document_type: 'RUC',
@@ -164,7 +167,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
               code: '',
               name: '',
               description: '',
-              default_priority: 'medium',
+              default_priority: runtimeCatalog.parameters['default_priority'],
               generates_alert: true,
               expected_action: '',
               state_id,

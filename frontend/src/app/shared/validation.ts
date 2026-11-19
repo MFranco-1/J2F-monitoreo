@@ -1,3 +1,4 @@
+import { runtimeCatalog } from '../core/runtime-catalog';
 /** Reglas de entrada de los formularios. Flask vuelve a validar cada escritura. */
 import { clientPhoneError } from './client-inputs';
 export type FormKind =
@@ -142,12 +143,9 @@ export function validateForm(
   }
   if (kind === 'clients') {
     const type = value('document_type').toUpperCase();
-    const documents: Record<string, [RegExp, string]> = {
-      RUC: [/^[0-9]{11}$/, 'El RUC debe contener exactamente 11 dígitos'],
-      DNI: [/^[0-9]{8}$/, 'El DNI debe contener exactamente 8 dígitos'],
-      CE: [/^[0-9]{9,12}$/, 'El carné de extranjería debe contener de 9 a 12 dígitos'],
-      PASAPORTE: [/^[A-Z0-9]{6,12}$/, 'El pasaporte debe contener de 6 a 12 letras o dígitos'],
-    };
+    const documents: Record<string, [RegExp, string]> = Object.fromEntries(
+      runtimeCatalog.document_types.map(item => [item.code, [new RegExp((item as unknown as {pattern: string}).pattern), `Formato de ${item.label} inválido`]])
+    );
     const preservedInternal =
       editing &&
       original?.document_type === 'Código interno' &&
@@ -253,7 +251,7 @@ export function validateForm(
     if (data[priority] !== undefined)
       check(
         priority,
-        ['critical', 'high', 'medium', 'low'].includes(value(priority)),
+        runtimeCatalog.priorities.some(item => item.code === value(priority)),
         'Selecciona una prioridad válida',
       );
   }

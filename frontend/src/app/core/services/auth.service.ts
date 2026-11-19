@@ -22,12 +22,12 @@ export class AuthService {
     () => !!this._currentUser()?.profile && !this.requiresProfileSelection(),
   );
   readonly availableProfiles = computed(() => this._currentUser()?.profiles || []);
-  readonly isAdmin = computed(() => this.hasRole('administrador'));
-  readonly isTechnician = computed(() => this.hasRole('tecnico'));
-  readonly isOperator = computed(() => this.hasRole('operador'));
-  readonly isSupervisor = computed(() => this.hasRole('supervisor'));
-  readonly canAssign = computed(() => this.isAdmin() || this.isSupervisor() || this.isOperator());
-  readonly canCancelAlert = computed(() => this.isAdmin() || this.isSupervisor());
+  readonly isAdmin = computed(() => this.hasPermission('admin'));
+  readonly isTechnician = computed(() => this.hasPermission('attend') && !this.hasPermission('admin'));
+  readonly isOperator = computed(() => this.hasPermission('assign') && !this.hasPermission('admin') && !this.hasPermission('supervise'));
+  readonly isSupervisor = computed(() => this.hasPermission('supervise'));
+  readonly canAssign = computed(() => this.hasPermission('assign'));
+  readonly canCancelAlert = computed(() => this.hasPermission('cancel'));
   readonly roleNames = computed(() => this._currentUser()?.profile?.name || 'Perfil pendiente');
 
   constructor(
@@ -35,17 +35,9 @@ export class AuthService {
     private router: Router,
   ) {}
 
-  private hasRole(role: string): boolean {
+  hasPermission(permission: string): boolean {
     const profile = this._currentUser()?.profile;
-    return (
-      !!profile &&
-      profile.state?.name === 'Activo' &&
-      profile.name
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim()
-        .toLowerCase() === role
-    );
+    return profile?.state?.is_active === true && profile.permissions?.includes(permission) === true;
   }
 
   login(identifier: string, password: string): Observable<AuthResponse> {

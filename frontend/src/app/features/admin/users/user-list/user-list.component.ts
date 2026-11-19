@@ -19,7 +19,7 @@ export class UserListComponent implements OnInit {
   profiles = signal<Profile[]>([]);
   states = signal<State[]>([]);
   private activeStateId(): number {
-    return this.states().find((s) => s.name === 'Activo')?.id ?? 0;
+    return this.states().find((s) => s.is_active === true)?.id ?? 0;
   }
   loading = signal(true);
   showModal = signal(false);
@@ -155,6 +155,6 @@ export class UserListComponent implements OnInit {
       : this.form.profile_ids.filter((id: number) => id !== profileId);
   }
   getStateBadge(user: User): string {
-    return user.state?.name === 'Activo' ? 'badge-active' : 'badge-inactive';
+    return user.state?.is_active === true ? 'badge-active' : 'badge-inactive';
   }
 }

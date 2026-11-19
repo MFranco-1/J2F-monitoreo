@@ -1,3 +1,4 @@
+import { runtimeCatalog } from '../../../core/runtime-catalog';
 import { AuthService } from '../../../core/services/auth.service';
 import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { NgFor, NgIf, DatePipe } from '@angular/common';
@@ -216,7 +217,7 @@ export class AssignmentListComponent implements OnInit, OnDestroy {
   private isCurrent(a: Assignment): boolean {
     return (
       !a.completed_at &&
-      !['Cerrado', 'Anulado'].includes(a.alert_state || '') &&
+      !runtimeCatalog.states.some(state => state.name === a.alert_state && state.is_terminal) &&
       !['Completada', 'Reasignada', 'Anulada'].includes(a.status || '')
     );
   }

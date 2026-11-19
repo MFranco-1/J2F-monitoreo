@@ -55,33 +55,10 @@
         </div>
       </div>
 
-      <!-- Abiertas -->
-      <div class="metric-card open-card">
+      <div class="metric-card" *ngFor="let state of states">
         <div class="metric-info">
-          <div class="metric-label">Abiertas</div>
-          <div class="metric-value">
-            {{ metrics()!.by_state['Abierto'] || 0 }}
-          </div>
-        </div>
-      </div>
-
-      <!-- En Progreso -->
-      <div class="metric-card progress-card">
-        <div class="metric-info">
-          <div class="metric-label">En Progreso</div>
-          <div class="metric-value">
-            {{ metrics()!.by_state['En Progreso'] || 0 }}
-          </div>
-        </div>
-      </div>
-
-      <!-- Cerradas -->
-      <div class="metric-card closed-card">
-        <div class="metric-info">
-          <div class="metric-label">Cerradas</div>
-          <div class="metric-value">
-            {{ metrics()!.by_state['Cerrado'] || 0 }}
-          </div>
+          <div class="metric-label">{{ state.name }}</div>
+          <div class="metric-value">{{ metrics()!.by_state[state.name] || 0 }}</div>
         </div>
       </div>
 

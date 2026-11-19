@@ -97,7 +97,6 @@ class TestingConfig(BaseConfig):
     TESTING = True
     DEBUG = False
     ENV = "testing"
-    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=5)
 
 
@@ -149,8 +148,7 @@ def get_config(env=None):
             or parsed.fragment
         ):
             raise RuntimeError("CORS_ORIGINS requiere orígenes explícitos, sin comodines ni rutas")
-    if cfg.ENV != "testing":
-        cfg.SQLALCHEMY_DATABASE_URI = database_url()
+    cfg.SQLALCHEMY_DATABASE_URI = database_url()
     if production and not os.environ.get("DATABASE_URL"):
         raise RuntimeError("Producción requiere DATABASE_URL")
     return cfg

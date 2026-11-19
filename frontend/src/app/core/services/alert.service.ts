@@ -1,3 +1,4 @@
+import { runtimeCatalog } from '../runtime-catalog';
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
@@ -78,7 +79,7 @@ export class AlertService {
     );
   }
 
-  getFuelStations(alertId: number, latitude: number, longitude: number, radius = 3000) {
+  getFuelStations(alertId: number, latitude: number, longitude: number, radius = runtimeCatalog.parameters['station_search'].radius) {
     const params = new HttpParams()
       .set('alert_id', alertId)
       .set('latitude', latitude)

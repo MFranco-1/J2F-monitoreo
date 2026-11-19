@@ -46,33 +46,6 @@ interface NavSection {
 export class SidebarComponent implements OnInit, OnDestroy {
   @Input() collapsed = false;
 
-  private readonly defaultSections: NavSection[] = [
-    {
-      title: 'MONITOREO',
-      items: [
-        { label: 'Panel de control', icon: 'dashboard', route: '/dashboard' },
-        { label: 'Alertas', icon: 'alerts', route: '/alerts' },
-        { label: 'Asignaciones', icon: 'assignments', route: '/assignments' },
-      ],
-    },
-    {
-      title: 'SEGUIMIENTO',
-      items: [
-        { label: 'Historial', icon: 'history', route: '/history' },
-        { label: 'Reportes', icon: 'reports', route: '/reports' },
-      ],
-    },
-    {
-      title: 'ADMINISTRACIÓN',
-      items: [
-        { label: 'Usuarios', icon: 'users', route: '/admin/users' },
-        { label: 'Perfiles', icon: 'profiles', route: '/admin/profiles' },
-        { label: 'Opciones de menú', icon: 'menu', route: '/admin/menu-options' },
-        { label: 'Datos maestros', icon: 'database', route: '/master-data' },
-      ],
-    },
-  ];
-
   private auth = inject(AuthService);
   private users = inject(UserService);
   private subscription?: Subscription;
@@ -118,54 +91,17 @@ export class SidebarComponent implements OnInit, OnDestroy {
 
   private canUseRoute(route?: string): boolean {
     if (route?.startsWith('/admin/')) return this.auth.isAdmin();
-    if (route === '/reports') return this.auth.isAdmin() || this.auth.isSupervisor();
+    if (route === '/reports') return this.auth.hasPermission('reports');
     return true;
   }
 
-  private fallbackSections(): NavSection[] {
-    return this.defaultSections
-      .map((section) => ({
-        ...section,
-        items: section.items
-          .filter((item) => this.canUseRoute(item.route))
-          .map((item) => ({ ...item })),
-      }))
-      .filter((section) => section.items.length > 0);
-  }
-
   private configuredSections(options: MenuOption[]): NavSection[] {
-    const sections: NavSection[] = [];
-    const standalone = new Map<string, NavItem[]>([
-      ['MONITOREO', []],
-      ['SEGUIMIENTO', []],
-      ['ADMINISTRACIÓN', []],
-    ]);
-    for (const option of options) {
-      if (!this.routeFor(option.url)) {
-        const items = (option.children || [])
-          .map((child) => this.menuItem(child))
-          .filter((item): item is NavItem => item !== null);
-        if (items.length) sections.push({ title: option.name, items });
-        continue;
-      }
-      const item = this.menuItem(option);
-      if (item) {
-        const route = item.route || '';
-        const title = ['/dashboard', '/alerts', '/assignments'].includes(route)
-          ? 'MONITOREO'
-          : ['/history', '/reports'].includes(route)
-            ? 'SEGUIMIENTO'
-            : 'ADMINISTRACIÓN';
-        standalone.get(title)?.push(item);
-      }
-    }
-    for (const [title, items] of standalone) {
-      if (!items.length) continue;
-      const existing = sections.find((section) => section.title === title);
-      if (existing) existing.items.push(...items);
-      else sections.push({ title, items });
-    }
-    return sections;
+    return options.map(option => ({
+      title: option.name,
+      items: (option.children?.length ? option.children : [option])
+        .map(child => this.menuItem(child))
+        .filter((item): item is NavItem => item !== null),
+    })).filter(section => section.items.length > 0);
   }
 
   ngOnInit(): void {
@@ -185,7 +121,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
         }
         const configured = data?.configured ?? !!data?.menu_options.length;
         if (!data || !configured) {
-          this.navSections.set(this.fallbackSections());
+          this.navSections.set([]);
           return;
         }
         this.navSections.set(this.configuredSections(data.menu_options));

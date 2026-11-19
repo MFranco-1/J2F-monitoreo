@@ -1,4 +1,2 @@
 -r requirements.txt
-# Herramienta de verificación; no es necesaria para ejecutar la aplicación.
-pip-audit==2.10.1
-ruff==0.17.3
+pytest>=8,<10

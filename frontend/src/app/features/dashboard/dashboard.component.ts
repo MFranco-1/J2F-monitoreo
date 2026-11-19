@@ -1,3 +1,4 @@
+import { runtimeCatalog } from '../../core/runtime-catalog';
 import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { NgFor, NgIf, DecimalPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -17,6 +18,7 @@ import { VehicleMapComponent } from './vehicle-map.component';
 })
 export class DashboardComponent implements OnInit, OnDestroy {
   private alertService = inject(AlertService);
+  readonly states = runtimeCatalog.states.filter(state => state.type === 'alert');
   readonly auth = inject(AuthService);
   private pollSub?: Subscription;
   private refreshRequest?: Subscription;

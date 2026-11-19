@@ -154,15 +154,15 @@
           <label
             class="checkbox-item"
             *ngFor="let profile of profiles()"
-            [class.disabled]="profile.state?.name !== 'Activo'"
+            [class.disabled]="!profile.state?.is_active"
           >
             <input
               type="checkbox"
               [checked]="profileChecked(profile.id)"
-              [disabled]="profile.state?.name !== 'Activo'"
+              [disabled]="!profile.state?.is_active"
               (change)="toggleProfile(profile.id, $any($event.target).checked)"
             />
-            {{ profile.name }}{{ profile.state?.name !== 'Activo' ? ' (Inactivo)' : '' }}
+            {{ profile.name }}{{ !profile.state?.is_active ? ' (Inactivo)' : '' }}
           </label>
         </div>
       </div>

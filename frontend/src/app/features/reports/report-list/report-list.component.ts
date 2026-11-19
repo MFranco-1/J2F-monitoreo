@@ -1,3 +1,5 @@
+import { priorityLabel as runtimePriorityLabel } from '../../../core/runtime-catalog';
+import { runtimeCatalog } from '../../../core/runtime-catalog';
 import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { NgFor, NgIf, NgSwitch, NgSwitchCase, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -22,6 +24,8 @@ import { firstError, validateForm } from '../../../shared/validation';
   styleUrl: './report-list.component.scss',
 })
 export class ReportListComponent implements OnInit, OnDestroy {
+  readonly catalog = runtimeCatalog;
+  readonly alertStates = runtimeCatalog.states.filter(state => state.type === 'alert');
   private assignmentService = inject(AssignmentService);
   private masterData = inject(MasterDataService);
   readonly auth = inject(AuthService);
@@ -42,19 +46,15 @@ export class ReportListComponent implements OnInit, OnDestroy {
   clients = signal<Client[]>([]);
   vehicles = signal<Vehicle[]>([]);
   newForm: ReportForm = this.blankForm();
-  readonly reportTypes = [
-    { value: 'alerts_summary', label: 'Resumen de alertas' },
-    { value: 'operator_performance', label: 'Rendimiento por técnico' },
-    { value: 'response_times', label: 'Tiempos de respuesta' },
-  ];
+  readonly reportTypes = runtimeCatalog.report_types;
 
   private canReport(): boolean {
-    return this.auth.isAdmin() || this.auth.isSupervisor();
+    return this.auth.hasPermission('reports');
   }
   private blankForm(): ReportForm {
     return {
       name: '',
-      type: 'alerts_summary',
+      type: runtimeCatalog.parameters['default_report_type'],
       description: '',
       date_range_start: '',
       date_range_end: '',
@@ -292,14 +292,7 @@ export class ReportListComponent implements OnInit, OnDestroy {
     return this.reportTypes.find((item) => item.value === type)?.label ?? type;
   }
   priorityLabel(priority: string): string {
-    return (
-      (
-        { critical: 'Crítica', high: 'Alta', medium: 'Media', low: 'Baja' } as Record<
-          string,
-          string
-        >
-      )[priority] || priority
-    );
+    return runtimePriorityLabel(priority);
   }
   priorityCounts(): [string, number][] {
     return Object.entries(this.selectedResult()?.by_priority || {}).filter(

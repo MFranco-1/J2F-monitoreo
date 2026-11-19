@@ -116,6 +116,14 @@
         ></textarea>
       </div>
       <div class="form-group">
+        <label>Permisos del perfil</label>
+        <label *ngFor="let permission of permissions" style="display:block">
+          <input type="checkbox" [checked]="form.permissions?.includes(permission.code)"
+            (change)="togglePermission(permission.code, $any($event.target).checked)" />
+          {{ permission.description }}
+        </label>
+      </div>
+      <div class="form-group">
         <label for="pf-state">Estado *</label>
         <select id="pf-state" class="form-control" [(ngModel)]="form.state_id">
           <option *ngFor="let state of states()" [ngValue]="state.id">{{ state.name }}</option>

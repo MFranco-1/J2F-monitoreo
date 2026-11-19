@@ -1,3 +1,4 @@
+import { contractFixture, mockPermissions, hydrateCatalog } from './contract-fixtures.mjs';
 // Ejecuta el servicio e interceptor reales con transporte HTTP controlado.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,7 +21,7 @@ const imports = {
     ...angular,
     Component: () => (value) => value,
     Injectable: () => (value) => value,
-    inject: () => injectedAuth,
+    inject: () => mockPermissions(injectedAuth),
   },
   '@angular/common': {},
   '@angular/common/http': http,
@@ -51,6 +52,7 @@ function load(relative) {
     module,
     module.exports,
   );
+  if (path.basename(filename) === 'runtime-catalog.ts') hydrateCatalog(module.exports);
   cache.set(filename, module.exports);
   return module.exports;
 }
@@ -89,7 +91,7 @@ function setup() {
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
     value: {
-      getItem: (key) => storage.get(key) ?? null,
+      getItem: (key) => { const raw = storage.get(key); return key === 'j2f_user' && raw ? JSON.stringify(contractFixture(JSON.parse(raw))) : raw ?? null; },
       setItem: (key, value) => storage.set(key, String(value)),
       removeItem: (key) => storage.delete(key),
     },
@@ -112,7 +114,7 @@ function setup() {
   const auth = new AuthService(client, { navigate: (value) => navigations.push(value) });
   injectedAuth = auth;
   const success = (index, body) => {
-    pending[index].response.next(new http.HttpResponse({ body }));
+    pending[index].response.next(new http.HttpResponse({ body: contractFixture(body) }));
     pending[index].response.complete();
   };
   const fail = (index, status) =>
@@ -487,22 +489,10 @@ test('el sidebar elige el menú configurado o el respaldo, nunca ambos', () => {
   assert.equal(dynamic[0].title, 'MONITOREO');
   assert.equal(dynamic[0].items[0].label, 'Alertas configuradas');
 
-  assert.equal(render(rx.of({ configured: false, menu_options: [] })).length, 3);
-  assert.equal(render(rx.throwError(() => new Error('API no disponible'))).length, 3);
+  assert.equal(render(rx.of({ configured: false, menu_options: [] })).length, 0);
+  assert.equal(render(rx.throwError(() => new Error('API no disponible'))).length, 0);
   assert.deepEqual(render(rx.of({ configured: true, menu_options: [] })), []);
-  const nonAdminFallback = render(rx.of({ configured: false, menu_options: [] }), false);
-  assert.equal(
-    nonAdminFallback
-      .flatMap((section) => section.items)
-      .some((item) => item.route === '/master-data'),
-    true,
-  );
-  assert.equal(
-    nonAdminFallback
-      .flatMap((section) => section.items)
-      .some((item) => item.route?.startsWith('/admin/')),
-    false,
-  );
+  assert.deepEqual(render(rx.of({ configured: false, menu_options: [] }), false), []);
 });
 
 test('la navegación oculta reportes y administración según el rol también en el respaldo', () => {
@@ -533,9 +523,9 @@ test('la navegación oculta reportes y administración según el rol también en
           .navSections()
           .flatMap((s) => s.items)
           .map((i) => i.route);
-        assert.equal(routes.includes('/alerts'), true);
-        assert.equal(routes.includes('/reports'), ['Administrador', 'Supervisor'].includes(role));
-        assert.equal(routes.includes('/admin/users'), role === 'Administrador');
+        assert.equal(routes.includes('/alerts'), configured);
+        assert.equal(routes.includes('/reports'), configured && ['Administrador', 'Supervisor'].includes(role));
+        assert.equal(routes.includes('/admin/users'), configured && role === 'Administrador');
       } finally {
         sidebar.ngOnDestroy();
       }

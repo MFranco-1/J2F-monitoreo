@@ -45,11 +45,7 @@
         id="filter-state"
       >
         <option value="">Todos los estados</option>
-        <option value="Abierto">Abierto</option>
-        <option value="En Progreso">En Progreso</option>
-        <option value="Cerrado">Cerrado</option>
-        <option value="Anulado">Anulado</option>
-        <option value="Escalado">Escalado</option>
+        <option *ngFor="let state of alertStates" [value]="state.name">{{ state.name }}</option>
       </select>
       <select
         class="filter-select"
@@ -57,10 +53,7 @@
         id="filter-priority"
       >
         <option value="">Todas las prioridades</option>
-        <option value="critical">Crítica</option>
-        <option value="high">Alta</option>
-        <option value="medium">Media</option>
-        <option value="low">Baja</option>
+        <option *ngFor="let priority of catalog.priorities" [value]="priority.code">{{ priority.label }}</option>
       </select>
     </div>
     <button
@@ -135,8 +128,7 @@
               class="action-buttons"
               *ngIf="
                 auth.canAssign() &&
-                alert.state?.name !== 'Cerrado' &&
-                alert.state?.name !== 'Anulado'
+                !alert.state?.is_terminal
               "
             >
               <button
@@ -359,10 +351,7 @@
         <div class="form-group">
           <label for="a-priority">Prioridad</label>
           <select id="a-priority" class="form-control" [(ngModel)]="newForm.priority">
-            <option value="critical">Crítica</option>
-            <option value="high">Alta</option>
-            <option value="medium">Media</option>
-            <option value="low">Baja</option>
+            <option *ngFor="let priority of catalog.priorities" [value]="priority.code">{{ priority.label }}</option>
           </select>
         </div>
         <div class="form-group">

@@ -1,3 +1,4 @@
+import { priorityLabel as runtimePriorityLabel } from '../../core/runtime-catalog';
 import {
   AfterViewInit,
   Component,
@@ -315,7 +316,7 @@ export class VehicleMapComponent implements OnInit, AfterViewInit, OnDestroy {
     return `Posición local simulada: ${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`;
   }
   priorityLabel(priority: AlertPriority): string {
-    return { critical: 'Crítica', high: 'Alta', medium: 'Media', low: 'Baja' }[priority];
+    return runtimePriorityLabel(priority);
   }
   hasOpenEvent(code: EventCode): boolean {
     return !!this.selectedVehicle()?.open_events.some((event) => event.code === code);

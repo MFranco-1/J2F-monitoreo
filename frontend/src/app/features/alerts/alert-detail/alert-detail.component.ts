@@ -1,3 +1,5 @@
+import { priorityLabel as runtimePriorityLabel } from '../../../core/runtime-catalog';
+import { runtimeCatalog } from '../../../core/runtime-catalog';
 import { AuthService } from '../../../core/services/auth.service';
 import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { Subscription } from 'rxjs';
@@ -36,13 +38,7 @@ export class AlertDetailComponent implements OnInit, OnDestroy {
 
   newStateName = '';
   stateNotes = '';
-  readonly availableTransitions: Record<string, string[]> = {
-    Abierto: ['En Progreso', 'Escalado', 'Cerrado'],
-    'En Progreso': ['Cerrado', 'Escalado', 'Abierto'],
-    Escalado: ['En Progreso', 'Cerrado'],
-    Cerrado: [],
-    Anulado: [],
-  };
+  readonly availableTransitions = runtimeCatalog.transitions;
 
   ngOnInit(): void {
     const id = Number(this.route.snapshot.paramMap.get('id'));
@@ -87,6 +83,10 @@ export class AlertDetailComponent implements OnInit, OnDestroy {
     });
   }
 
+  get targetIsResolution(): boolean {
+    return runtimeCatalog.states.some(state => state.name === this.newStateName && state.is_resolution);
+  }
+
   get canAttend(): boolean {
     // Tener acceso de lectura al caso no concede atención: se exige la asignación vigente.
     return (
@@ -99,7 +99,7 @@ export class AlertDetailComponent implements OnInit, OnDestroy {
   }
 
   get isTerminal(): boolean {
-    return ['Cerrado', 'Anulado'].includes(this.alert()?.state?.name || '');
+    return this.alert()?.state?.is_terminal === true;
   }
   get canCancel(): boolean {
     return !!this.alert() && !this.isTerminal && this.auth.canCancelAlert();
@@ -144,9 +144,9 @@ export class AlertDetailComponent implements OnInit, OnDestroy {
   }
 
   get transitions(): string[] {
-    const current = this.alert()?.state?.name ?? 'Abierto';
+    const current = this.alert()?.state?.name ?? '';
     const transitions = this.availableTransitions[current] ?? [];
-    return this.isFuelAlert ? transitions.filter((state) => state !== 'Cerrado') : transitions;
+    return this.isFuelAlert ? transitions.filter((state) => !runtimeCatalog.states.some(item => item.name === state && item.is_resolution)) : transitions;
   }
 
   get isFuelAlert(): boolean {
@@ -158,7 +158,7 @@ export class AlertDetailComponent implements OnInit, OnDestroy {
       this.errorMsg.set('Selecciona un estado');
       return;
     }
-    if (this.newStateName === 'Cerrado' && !this.stateNotes.trim()) {
+    if (runtimeCatalog.states.some(item => item.name === this.newStateName && item.is_resolution) && !this.stateNotes.trim()) {
       this.errorMsg.set('Debes registrar la solución aplicada para cerrar la alerta');
       return;
     }
@@ -200,14 +200,7 @@ export class AlertDetailComponent implements OnInit, OnDestroy {
   }
 
   getPriorityLabel(p: string): string {
-    return (
-      (
-        { critical: 'Crítica', high: 'Alta', medium: 'Media', low: 'Baja' } as Record<
-          string,
-          string
-        >
-      )[p] || p
-    );
+    return runtimePriorityLabel(p);
   }
 
   getPriorityClass(p: string): string {

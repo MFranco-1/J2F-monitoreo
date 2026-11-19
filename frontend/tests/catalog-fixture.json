@@ -1,0 +1,272 @@
+{
+  "states": [
+    {
+      "id": 1,
+      "code": "active",
+      "name": "Activo",
+      "type": "user",
+      "is_active": true,
+      "created_at": null,
+      "description": null,
+      "is_terminal": false,
+      "is_resolution": false
+    },
+    {
+      "id": 2,
+      "code": "inactive",
+      "name": "Inactivo",
+      "type": "user",
+      "is_active": false,
+      "created_at": null,
+      "description": null,
+      "is_terminal": false,
+      "is_resolution": false
+    },
+    {
+      "id": 3,
+      "code": "open",
+      "name": "Abierto",
+      "type": "alert",
+      "is_active": false,
+      "created_at": null,
+      "description": null,
+      "is_terminal": false,
+      "is_resolution": false
+    },
+    {
+      "id": 4,
+      "code": "in_progress",
+      "name": "En Progreso",
+      "type": "alert",
+      "is_active": false,
+      "created_at": null,
+      "description": null,
+      "is_terminal": false,
+      "is_resolution": false
+    },
+    {
+      "id": 5,
+      "code": "escalated",
+      "name": "Escalado",
+      "type": "alert",
+      "is_active": false,
+      "created_at": null,
+      "description": null,
+      "is_terminal": false,
+      "is_resolution": false
+    },
+    {
+      "id": 6,
+      "code": "closed",
+      "name": "Cerrado",
+      "type": "alert",
+      "is_active": false,
+      "created_at": null,
+      "description": null,
+      "is_terminal": true,
+      "is_resolution": true
+    },
+    {
+      "id": 7,
+      "code": "cancelled",
+      "name": "Anulado",
+      "type": "alert",
+      "is_active": false,
+      "created_at": null,
+      "description": null,
+      "is_terminal": true,
+      "is_resolution": false
+    }
+  ],
+  "parameters": {
+    "page_size": 20,
+    "simulation": {
+      "center": [
+        -12.083,
+        -77.052
+      ],
+      "routes": [
+        [
+          {
+            "lat": -12.0478,
+            "lng": -77.0622
+          },
+          {
+            "lat": -12.1047,
+            "lng": -77.0306
+          }
+        ],
+        [
+          {
+            "lat": -12.0526,
+            "lng": -77.1171
+          },
+          {
+            "lat": -12.0964,
+            "lng": -77.0473
+          }
+        ],
+        [
+          {
+            "lat": -12.1177,
+            "lng": -77.0357
+          },
+          {
+            "lat": -12.1738,
+            "lng": -76.987
+          }
+        ]
+      ],
+      "maxZoom": 18,
+      "tileUrl": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+      "initialZoom": 11,
+      "minSpeedKmh": 38,
+      "speedSpread": 43,
+      "eventsIntervalMs": 10000,
+      "speedingEventKmh": 96,
+      "vehicleVariation": 7,
+      "initialFuelSpread": 30,
+      "stationCandidates": 8,
+      "initialSpeedSpread": 42,
+      "movementIntervalMs": 2000,
+      "fuelConsumedPerTick": 0.015,
+      "confirmedFuelPercent": 70,
+      "initialFuelMinPercent": 58,
+      "lowFuelInitialPercent": 8,
+      "speedVariationPerTick": 3,
+      "speedVehicleVariation": 11,
+      "initialPositionSpacing": 37,
+      "triggeredLowFuelPercent": 9
+    },
+    "max_page_size": 100,
+    "station_search": {
+      "radius": 3000,
+      "maximum": 10000,
+      "minimum": 100,
+      "timeout": 10
+    },
+    "fuel_event_code": "LOW_FUEL",
+    "default_priority": "medium",
+    "default_state_code": "active",
+    "low_fuel_threshold": 10,
+    "critical_list_limit": 7,
+    "default_report_type": "alerts_summary",
+    "default_phone_country": "PE",
+    "initial_alert_state_code": "open",
+    "working_alert_state_code": "in_progress",
+    "resolved_alert_state_code": "closed",
+    "cancelled_alert_state_code": "cancelled"
+  },
+  "priorities": [
+    {
+      "code": "critical",
+      "rank": 1,
+      "label": "Crítica"
+    },
+    {
+      "code": "high",
+      "rank": 2,
+      "label": "Alta"
+    },
+    {
+      "code": "medium",
+      "rank": 3,
+      "label": "Media"
+    },
+    {
+      "code": "low",
+      "rank": 4,
+      "label": "Baja"
+    }
+  ],
+  "permissions": [
+    {
+      "code": "admin",
+      "description": "Administrar catálogos, usuarios y perfiles"
+    },
+    {
+      "code": "assign",
+      "description": "Crear alertas y distribuir trabajo"
+    },
+    {
+      "code": "reports",
+      "description": "Consultar y generar reportes"
+    },
+    {
+      "code": "cancel",
+      "description": "Anular alertas"
+    },
+    {
+      "code": "view_all",
+      "description": "Consultar toda la operación"
+    },
+    {
+      "code": "attend",
+      "description": "Atender casos asignados"
+    },
+    {
+      "code": "supervise",
+      "description": "Supervisar la operación"
+    }
+  ],
+  "transitions": {
+    "Abierto": [
+      "En Progreso",
+      "Escalado",
+      "Cerrado"
+    ],
+    "Anulado": [],
+    "Cerrado": [],
+    "Escalado": [
+      "En Progreso",
+      "Cerrado"
+    ],
+    "En Progreso": [
+      "Abierto",
+      "Escalado",
+      "Cerrado"
+    ]
+  },
+  "report_types": [
+    {
+      "label": "Resumen de alertas",
+      "value": "alerts_summary"
+    },
+    {
+      "label": "Rendimiento por técnico",
+      "value": "operator_performance"
+    },
+    {
+      "label": "Tiempos de respuesta",
+      "value": "response_times"
+    }
+  ],
+  "document_types": [
+    {
+      "code": "CE",
+      "label": "Carné de extranjería",
+      "pattern": "^[A-Za-z0-9]{9,12}$"
+    },
+    {
+      "code": "DNI",
+      "label": "DNI",
+      "pattern": "^[0-9]{8}$"
+    },
+    {
+      "code": "PASAPORTE",
+      "label": "Pasaporte",
+      "pattern": "^[A-Za-z0-9]{6,20}$"
+    },
+    {
+      "code": "RUC",
+      "label": "RUC",
+      "pattern": "^[0-9]{11}$"
+    }
+  ],
+  "simulated_events": [
+    "SPEEDING",
+    "GPS_SIGNAL_LOSS",
+    "SOS",
+    "LOW_FUEL"
+  ]
+}

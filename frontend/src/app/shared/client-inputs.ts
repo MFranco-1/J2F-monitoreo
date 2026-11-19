@@ -1,3 +1,4 @@
+import { runtimeCatalog } from '../core/runtime-catalog';
 import {
   CountryCode,
   getCountries,
@@ -20,9 +21,9 @@ export function phoneCountries(): { code: CountryCode; label: string }[] {
   return getCountries()
     .map((code) => ({ code, label: `${names.of(code) || code} (+${getCountryCallingCode(code)})` }))
     .sort((left, right) =>
-      left.code === 'PE'
+      left.code === runtimeCatalog.parameters['default_phone_country']
         ? -1
-        : right.code === 'PE'
+        : right.code === runtimeCatalog.parameters['default_phone_country']
           ? 1
           : left.label.localeCompare(right.label, 'es'),
     );
@@ -38,7 +39,7 @@ export function clientPhoneError(value: unknown, country?: unknown): string {
     return '';
   if (typeof value !== 'string' || !/^[0-9]{7,15}$/.test(value.trim()))
     return 'Teléfono: ingresa solo dígitos, sin espacios ni símbolos; el prefijo se elige por país';
-  const region = (country || 'PE') as CountryCode;
+  const region = (country || runtimeCatalog.parameters['default_phone_country']) as CountryCode;
   const parsed = parsePhoneNumberFromString(value.trim(), {
     defaultCountry: region,
     extract: false,
@@ -55,11 +56,11 @@ export function splitClientPhone(
   value?: string | null,
   country?: CountryCode | null,
 ): { phone: string; phone_country: string } {
-  if (!value) return { phone: '', phone_country: country || 'PE' };
+  if (!value) return { phone: '', phone_country: country || runtimeCatalog.parameters['default_phone_country'] };
   const candidates = value.startsWith('+') ? [value] : [value, '+' + value];
   for (const candidate of candidates) {
     const parsed = parsePhoneNumberFromString(candidate, {
-      defaultCountry: country || 'PE',
+      defaultCountry: country || runtimeCatalog.parameters['default_phone_country'],
       extract: false,
     });
     if (parsed?.isValid() && parsed.country)

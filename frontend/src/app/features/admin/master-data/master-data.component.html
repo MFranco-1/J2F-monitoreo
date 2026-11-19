@@ -46,8 +46,8 @@
           <td>
             <span
               class="badge"
-              [class.badge-active]="record.state?.name === 'Activo'"
-              [class.badge-inactive]="record.state?.name !== 'Activo'"
+              [class.badge-active]="record.state?.is_active"
+              [class.badge-inactive]="!record.state?.is_active"
               >{{ record.state?.name }}</span
             >
           </td>
@@ -93,10 +93,7 @@
               >
                 Código interno (registro anterior)
               </option>
-              <option value="RUC">RUC</option>
-              <option value="DNI">DNI</option>
-              <option value="CE">Carné de extranjería</option>
-              <option value="PASAPORTE">Pasaporte</option>
+              <option *ngFor="let document of catalog.document_types" [value]="document.code">{{ document.label }}</option>
             </select>
             <small class="text-muted" *ngIf="isInternalDocument()"
               >Identificador anterior, no es un RUC. Se conserva sin cambios o puedes sustituirlo
@@ -344,10 +341,7 @@
         <div class="form-group">
           <label>Prioridad sugerida</label
           ><select class="form-control" [(ngModel)]="form.default_priority">
-            <option value="critical">Crítica</option>
-            <option value="high">Alta</option>
-            <option value="medium">Media</option>
-            <option value="low">Baja</option>
+            <option *ngFor="let priority of catalog.priorities" [value]="priority.code">{{ priority.label }}</option>
           </select>
         </div>
         <div class="form-group">

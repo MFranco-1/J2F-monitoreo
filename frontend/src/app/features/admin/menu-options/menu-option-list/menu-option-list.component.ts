@@ -20,7 +20,7 @@ export class MenuOptionListComponent implements OnInit {
   parentOptions = signal<MenuOption[]>([]);
   states = signal<State[]>([]);
   private activeStateId(): number {
-    return this.states().find((s) => s.name === 'Activo')?.id ?? 0;
+    return this.states().find((s) => s.is_active === true)?.id ?? 0;
   }
   loading = signal(true);
   showModal = signal(false);
@@ -158,7 +158,7 @@ export class MenuOptionListComponent implements OnInit {
   }
 
   getStateBadge(opt: MenuOption): string {
-    return opt.state?.name === 'Activo' ? 'badge-active' : 'badge-inactive';
+    return opt.state?.is_active ? 'badge-active' : 'badge-inactive';
   }
 
   getProfileNames(opt: MenuOption): string {

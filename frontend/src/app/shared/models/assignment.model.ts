@@ -43,7 +43,7 @@ export interface AssignmentNotes {
 export interface Report {
   id: number;
   name: string;
-  type: 'alerts_summary' | 'operator_performance' | 'response_times' | 'custom';
+  type: string;
   description?: string;
   date_range_start?: string;
   date_range_end?: string;
@@ -54,7 +54,7 @@ export interface Report {
   created_at?: string;
 }
 
-export type ReportType = 'alerts_summary' | 'operator_performance' | 'response_times';
+export type ReportType = string;
 export interface ReportFilters {
   client_id?: number | null;
   vehicle_id?: number | null;
