@@ -56,6 +56,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
     '/assignments',
     '/history',
     '/reports',
+    '/billing',
     '/admin/users',
     '/admin/profiles',
     '/admin/menu-options',
@@ -91,6 +92,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
 
   private canUseRoute(route?: string): boolean {
     if (route?.startsWith('/admin/')) return this.auth.isAdmin();
+    if (route === '/billing') return this.auth.hasPermission('billing');
     if (route === '/reports') return this.auth.hasPermission('reports');
     return true;
   }

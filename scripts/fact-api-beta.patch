@@ -1,0 +1,160 @@
+diff --git a/app/Http/Controllers/Api/CompanyController.php b/app/Http/Controllers/Api/CompanyController.php
+index c30944b..2e95830 100644
+--- a/app/Http/Controllers/Api/CompanyController.php
++++ b/app/Http/Controllers/Api/CompanyController.php
+@@ -86,2 +86,5 @@ public function show(Company $company): JsonResponse
+                     'company' => $company,
++                    'j2f_beta_endpoint' => $company->getInvoiceEndpoint(),
++                    'j2f_signing_ready' => is_readable(storage_path('app/private/certificado/certificado.pem'))
++                        && filled($company->usuario_sol) && filled($company->clave_sol),
+                     'stats' => $this->getCompanyStats($company)
+diff --git a/app/Http/Controllers/Api/InvoiceController.php b/app/Http/Controllers/Api/InvoiceController.php
+index 38c88d3..00b4d89 100644
+--- a/app/Http/Controllers/Api/InvoiceController.php
++++ b/app/Http/Controllers/Api/InvoiceController.php
+@@ -31,2 +31,6 @@ public function index(IndexInvoiceRequest $request): JsonResponse
+ 
++            if ($request->filled('j2f_reference')) {
++                $query->where('datos_adicionales->j2f_reference', $request->j2f_reference);
++            }
++
+             // Filtros
+diff --git a/app/Http/Requests/IndexInvoiceRequest.php b/app/Http/Requests/IndexInvoiceRequest.php
+index 62c04d2..2d31075 100644
+--- a/app/Http/Requests/IndexInvoiceRequest.php
++++ b/app/Http/Requests/IndexInvoiceRequest.php
+@@ -17,2 +17,3 @@ public function rules(): array
+             'company_id' => 'nullable|exists:companies,id',
++            'j2f_reference' => 'nullable|uuid',
+             'branch_id' => 'nullable|exists:branches,id',
+diff --git a/app/Http/Requests/StoreInvoiceRequest.php b/app/Http/Requests/StoreInvoiceRequest.php
+index 451f92a..032c0c0 100644
+--- a/app/Http/Requests/StoreInvoiceRequest.php
++++ b/app/Http/Requests/StoreInvoiceRequest.php
+@@ -46,2 +46,3 @@ public function rules(): array
+             'detalles' => 'required|array|min:1',
++            'detalles.*.j2f_precio_final' => 'nullable|numeric|min:0.01',
+             'detalles.*.codigo' => 'required|string|max:50',
+@@ -85,2 +86,3 @@ public function rules(): array
+             'datos_adicionales' => 'nullable|array',
++            'datos_adicionales.j2f_reference' => 'sometimes|uuid',
+             'usuario_creacion' => 'nullable|string|max:100',
+diff --git a/app/Services/DocumentService.php b/app/Services/DocumentService.php
+index 576db36..8f5af4f 100644
+--- a/app/Services/DocumentService.php
++++ b/app/Services/DocumentService.php
+@@ -42,6 +42,14 @@ public function createInvoice(array $data): Invoice
+             
+-            // Crear o buscar cliente
++            // Serializa la referencia de J2F antes de consumir un correlativo.
++            $reference = $data['datos_adicionales']['j2f_reference'] ?? null;
++            if ($reference !== null) {
++                Branch::whereKey($branch->id)->lockForUpdate()->firstOrFail();
++                $previous = Invoice::where('branch_id', $branch->id)
++                    ->where('datos_adicionales->j2f_reference', $reference)
++                    ->lockForUpdate()->first();
++                if ($previous) {
++                    return $previous;
++                }
++            }
+             $client = $this->getOrCreateClient($data['client']);
+-            
+-            // Obtener siguiente correlativo
+             $serie = $data['serie'];
+@@ -361,2 +369,10 @@ protected function calculateTotals(array &$detalles, array $globalData = []): ar
+                 $igv = round($mtoBaseIgv * ($porcentajeIgv / 100), 2);
++                if (isset($detalle['j2f_precio_final'])) {
++                    $gross = round($cantidad * $mtoValorUnitario * (1 + $porcentajeIgv / 100), 2);
++                    if ($cantidad != 1 || !empty($detalle['descuentos']) || $isc != 0 || $icbper != 0
++                        || abs($gross - $detalle['j2f_precio_final']) > 0.00001) {
++                        throw new \InvalidArgumentException('Precio final inconsistente para el cargo J2F.');
++                    }
++                    $igv = round($gross - $mtoValorVenta, 2);
++                }
+             } elseif ($tipAfeIgv === '17') { // IVAP - paga IVAP (normalmente 2%)
+diff --git a/app/Services/GreenterService.php b/app/Services/GreenterService.php
+index c40a064..2998b29 100644
+--- a/app/Services/GreenterService.php
++++ b/app/Services/GreenterService.php
+@@ -46,3 +46,2 @@ public function __construct(Company $company)
+         $this->see = $this->initializeSee();
+-        $this->seeApi = $this->initializeSeeApi();
+     }
+@@ -56,2 +55,5 @@ protected function initializeSee(): See
+         
++        if ($this->company->modo_produccion || $endpoint !== 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService') {
++            throw new \RuntimeException('La instancia de J2F admite exclusivamente SUNAT beta.');
++        }
+         $see->setService($endpoint);
+@@ -60,3 +62,3 @@ protected function initializeSee(): See
+         try {
+-            $certificadoPath = storage_path('app/public/certificado/certificado.pem');
++            $certificadoPath = storage_path('app/private/certificado/certificado.pem');
+             
+@@ -112,3 +114,3 @@ protected function initializeSeeApi()
+         try {
+-            $certificadoPath = storage_path('app/public/certificado/certificado.pem');
++            $certificadoPath = storage_path('app/private/certificado/certificado.pem');
+             
+@@ -1269,7 +1271,4 @@ protected function getSeeApi()
+     {
+-        Log::info("Retornando seeApi", [
+-            'seeApi_exists' => $this->seeApi !== null,
+-            'seeApi_class' => $this->seeApi ? get_class($this->seeApi) : 'NULL'
+-        ]);
+-        return $this->seeApi;
++        // Las facturas SOAP no necesitan las credenciales de guías de remisión.
++        return $this->seeApi ??= $this->initializeSeeApi();
+     }
+diff --git a/app/Traits/HasCompanyConfigurations.php b/app/Traits/HasCompanyConfigurations.php
+index ad8698a..977ece7 100644
+--- a/app/Traits/HasCompanyConfigurations.php
++++ b/app/Traits/HasCompanyConfigurations.php
+@@ -369,3 +369,3 @@ public function getInvoiceEndpoint(): string
+     {
+-        return $this->getSunatEndpoint('facturacion', 'endpoint');
++        return $this->getSunatEndpoint('facturacion', 'endpoint') ?: $this->endpoint;
+     }
+diff --git a/database/migrations/2025_09_13_140000_clean_company_configurations.php b/database/migrations/2025_09_13_140000_clean_company_configurations.php
+index 56896f3..4bdb1c0 100644
+--- a/database/migrations/2025_09_13_140000_clean_company_configurations.php
++++ b/database/migrations/2025_09_13_140000_clean_company_configurations.php
+@@ -29,3 +29,4 @@ public function up(): void
+         // Actualizar la estructura del ENUM removiendo tipos no utilizados
+-        DB::statement("ALTER TABLE company_configurations MODIFY COLUMN config_type ENUM(
++        if (DB::getDriverName() !== 'sqlite') {
++            DB::statement("ALTER TABLE company_configurations MODIFY COLUMN config_type ENUM(
+             'tax_settings',
+@@ -35,2 +36,3 @@ public function up(): void
+         ) NOT NULL");
++        }
+         
+@@ -150,3 +152,4 @@ public function down(): void
+         // Revertir cambios - restaurar ENUM original
+-        DB::statement("ALTER TABLE company_configurations MODIFY COLUMN config_type ENUM(
++        if (DB::getDriverName() !== 'sqlite') {
++            DB::statement("ALTER TABLE company_configurations MODIFY COLUMN config_type ENUM(
+             'sunat_credentials',
+@@ -163,2 +166,3 @@ public function down(): void
+         ) NOT NULL");
++        }
+     }
+diff --git a/database/migrations/2025_12_15_104136_add_missing_columns_to_boletas_table.php b/database/migrations/2025_12_15_104136_add_missing_columns_to_boletas_table.php
+index 46194b0..f2dcca0 100644
+--- a/database/migrations/2025_12_15_104136_add_missing_columns_to_boletas_table.php
++++ b/database/migrations/2025_12_15_104136_add_missing_columns_to_boletas_table.php
+@@ -21,6 +21,2 @@ public function up(): void
+ 
+-            // Agregar columnas para impuestos adicionales
+-            $table->decimal('mto_igv_gratuitas', 12, 2)->default(0)->after('mto_oper_gratuitas');
+-            $table->decimal('mto_base_ivap', 12, 2)->default(0)->after('mto_igv');
+-            $table->decimal('mto_ivap', 12, 2)->default(0)->after('mto_base_ivap');
+         });
+@@ -36,6 +32,3 @@ public function down(): void
+                 'metodo_envio',
+-                'daily_summary_id',
+-                'mto_igv_gratuitas',
+-                'mto_base_ivap',
+-                'mto_ivap'
++                'daily_summary_id'
+             ]);

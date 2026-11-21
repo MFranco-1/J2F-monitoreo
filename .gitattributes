@@ -12,3 +12,5 @@
 .editorconfig text eol=lf
 .gitignore text eol=lf
 .env.example text eol=lf
+# Mantener los espacios de contexto del parche del proveedor.
+scripts/fact-api-beta.patch text eol=lf whitespace=-blank-at-eol

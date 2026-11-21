@@ -1,0 +1,33 @@
+.card {
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+h2 {
+  font-size: 1.125rem;
+  margin: 0 0 1rem;
+}
+label {
+  display: grid;
+  gap: 0.35rem;
+}
+.period-picker, fieldset,
+.actions {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0;
+  border: 0;
+}
+fieldset label:has([type='checkbox']) {
+  display: inline-flex;
+  align-items: center;
+}
+.form-group { margin-bottom: 0; }
+fieldset .form-group { flex: 1 1 10rem; }
+fieldset label:has([type='checkbox']) { flex: 0 1 auto; flex-direction: row; }
+.period-picker, .actions { margin-block: 1rem; }
+.card > .form-group { max-width: 34rem; }
+section {
+  overflow-x: auto;
+}

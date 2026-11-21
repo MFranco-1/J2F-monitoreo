@@ -1,0 +1,167 @@
+<div class="page-header">
+  <h1>Facturación</h1>
+  <p>Facturas de monitoreo vehicular · Ambiente de pruebas</p>
+</div>
+@if (message()) {
+  <p class="alert-banner" role="status">{{ message() }}</p>
+}
+<div class="card">
+  <label class="form-group"
+    >Cliente
+    <select
+      class="form-control"
+      [(ngModel)]="client"
+      (ngModelChange)="changeClient()"
+      [disabled]="busy()"
+    >
+      <option [ngValue]="null">Seleccionar cliente</option>
+      @for (c of catalog().clients; track c.id) {
+        <option [ngValue]="c.id">{{ c.name }}</option>
+      }
+    </select>
+  </label>
+</div>
+@if (client) {
+  <section class="card">
+    <h2>Plan del vehículo</h2>
+    <form (ngSubmit)="savePlan()" #form="ngForm">
+      <fieldset [disabled]="busy()">
+        <label class="form-group"
+          >Placa<select
+            class="form-control"
+            required
+            name="vehicle"
+            [(ngModel)]="vehicle"
+            (ngModelChange)="editPlan()"
+          >
+            <option [ngValue]="null">Elegir vehículo</option>
+            @for (v of catalog().vehicles; track v.id) {
+              @if (v.client_id === client) {
+                <option [ngValue]="v.id">{{ v.plate }}</option>
+              }
+            }
+          </select></label
+        >
+        <label class="form-group"
+          >Plan<select class="form-control" name="plan" [(ngModel)]="plan">
+            <option value="monthly">Mensual</option>
+            <option value="annual">Anual</option>
+          </select></label
+        >
+        <label class="form-group"
+          >Inicio del servicio<input
+            class="form-control"
+            type="date"
+            required
+            name="start"
+            [(ngModel)]="start"
+        /></label>
+        <label class="form-group"
+          >Facturar desde<input
+            class="form-control"
+            type="month"
+            required
+            name="first"
+            [(ngModel)]="first"
+        /></label>
+        @if (plan === 'monthly') {
+          <label class="form-group"
+            ><input type="checkbox" name="paid" [(ngModel)]="paid" /> Equipo e instalación ya
+            facturados</label
+          >
+        } @else {
+          <p>
+            El primer año incluye equipo e instalación. Para un año ya facturado, elige el período
+            de su próxima renovación.
+          </p>
+        }
+        <button class="btn-secondary" [disabled]="form.invalid || !vehicle">Guardar plan</button>
+      </fieldset>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Factura del cliente</h2>
+    <div class="period-picker">
+      <label class="form-group"
+        >Período<input
+          class="form-control"
+          type="month"
+          [(ngModel)]="period"
+          (ngModelChange)="clear()"
+          [disabled]="busy()"
+      /></label>
+      <button class="btn-secondary" (click)="preview()" [disabled]="busy() || !period">
+        Consultar período
+      </button>
+    </div>
+    @if (invoice(); as v) {
+      @if (v.status) {
+        <p>
+          <strong>{{ v.number }}</strong> <span class="badge" [class.badge-active]="v.status === 'accepted'">{{ states[v.status] }}</span>
+        </p>
+      }
+      @if (v.message && v.status !== 'accepted') {
+        <p role="status">{{ v.message }}</p>
+      }
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>Concepto</th>
+            <th>Período</th>
+            <th>Precio con IGV</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (l of v.lines; track l.plate + l.label) {
+            <tr>
+              <td>{{ l.plate }}</td>
+              <td>{{ l.label }}</td>
+              <td>{{ l.period.slice(0, 7) }}</td>
+              <td>S/ {{ l.gross | number: '1.2-2' }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="4">Sin cargos para este período.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <p>
+        <strong>Total con IGV: S/ {{ v.total | number: '1.2-2' }}</strong>
+      </p>
+      @if (v.missing?.length) {
+        <p>Completa antes de emitir:</p>
+        <ul>
+          @for (m of v.missing; track m) {
+            <li>{{ m }}</li>
+          }
+        </ul>
+      }
+      <div class="actions">
+        @if (!v.status || v.status === 'reserved') {
+          <button
+            class="btn-primary"
+            [disabled]="busy() || !!v.missing?.length || !v.lines.length"
+            (click)="issue()"
+          >
+            Crear factura
+          </button>
+        }
+        @if (v.status === 'created' || v.status === 'rejected') {
+          <button class="btn-primary" [disabled]="busy()" (click)="action('send')">
+            Enviar a SUNAT beta
+          </button>
+        }
+        @if (v.id && v.external_id && v.status !== 'mismatch') {
+          <button class="btn-primary" [disabled]="busy()" (click)="openPdf()">Ver PDF</button>
+        }
+        @if (v.id && v.status !== 'accepted') {
+          <button class="btn-secondary" [disabled]="busy()" (click)="action('consult')">
+            Consultar resultado
+          </button>
+        }
+      </div>
+    }
+  </section>
+}

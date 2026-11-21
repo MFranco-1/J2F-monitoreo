@@ -1,3 +1,4 @@
+import { billingGuard } from './core/guards/auth.guard';
 import { Routes } from '@angular/router';
 import { authGuard, adminGuard, activeProfileGuard, reportGuard } from './core/guards/auth.guard';
 
@@ -49,6 +50,11 @@ export const routes: Routes = [
           import('./features/history/history-list/history-list.component').then(
             (m) => m.HistoryListComponent,
           ),
+      },
+      {
+        path: 'billing',
+        canActivate: [activeProfileGuard, billingGuard],
+        loadComponent: () => import('./features/billing/billing.component').then(m => m.BillingComponent),
       },
       {
         path: 'reports',

@@ -120,6 +120,8 @@ def get_config(env=None):
     if production and cfg.SECRET_KEY == cfg.JWT_SECRET_KEY:
         raise RuntimeError("SECRET_KEY y JWT_SECRET_KEY deben ser diferentes")
     cfg.HOST = os.environ.get("HOST", "127.0.0.1").strip()
+    for key in ('FACT_API_URL', 'FACT_API_TOKEN', 'FACT_API_COMPANY_ID', 'FACT_API_BRANCH_ID', 'FACT_API_SERIES'):
+        setattr(cfg, key, os.environ.get(key, '').strip())
     cfg.PORT = integer_setting("PORT", 5000, 1, 65535)
     cfg.MAP_SERVICE_TIMEOUT = integer_setting("MAP_SERVICE_TIMEOUT", 12, 1, 60)
     cfg.OVERPASS_API_URL = os.environ.get(

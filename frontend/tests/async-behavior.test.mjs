@@ -107,6 +107,36 @@ const { AlertListComponent } = load('src/app/features/alerts/alert-list/alert-li
 const { AlertDetailComponent } = load(
   'src/app/features/alerts/alert-detail/alert-detail.component.ts',
 );
+test('facturación bloquea el doble clic y descarta la respuesta al perder el permiso', () => {
+  const { BillingComponent } = load('src/app/features/billing/billing.component.ts');
+  const pending = new rx.Subject();
+  const calls = [];
+  const redirects = [];
+  const session = { profileChanges: new rx.Subject(), hasPermission: () => false };
+  injections = [
+    { get: () => rx.of({ clients: [], vehicles: [] }), post: (url, data) => {
+      calls.push({ url, data });
+      return pending;
+    } },
+    session,
+    { navigateByUrl: (url) => redirects.push(url) },
+  ];
+  const page = new BillingComponent();
+  page.ngOnInit();
+  page.client = 3;
+  page.period = '2027-01';
+  page.invoice.set({ total: 574, signature: 'vista', lines: [{ plate: 'J2F-101' }] });
+  page.issue();
+  page.issue();
+  assert.deepEqual(calls, [{ url: '/api/billing/invoices',
+    data: { client: 3, period: '2027-01', signature: 'vista' } }]);
+  session.profileChanges.next();
+  pending.next({ id: 1, total: 574, status: 'created' });
+  assert.equal(page.invoice(), null);
+  assert.deepEqual(redirects, ['/dashboard']);
+  page.ngOnDestroy();
+});
+
 const { AlertService } = load('src/app/core/services/alert.service.ts');
 const { AssignmentListComponent } = load(
   'src/app/features/assignments/assignment-list/assignment-list.component.ts',

@@ -16,6 +16,8 @@ def create_app(env=None):
     CORS(app, origins=app.config["CORS_ORIGINS"])
     from app.api import api, revoked
     app.register_blueprint(api, url_prefix="/api")
+    from app.billing import billing
+    app.register_blueprint(billing, url_prefix="/api/billing")
     jwt.token_in_blocklist_loader(lambda header, payload: revoked(payload))
 
     @app.errorhandler(HTTPException)
