@@ -61,11 +61,30 @@ class FactAPI:
         except (URLError, OSError, ValueError, AttributeError) as error:
             raise ProviderError("No se obtuvo una respuesta válida de fact_api.") from error
 
-    def invoice_pdf(self, inv):
-        path = f'invoices/{int(inv["external_id"])}'
+    def document_path(self, inv):
         document = self.read(inv)
         if (document.get("datos_adicionales") or {}).get("j2f_reference") != inv["reference"]:
             raise ProviderError("El comprobante del emisor no coincide con esta factura.")
+        return f'invoices/{int(inv["external_id"])}'
+
+    def invoice_xml(self, inv):
+        path = self.document_path(inv)
+        req = Request(self.url + "/api/v1/" + path + "/download-xml",
+                      headers={"Authorization": "Bearer " + self.token, "Accept": "application/xml"})
+        try:
+            with build_opener(NoRedirect).open(req, timeout=30) as response:
+                content = response.read()
+                if not content.lstrip().startswith(b"<") or response.headers.get_content_type() == "text/html":
+                    raise ProviderError("El emisor no devolvió un XML válido.")
+                return content
+        except HTTPError as error:
+            raise ProviderError("El XML no está disponible en el emisor.", error.code) from None
+        except (URLError, OSError) as error:
+            raise ProviderError("No se pudo descargar el XML del emisor.") from error
+
+    def invoice_pdf(self, inv):
+        path = self.document_path(inv)
+
         def download():
             req = Request(self.url + "/api/v1/" + path + "/download-pdf",
                           headers={"Authorization": "Bearer " + self.token, "Accept": "application/pdf"})
@@ -101,9 +120,14 @@ class FactAPI:
         details = []
         for line in inv["lines"]:
             price, tax = Decimal(str(line["gross"])), Decimal(str(line["igv"]))
+            description = f'{line["plate"]} · {line["label"]}'
+            if inv.get("sale_start"):
+                description += f' · Inicio {inv["sale_start"]}'
+            elif line["concept"] != "equipment":
+                description += f' · {line["period"][:7]}'
             details.append({
                 "codigo": f'{line["vehicle_id"]}-{line["concept"]}', "cantidad": 1,
-                "descripcion": f'{line["plate"]} · {line["label"]} · {line["period"][:7]}',
+                "descripcion": description,
                 "unidad": "NIU" if line["concept"] == "equipment" else "ZZ",
                 "mto_valor_unitario": str(round(price / (1 + tax / 100), 8)),
                 "j2f_precio_final": str(price), "porcentaje_igv": str(tax), "tip_afe_igv": "10",

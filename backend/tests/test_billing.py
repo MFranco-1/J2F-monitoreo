@@ -133,4 +133,108 @@ def test_billing_permission(client, admin, emitter):
     assert client.get('/api/billing/catalog', headers=headers).status_code == 403
     for path in ('billing/invoices','billing/invoices/1/send','billing/invoices/1/consult'):
         assert client.post('/api/'+path, headers=headers, json={'client':1,'period':'2027-01'}).status_code == 403
+    for path in ('invoices', 'invoices/1', 'invoices/1/pdf', 'invoices/1/xml'):
+        assert client.get('/api/billing/' + path, headers=headers).status_code == 403
     assert emitter.calls == 0
+
+
+def test_separate_services_same_vehicle_and_month(client, admin, emitter):
+    customer = fleet(client, admin, 76)
+    catalog = call(client, admin, 'get', 'billing/catalog')
+    vehicle = next(v['id'] for v in catalog['vehicles'] if v['client_id'] == customer)
+    invoices = []
+    for concept, total in [('equipment', 250), ('month', 37)]:
+        selection = dict(client=customer, vehicle=vehicle, period='2027-01')
+        draft = call(client, admin, 'get', 'billing/preview',
+                     query_string={**selection, 'concept': concept})
+        assert draft['total'] == total
+        payload = dict(**selection, concepts=[concept], signature=draft['signature'])
+        invoice = call(client, admin, 'post', 'billing/invoices', json=payload)
+        invoices.append(invoice['id'])
+        assert invoice['total'] == total
+        assert client.post('/api/billing/invoices', headers=admin, json=payload).status_code == 409
+    assert invoices[0] != invoices[1] and emitter.calls == 2
+    rows = call(client, admin, 'get', 'billing/invoices')['items']
+    assert [r['id'] for r in rows[:2]] == invoices[::-1]
+    assert all(r['created_at'] for r in rows[:2])
+
+
+
+@pytest.mark.parametrize(('plan', 'suffix', 'total'), [('monthly', 77, 287), ('annual', 78, 630)])
+def test_sell_new_plan(client, admin, emitter, plan, suffix, total):
+    customer = fleet(client, admin, suffix, count=0)
+    vehicle = call(client, admin, 'post', 'master-data/vehicles/', json={
+        'client_id': customer, 'plate': f'J{suffix}-100',
+    })['record']['id']
+    sale = dict(client=customer, vehicle=vehicle, start='2027-02-23', plan=plan)
+
+    def contract():
+        catalog = call(client, admin, 'get', 'billing/catalog')
+        return next(v['contract'] for v in catalog['vehicles'] if v['id'] == vehicle)
+
+    quote = call(client, admin, 'post', 'billing/sales/preview', json=sale)
+    assert quote['total'] == total and contract() is None
+    assert client.post('/api/billing/sales', headers=admin,
+                       json={**sale, 'signature': 'obsoleta'}).status_code == 409
+    assert contract() is None
+    sale['signature'] = quote['signature']
+    invoice = call(client, admin, 'post', 'billing/sales', json=sale)
+    assert invoice['total'] == total and invoice['status'] == 'created'
+    assert contract()['service_start'] == sale['start']
+    catalog = call(client, admin, 'get', 'billing/catalog')
+    coverage = catalog['coverage'][str(vehicle)]
+    assert coverage['start'] == sale['start']
+    assert coverage['end'] == ('2027-03-22' if plan == 'monthly' else '2028-02-22')
+    sold = catalog['sold_plans']
+    assert sold[str(vehicle)] == ['Mensual' if plan == 'monthly' else 'Anual']
+    assert client.post('/api/billing/sales', headers=admin, json=sale).status_code == 409
+    assert emitter.calls == 1
+
+
+
+def test_selected_plates_grouped_sale(client, admin, emitter):
+    customer = fleet(client, admin, 86, count=0)
+    def add(i):
+        return call(client, admin, 'post', 'master-data/vehicles/', json={
+            'client_id': customer, 'plate': f'J86-{i:03}',
+        })['record']['id']
+    first, second, other = [add(i) for i in range(100, 103)]
+    payload = dict(client=customer, vehicles=[first, second], plan='monthly', start='2027-03-23')
+    def sell(data):
+        quote = call(client, admin, 'post', 'billing/sales/preview', json=data)
+        return call(client, admin, 'post', 'billing/sales', json={**data, 'signature': quote['signature']})
+    invoice = sell(payload)
+    assert invoice['total'] == 574 and invoice['sale_start'] == payload['start']
+    periods = call(client, admin, 'get', 'billing/catalog')['billed_periods']
+    for vehicle in [first, second]:
+        entry, = periods[str(vehicle)]
+        assert (entry['period'], entry['number'], entry['amount']) == ('2027-03-01', invoice['number'], 37)
+    assert str(other) not in periods
+    assert {l['vehicle_id'] for l in invoice['lines']} == {first, second}
+    assert client.post('/api/billing/sales/preview', headers=admin, json=payload).status_code == 409
+    assert sell({**payload, 'vehicles': [other]})['total'] == 287
+    assert sell({**payload, 'start': '2027-04-23'})['total'] == 74
+    wrong = fleet(client, admin, 87, count=0)
+    assert client.post('/api/billing/sales/preview', headers=admin,
+                       json={**payload, 'client': wrong}).status_code == 400
+
+def test_invoice_history_filters_before_pagination(app, client, admin):
+    customer = fleet(client, admin, 93, count=0)
+    other = fleet(client, admin, 94, count=0)
+    for cid, count in [(customer, 32), (other, 35)]:
+        app.config['TEST_SQL'](f"""
+            INSERT INTO billing_invoices(client_id,period,recipient,issuer,total,created_by,issue_date)
+            SELECT {cid}, date '2031-01-01' + n, '{{}}','{{}}',1,(SELECT min(id) FROM users),
+                CASE WHEN n=1 THEN date '2031-03-01' ELSE date '2031-03-02' END
+            FROM generate_series(1,{count}) n;
+        """)
+    path = 'billing/invoices'
+    filters = {'client': customer, 'from': '2031-03-02', 'to': '2031-03-02'}
+    page = call(client, admin, 'get', path, query_string=filters)
+    assert page['has_more'] and len(page['items']) == 30
+    assert all(row['issue_date'] == filters['from'] for row in page['items'])
+    last = page['items'][-1]['id']
+    rest = call(client, admin, 'get', path, query_string={**filters, 'before': last})
+    assert len(rest['items']) == 1 and rest['items'][0]['id'] < last and not rest['has_more']
+    assert not call(client, admin, 'get', path, query_string={'client': customer, 'to': '2031-02-28'})['items']
+    assert client.get('/api/'+path, headers=admin, query_string={**filters, 'to':'2031-01-01'}).status_code == 400

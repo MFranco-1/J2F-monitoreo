@@ -1,4 +1,6 @@
+declare const J2F_API_URL: string | undefined;
+
 export const environment = {
   production: true,
-  apiUrl: '/api', // En producción, usar URL relativa (proxy/mismo dominio)
+  apiUrl: typeof J2F_API_URL === 'undefined' ? '/api' : J2F_API_URL,
 };

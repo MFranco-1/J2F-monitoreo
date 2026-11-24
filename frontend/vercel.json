@@ -1,0 +1,5 @@
+{
+  "buildCommand": "node build-vercel.mjs",
+  "outputDirectory": "dist/j2f-monitoreo-frontend/browser",
+  "rewrites": [{ "source": "/((?!.*\\.).*)", "destination": "/index.html" }]
+}

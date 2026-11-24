@@ -124,17 +124,32 @@ test('facturación bloquea el doble clic y descarta la respuesta al perder el pe
   const page = new BillingComponent();
   page.ngOnInit();
   page.client = 3;
-  page.period = '2027-01';
+  page.plates = [7, 8];
+  page.start = '2027-01-23';
   page.invoice.set({ total: 574, signature: 'vista', lines: [{ plate: 'J2F-101' }] });
   page.issue();
   page.issue();
-  assert.deepEqual(calls, [{ url: '/api/billing/invoices',
-    data: { client: 3, period: '2027-01', signature: 'vista' } }]);
+  assert.deepEqual(calls, [{ url: '/api/billing/sales',
+    data: { client: 3, vehicles: [7, 8], plan: 'monthly', start: '2027-01-23', signature: 'vista' } }]);
   session.profileChanges.next();
   pending.next({ id: 1, total: 574, status: 'created' });
   assert.equal(page.invoice(), null);
   assert.deepEqual(redirects, ['/dashboard']);
   page.ngOnDestroy();
+});
+
+test('seleccionar todas las placas se limita al cliente elegido', () => {
+  const { BillingComponent } = load('src/app/features/billing/billing.component.ts');
+  injections = [{}, {}, {}];
+  const page = new BillingComponent();
+  page.catalog.set({ clients: [], vehicles: [{id: 7, client_id: 3}, {id: 8, client_id: 3}, {id: 9, client_id: 4}] });
+  page.client = 3;
+  page.toggleAll();
+  assert.deepEqual(Array.from(page.plates), [7, 8]);
+  page.togglePlate(7);
+  assert.deepEqual(Array.from(page.plates), [8]);
+  page.changeClient();
+  assert.equal(page.plates.length, 0);
 });
 
 const { AlertService } = load('src/app/core/services/alert.service.ts');

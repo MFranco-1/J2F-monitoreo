@@ -3,6 +3,7 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from psycopg2 import Error
+from sqlalchemy import create_engine
 from werkzeug.exceptions import HTTPException
 from app.config import get_config
 
@@ -12,6 +13,9 @@ def create_app(env=None):
     app = Flask(__name__)
     app.url_map.redirect_defaults = False
     app.config.from_object(get_config(env))
+    app.extensions["postgres_engine"] = create_engine(
+        app.config["SQLALCHEMY_DATABASE_URI"], pool_pre_ping=True, pool_timeout=10,
+    )
     jwt.init_app(app)
     CORS(app, origins=app.config["CORS_ORIGINS"])
     from app.api import api, revoked

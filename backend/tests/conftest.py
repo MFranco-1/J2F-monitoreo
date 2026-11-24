@@ -57,7 +57,7 @@ def app():
             return database.utc_json(json.loads(match[1])) if match else None
         database.invoke=invoke
         execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-        for name in ('01_esquema.sql','02_catalogos.sql','03_funciones.sql','04_facturacion.sql'):
+        for name in ('01_esquema.sql','02_catalogos.sql','03_funciones.sql','04_facturacion.sql','05_servicios.sql','06_venta_placas.sql','07_planes_vendidos.sql'):
             execute((directory/name).read_text(encoding='utf-8'))
         os.environ['DATABASE_URL']='postgresql://localhost/j2f_test'
     else:
@@ -65,7 +65,7 @@ def app():
         with psycopg2.connect(url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-                for name in ('01_esquema.sql','02_catalogos.sql','03_funciones.sql','04_facturacion.sql'):
+                for name in ('01_esquema.sql','02_catalogos.sql','03_funciones.sql','04_facturacion.sql','05_servicios.sql','06_venta_placas.sql','07_planes_vendidos.sql'):
                     cursor.execute((directory/name).read_text(encoding='utf-8'))
         os.environ['DATABASE_URL']=url
     from app import create_app

@@ -3,25 +3,40 @@ from contextlib import contextmanager
 import re
 import psycopg2
 from psycopg2.extras import Json
+from sqlalchemy.exc import DBAPIError, TimeoutError as PoolTimeout
 from flask import current_app
 
 @contextmanager
 def connection():
-    url = current_app.config["SQLALCHEMY_DATABASE_URI"]
-    conn = psycopg2.connect(url.set(drivername="postgresql").render_as_string(hide_password=False))
+    engine = current_app.extensions["postgres_engine"]
+    try:
+        conn = engine.raw_connection()
+    except DBAPIError as error:
+        raise error.orig from None
+    except PoolTimeout:
+        raise psycopg2.OperationalError("No hay una conexión disponible") from None
     try:
         yield conn
+    except psycopg2.Error:
+        if conn.driver_connection.closed:
+            conn.invalidate()
+        raise
     finally:
+        # Devuelve la conexión al pool; una transacción fallida se revierte antes del próximo uso.
         conn.close()
+
+def call_routine(cursor, name, *parameters):
+    cursor.callproc(name, [Json(p) if isinstance(p, (dict, list)) else p for p in parameters])
+    return utc_json(cursor.fetchone()[0])
+
 
 def invoke(name, *parameters):
     # El nombre proviene del backend, nunca de un parámetro HTTP.
     with connection() as conn:
         with conn.cursor() as cursor:
-            cursor.callproc(name, [Json(p) if isinstance(p, (dict, list)) else p for p in parameters])
-            value = cursor.fetchone()[0]
+            value = call_routine(cursor, name, *parameters)
         conn.commit()
-        return utc_json(value)
+        return value
 
 
 def utc_json(value):

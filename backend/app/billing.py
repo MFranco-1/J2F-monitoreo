@@ -7,14 +7,16 @@ from decimal import Decimal, InvalidOperation
 from flask import Blueprint, Response, abort, request
 from flask_jwt_extended import jwt_required
 from app.api import body, context
-from app.database import invoke
+from psycopg2.errors import SerializationFailure
+from app.database import call_routine, connection, invoke
 from app.fact_api import FactAPI, ProviderError
 
 billing = Blueprint("billing", __name__)
 
 
 def db(action, **data):
-    return invoke("j2f_billing", action, data, *context())
+    routine = "j2f_service" if action in ("preview", "reserve", "history") else "j2f_billing"
+    return invoke(routine, action, data, *context())
 
 
 def month(value):
@@ -75,7 +77,7 @@ def record(inv, doc, *, after_send=False, notice=None):
 @billing.get("/catalog")
 @jwt_required()
 def catalog():
-    return db("catalog")
+    return invoke("j2f_billing_catalog", *context())
 
 
 @billing.put("/plans/<int:vehicle>")
@@ -88,10 +90,119 @@ def plan(vehicle):
               first_period=month(data.get("first_period")), equipment_paid=data["equipment_paid"])
 
 
+def service_args(data, concepts):
+    args = dict(client_id=client_id(data.get("client")), period=month(data.get("period")))
+    if "vehicle" in data:
+        args["vehicle_id"] = client_id(data["vehicle"])
+    if concepts is not None:
+        if ("vehicle_id" not in args or not isinstance(concepts, list)
+                or not concepts or not all(isinstance(c, str) for c in concepts)):
+            abort(400, "Selecciona los servicios a cobrar.")
+        args["concepts"] = concepts
+    return args
+
+
+def new_contract(data):
+    start = data.get("start")
+    if data.get("plan") not in ("annual", "monthly") or not isinstance(start, str):
+        abort(400, "Selecciona el plan y la fecha de inicio.")
+    try:
+        parsed = datetime.strptime(start, "%Y-%m-%d").date()
+    except ValueError:
+        abort(400, "La fecha de inicio no es válida.")
+    return dict(plan=data["plan"], service_start=parsed.isoformat(),
+                first_period=parsed.replace(day=1).isoformat(), equipment_paid=False)
+
+
+def sale(action, data, **fields):
+    contract = new_contract(data)
+    bulk = "vehicles" in data
+    requested = data["vehicles"] if bulk else [data.get("vehicle")]
+    if not isinstance(requested, list) or not requested:
+        abort(400, "Selecciona al menos una placa.")
+    vehicles = sorted({client_id(value) for value in requested})
+    args = dict(client_id=client_id(data.get("client")), period=contract["first_period"], **fields)
+    if bulk:
+        args.update(vehicles=vehicles, start=contract["service_start"])
+    else:
+        args["vehicle_id"] = vehicles[0]
+    actor = context()
+    try:
+        with connection() as conn, conn.cursor() as cursor:
+            cursor.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+            catalog = call_routine(cursor, "j2f_billing", "catalog", {}, *actor)
+            units = {v["id"]: v for v in catalog["vehicles"] if v["client_id"] == args["client_id"]}
+            for vehicle in vehicles:
+                if vehicle not in units:
+                    abort(400, "Hay una placa que no pertenece al cliente.")
+                existing = units[vehicle]["contract"]
+                if existing:
+                    if not bulk:
+                        abort(409, "El vehículo ya tiene un plan.")
+                else:
+                    call_routine(cursor, "j2f_billing", "plan", dict(vehicle_id=vehicle, **contract), *actor)
+            summary = call_routine(cursor, "j2f_service", action, args, *actor)
+            # La cotización usa las mismas tarifas que la venta, sin dejar un contrato provisional.
+            if action == "preview":
+                conn.rollback()
+            else:
+                conn.commit()
+            return summary
+    except SerializationFailure:
+        abort(409, "Otro usuario actualizó el vehículo. Actualiza la página para ver su plan vigente.")
+
+
+@billing.post("/sales/preview")
+@jwt_required()
+def sale_preview():
+    draft = sale("preview", body())
+    draft["missing"].extend(FactAPI().missing)
+    return view(draft)
+
+
+@billing.post("/sales")
+@jwt_required()
+def sell_plan():
+    data = body()
+    sale("preview", data)
+    api = provider()
+    inv = sale("reserve", data, issuer=api.issuer, signature=data.get("signature"))
+    return create_document(inv, api)
+
+
+@billing.get("/invoices")
+@jwt_required()
+def history():
+    filters = {}
+    if request.args.get("client"):
+        filters["client_id"] = client_id(request.args["client"])
+    if "before" in request.args:
+        cursor = request.args.get("before", type=int)
+        if cursor is None or not 0 < cursor <= 2147483647:
+            abort(400, "La página solicitada no es válida.")
+        filters["before"] = cursor
+    for key in ("from", "to"):
+        value = request.args.get(key)
+        if value:
+            try:
+                filters[key] = datetime.strptime(value, "%Y-%m-%d").date().isoformat()
+            except ValueError:
+                abort(400, "La fecha de emisión no es válida.")
+    if "from" in filters and "to" in filters and filters["from"] > filters["to"]:
+        abort(400, "La fecha final debe ser igual o posterior a la inicial.")
+    return db("history", **filters)
+
+
+@billing.get("/invoices/<int:iid>")
+@jwt_required()
+def detail(iid):
+    return view(db("get", id=iid))
+
+
 @billing.get("/preview")
 @jwt_required()
 def preview():
-    data = db("preview", client_id=client_id(request.args.get("client")), period=month(request.args.get("period")))
+    data = db("preview", **service_args(request.args, request.args.getlist("concept") or None))
     if "id" not in data:
         data["missing"].extend(FactAPI().missing)
     return view(data)
@@ -112,7 +223,7 @@ def provider(inv=None):
 @jwt_required()
 def issue():
     data = body()
-    args = dict(client_id=client_id(data.get("client")), period=month(data.get("period")))
+    args = service_args(data, data.get("concepts"))
     current = db("preview", **args)
     if current.get("id") and current["status"] != "reserved":
         return view(current)
@@ -120,6 +231,19 @@ def issue():
     inv = db("reserve", **args, issuer=api.issuer, signature=data.get("signature"))
     if inv["status"] != "reserved":
         return view(inv)
+    return create_document(inv, api)
+
+
+@billing.post("/invoices/<int:iid>/create")
+@jwt_required()
+def retry_creation(iid):
+    inv = db("get", id=iid)
+    if inv["status"] != "reserved":
+        abort(409, "Consulta el estado de la factura.")
+    return create_document(inv, provider(inv))
+
+
+def create_document(inv, api):
     inv = db("claim_create", id=inv["id"], version=inv["version"])
     try:
         doc = api.create(inv)
@@ -143,6 +267,22 @@ def invoice_pdf(iid):
         abort(502, str(error))
     return Response(content, mimetype="application/pdf", headers={
         "Content-Disposition": f'inline; filename="factura-{iid}.pdf"',
+    })
+
+
+@billing.get("/invoices/<int:iid>/xml")
+@jwt_required()
+def invoice_xml(iid):
+    inv = db("get", id=iid)
+    if not inv["external_id"] or inv["status"] == "mismatch":
+        abort(409, "El XML todavía no está disponible.")
+    api = provider(inv)
+    try:
+        content = api.invoice_xml(inv)
+    except ProviderError as error:
+        abort(404 if error.code == 404 else 502, str(error))
+    return Response(content, mimetype="application/xml", headers={
+        "Content-Disposition": f'attachment; filename="factura-{iid}.xml"',
     })
 
 

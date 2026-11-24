@@ -1,151 +1,235 @@
 <div class="page-header">
-  <h1>Facturación</h1>
-  <p>Facturas de monitoreo vehicular · Ambiente de pruebas</p>
+  <h1>Servicio</h1>
+  <p>Monitoreo vehicular y comprobantes de pago</p>
 </div>
+<nav class="tabs" aria-label="Servicio">
+  <button [class.active]="tab === 'service'" [disabled]="busy()" (click)="switchTab('service')">
+    Vender servicio
+  </button>
+  <button [class.active]="tab === 'history'" [disabled]="busy()" (click)="switchTab('history')">
+    Facturas emitidas
+  </button>
+</nav>
 @if (message()) {
   <p class="alert-banner" role="status">{{ message() }}</p>
 }
-<div class="card">
-  <label class="form-group"
-    >Cliente
-    <select
-      class="form-control"
-      [(ngModel)]="client"
-      (ngModelChange)="changeClient()"
-      [disabled]="busy()"
-    >
-      <option [ngValue]="null">Seleccionar cliente</option>
-      @for (c of catalog().clients; track c.id) {
-        <option [ngValue]="c.id">{{ c.name }}</option>
-      }
-    </select>
-  </label>
-</div>
-@if (client) {
-  <section class="card">
-    <h2>Plan del vehículo</h2>
-    <form (ngSubmit)="savePlan()" #form="ngForm">
-      <fieldset [disabled]="busy()">
+<div class="layout" [class.history]="tab !== 'service'">
+  @if (tab === 'service') {
+    <section class="card">
+      <h2>Datos del servicio</h2>
+      <div class="selectors">
         <label class="form-group"
-          >Placa<select
+          >Cliente
+          <select
             class="form-control"
-            required
-            name="vehicle"
-            [(ngModel)]="vehicle"
-            (ngModelChange)="editPlan()"
+            [(ngModel)]="client"
+            (ngModelChange)="changeClient()"
+            [disabled]="busy()"
           >
-            <option [ngValue]="null">Elegir vehículo</option>
-            @for (v of catalog().vehicles; track v.id) {
-              @if (v.client_id === client) {
-                <option [ngValue]="v.id">{{ v.plate }}</option>
-              }
+            <option [ngValue]="null">Seleccionar cliente</option>
+            @for (c of catalog().clients; track c.id) {
+              <option [ngValue]="c.id">{{ c.name }}</option>
             }
-          </select></label
-        >
-        <label class="form-group"
-          >Plan<select class="form-control" name="plan" [(ngModel)]="plan">
-            <option value="monthly">Mensual</option>
-            <option value="annual">Anual</option>
-          </select></label
-        >
-        <label class="form-group"
-          >Inicio del servicio<input
-            class="form-control"
-            type="date"
-            required
-            name="start"
-            [(ngModel)]="start"
-        /></label>
-        <label class="form-group"
-          >Facturar desde<input
-            class="form-control"
-            type="month"
-            required
-            name="first"
-            [(ngModel)]="first"
-        /></label>
-        @if (plan === 'monthly') {
-          <label class="form-group"
-            ><input type="checkbox" name="paid" [(ngModel)]="paid" /> Equipo e instalación ya
-            facturados</label
-          >
-        } @else {
-          <p>
-            El primer año incluye equipo e instalación. Para un año ya facturado, elige el período
-            de su próxima renovación.
-          </p>
+          </select>
+        </label>
+        <div class="form-group plate-picker" #picker
+          (document:pointerdown)="closePlatesIfOutside(picker, $event.target)"
+          (focusout)="closePlatesIfOutside(picker, $event.relatedTarget)"
+          (keydown.escape)="closePlates(); trigger.focus()">
+          <span id="plate-label">Placas</span>
+          <button type="button" #trigger class="plate-trigger" [disabled]="!client || busy() || !!invoice()?.id"
+            aria-labelledby="plate-label plate-summary" [attr.aria-expanded]="platesOpen"
+            (click)="togglePicker()">
+            <span id="plate-summary">{{ plateSummary }}</span><span aria-hidden="true">▾</span>
+          </button>
+          @if (platesOpen) {
+            <div class="plate-menu" role="group" aria-labelledby="plate-label">
+              <input type="search" aria-label="Buscar placa" placeholder="Buscar placa" [(ngModel)]="plateSearch">
+              @if (vehicles.length) {
+                <label class="choice"><input type="checkbox" [disabled]="busy()" [checked]="plates.length === vehicles.length"
+                  [indeterminate]="plates.length > 0 && plates.length < vehicles.length" (change)="toggleAll()">Todas las placas ({{ vehicles.length }})</label>
+              }
+              <div class="plate-options">
+                @for (v of visibleVehicles; track v.id) {
+                  <label class="choice"><input type="checkbox" [disabled]="busy()" [checked]="plates.includes(v.id)"
+                    (change)="togglePlate(v.id)">{{ v.plate }}
+                  </label>
+                } @empty {<p>{{ vehicles.length ? 'Ninguna placa coincide.' : 'Este cliente no tiene vehículos.' }}</p>}
+              </div>
+            </div>
+          }
+        </div>
+        @if (selectedPlans.length) {
+          <ul class="plan-cards" aria-label="Planes de las placas seleccionadas">
+            @for (item of selectedPlans; track item.plate) {
+              <li>
+                <div class="plan-meta"><strong>{{ item.plate }}</strong><span>Plan {{ item.name | lowercase }}</span></div>
+                <small>@if (item.end) {
+                  {{ item.start | date:'dd/MM/yyyy' }} – {{ item.end | date:'dd/MM/yyyy' }}
+                } @else {
+                  Desde el {{ item.start | date:'dd/MM/yyyy' }}
+                }</small>
+                @if (item.selected; as billed) {
+                  <p class="billed-month">{{ monthLabel(billed.period) }} · S/ {{ billed.amount | number:'1.2-2' }} facturados</p>
+                  <button class="link" [disabled]="busy()" (click)="openPdf(billed.id)">
+                    Ver factura {{ billed.number }}
+                  </button>
+                }
+                @if (item.periods.length) {
+                  <details><summary>Meses facturados ({{ item.periods.length }})</summary>
+                    @for (period of item.periods; track period.id) {
+                      <div class="period-row"><span>{{ monthLabel(period.period) }} · {{ period.plan }}</span>
+                        <button class="link" [disabled]="busy()" (click)="openPdf(period.id)">{{ period.number || 'Ver PDF' }}</button>
+                      </div>
+                    }
+                  </details>
+                }
+              </li>
+            }
+          </ul>
         }
-        <button class="btn-secondary" [disabled]="form.invalid || !vehicle">Guardar plan</button>
+      </div>
+      @if (invoice()?.id) {
+        <button class="btn-secondary" [disabled]="busy()" (click)="newSale()">Nueva venta</button>
+      } @else if (plates.length) {
+        <fieldset [disabled]="busy()">
+          @if (!renewal) {
+            <label class="form-group">{{ existingPlans.size ? 'Plan para las placas nuevas' : 'Plan' }}
+              <select [(ngModel)]="plan" (ngModelChange)="quoteSale()">
+                <option value="monthly">Mensual</option><option value="annual">Anual</option>
+              </select>
+            </label>
+          }
+          @if (renewal && commonStartDay) {
+            <label class="form-group">Mes a cobrar<input type="month" [ngModel]="start.slice(0,7)" (ngModelChange)="chooseMonth($event)"></label>
+          } @else {
+            <label class="form-group">{{ renewal ? 'Inicio de la renovación' : 'Fecha de inicio' }}
+              <input type="date" [(ngModel)]="start" (ngModelChange)="quoteSale()">
+            </label>
+          }
+        </fieldset>
+      }
+    </section>
+  } @else {
+    <section class="card ledger">
+      <h2>Facturas registradas</h2>
+      <fieldset class="history-filters" [disabled]="busy()" aria-label="Filtrar facturas por cliente y fecha de emisión">
+        <label>Cliente<select [(ngModel)]="historyClient" (ngModelChange)="history()">
+          <option [ngValue]="null">Todos los clientes</option>
+          @for (c of catalog().clients; track c.id) {<option [ngValue]="c.id">{{ c.name }}</option>}
+        </select></label>
+        <label>Emitidas desde<input type="date" [(ngModel)]="dateFrom" (change)="history()" [max]="dateTo"></label>
+        <label>Hasta<input type="date" [(ngModel)]="dateTo" (change)="history()" [min]="dateFrom"></label>
+        @if (historyClient || dateFrom || dateTo) {<button class="btn-secondary" (click)="resetFilters()">Ver todas</button>}
       </fieldset>
-    </form>
-  </section>
-  <section class="card">
-    <h2>Factura del cliente</h2>
-    <div class="period-picker">
-      <label class="form-group"
-        >Período<input
-          class="form-control"
-          type="month"
-          [(ngModel)]="period"
-          (ngModelChange)="clear()"
-          [disabled]="busy()"
-      /></label>
-      <button class="btn-secondary" (click)="preview()" [disabled]="busy() || !period">
-        Consultar período
-      </button>
-    </div>
-    @if (invoice(); as v) {
-      @if (v.status) {
-        <p>
-          <strong>{{ v.number }}</strong> <span class="badge" [class.badge-active]="v.status === 'accepted'">{{ states[v.status] }}</span>
-        </p>
-      }
-      @if (v.message && v.status !== 'accepted') {
-        <p role="status">{{ v.message }}</p>
-      }
       <table class="data-table">
         <thead>
           <tr>
-            <th>Placa</th>
-            <th>Concepto</th>
-            <th>Período</th>
-            <th>Precio con IGV</th>
+            <th>Fecha de emisión · Lima</th>
+            <th>Factura</th>
+            <th>Cliente</th>
+            <th>Total</th>
+            <th>Estado</th>
+            <th>Documentos</th>
           </tr>
         </thead>
         <tbody>
-          @for (l of v.lines; track l.plate + l.label) {
+          @for (row of rows; track row.id) {
             <tr>
-              <td>{{ l.plate }}</td>
-              <td>{{ l.label }}</td>
-              <td>{{ l.period.slice(0, 7) }}</td>
-              <td>S/ {{ l.gross | number: '1.2-2' }}</td>
+              <td>
+                {{ row.issue_date | date: 'dd/MM/yyyy' }}
+                @if (row.created_at) { {{ row.created_at | date:'HH:mm':'-0500' }} }
+              </td>
+              <td>
+                <button class="link" [disabled]="busy()" (click)="showInvoice(row.id)">
+                  {{ row.number || 'Ver registro' }}
+                </button>
+              </td>
+              <td>{{ row.client_name }}</td>
+              <td>S/ {{ row.total | number: '1.2-2' }}</td>
+              <td>{{ states[row.status] }}</td>
+              <td>
+                @if (row.external_id && row.status !== 'mismatch') {
+                  <button class="link" [disabled]="busy()" (click)="openPdf(row.id)">PDF</button>
+                  @if (row.status === 'accepted' || row.status === 'rejected') {
+                    <button
+                      class="link"
+                      [disabled]="busy()"
+                      (click)="downloadXml(row.id, row.number)"
+                    >
+                      XML
+                    </button>
+                  }
+                }
+              </td>
             </tr>
           } @empty {
             <tr>
-              <td colspan="4">Sin cargos para este período.</td>
+              <td colspan="6">{{ busy() ? 'Cargando facturas…' : (historyClient || dateFrom || dateTo ? 'No hay facturas con estos filtros.' : 'Aún no hay facturas.') }}</td>
             </tr>
           }
         </tbody>
       </table>
-      <p>
-        <strong>Total con IGV: S/ {{ v.total | number: '1.2-2' }}</strong>
-      </p>
+      @if (more) {
+        <button class="btn-secondary" [disabled]="busy()" (click)="history(true)">
+          Ver anteriores
+        </button>
+      }
+    </section>
+  }
+  @if (invoice(); as v) {
+    <article class="ticket" aria-label="Detalle del cobro">
+      <header><span class="wordmark">J2F</span><span>MONITOREO VEHICULAR</span></header>
+      <div class="ticket-title">
+        <small>{{ v.id ? 'FACTURA DE PRUEBA' : 'RESUMEN DEL SERVICIO' }}</small>
+        <h2>{{ v.number || v.recipient?.razon_social }}</h2>
+        @if (v.sale_start || tab === 'service') {<p>Inicio {{ (v.sale_start || start) | date:'dd/MM/yyyy' }}</p>}
+        @if (v.number) {
+          <p>{{ v.recipient?.razon_social }}</p>
+        }
+        @if (v.status) {
+          <p>{{ states[v.status] }}</p>
+        }
+      </div>
+      @for (l of v.lines; track l.plate + l.concept) {
+        <div class="charge">
+          <div>
+            <strong>{{ l.label }}</strong
+            ><small
+              >{{ l.plate }}
+              @if (l.concept !== 'equipment') {
+                · {{ l.period.slice(0, 7) }}
+              }
+            </small>
+          </div>
+          <b>S/ {{ l.gross | number: '1.2-2' }}</b>
+        </div>
+      } @empty {
+        <p>Sin servicios pendientes de cobro para este vehículo y mes.</p>
+      }
+      <div class="total">
+        <span>Total con IGV</span><strong>S/ {{ v.total | number: '1.2-2' }}</strong>
+      </div>
       @if (v.missing?.length) {
-        <p>Completa antes de emitir:</p>
+        <p>Completa antes de emitir</p>
         <ul>
           @for (m of v.missing; track m) {
             <li>{{ m }}</li>
           }
         </ul>
       }
+      @if (v.message && v.status !== 'accepted') {
+        <p role="status">{{ v.message }}</p>
+      }
       <div class="actions">
-        @if (!v.status || v.status === 'reserved') {
-          <button
-            class="btn-primary"
-            [disabled]="busy() || !!v.missing?.length || !v.lines.length"
-            (click)="issue()"
-          >
-            Crear factura
+        @if (!v.id && v.lines.length) {
+          <button class="btn-primary" [disabled]="busy() || !!v.missing?.length" (click)="issue()">
+            {{ chargeLabel }}
+          </button>
+        }
+        @if (v.status === 'reserved') {
+          <button class="btn-primary" [disabled]="busy()" (click)="action('create')">
+            Reintentar creación
           </button>
         }
         @if (v.status === 'created' || v.status === 'rejected') {
@@ -153,15 +237,20 @@
             Enviar a SUNAT beta
           </button>
         }
-        @if (v.id && v.external_id && v.status !== 'mismatch') {
-          <button class="btn-primary" [disabled]="busy()" (click)="openPdf()">Ver PDF</button>
+        @if (v.external_id && v.status !== 'mismatch') {
+          <button class="btn-secondary" [disabled]="busy()" (click)="openPdf()">Ver PDF</button>
         }
-        @if (v.id && v.status !== 'accepted') {
+        @if (v.id && (v.status === 'accepted' || v.status === 'rejected')) {
+          <button class="btn-secondary" [disabled]="busy()" (click)="downloadXml(v.id, v.number)">
+            Descargar XML
+          </button>
+        }
+        @if (v.id && v.status !== 'accepted' && v.status !== 'reserved') {
           <button class="btn-secondary" [disabled]="busy()" (click)="action('consult')">
-            Consultar resultado
+            Consultar estado
           </button>
         }
       </div>
-    }
-  </section>
-}
+    </article>
+  }
+</div>

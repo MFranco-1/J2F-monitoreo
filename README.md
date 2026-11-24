@@ -47,3 +47,10 @@ npm run build
 ```
 
 Para desplegar el frontend compilado, configura el servidor web para servir Angular y redirigir `/api` a Flask. En producción, el backend requiere `DATABASE_URL` y dos claves privadas distintas de al menos 32 caracteres, `SECRET_KEY` y `JWT_SECRET_KEY`.
+
+## Despliegue de la demo
+
+- **Emisor Laravel en Render.** Construir con Docker, contexto `scripts` y archivo `scripts/Dockerfile.fact-api` (rutas desde la raíz del repositorio). La imagen usa Apache en el puerto 80 y aplica el parche de SUNAT beta a la revisión de Laravel probada. Configurar `APP_KEY` de forma privada. Para trasladar el emisor SQLite, restaurar su base en almacenamiento persistente, configurar `DB_CONNECTION=sqlite` y `DB_DATABASE` con su ruta absoluta, y conservar también `storage/app` (XML, PDF, CDR y certificado privado). Los directorios deben ser escribibles por el usuario de Apache. Si se usa un solo volumen, colocar la base en la zona privada de ese volumen. Las migraciones de Laravel usan exclusivamente la base del emisor.
+- **Flask en Render.** Seleccionar Python y la raíz `backend`. Construir con `pip install -r requirements-render.txt` e iniciar con `gunicorn --bind 0.0.0.0:$PORT --timeout 120 run:app`. Configurar `FLASK_ENV=production`, `DATABASE_URL` de Neon, `SECRET_KEY` y `JWT_SECRET_KEY` independientes, `CORS_ORIGINS` con el origen de Vercel y las variables `FACT_API_*` de la plantilla. Usar la URL HTTPS del emisor y un token vigente. Revisar el traslado de facturas anteriores: Flask valida la identidad del emisor, incluida su URL, antes de servir documentos.
+- **Angular en Vercel.** Elegir `frontend` como Root Directory, Node 22 compatible con `package.json` y definir `J2F_BACKEND_ORIGIN` con el origen HTTPS de Flask. La compilación incorpora esa dirección pública. Los tokens y certificados se configuran únicamente en los servicios que los utilizan.
+- **Comprobación.** Abrir la web desde otro equipo, iniciar sesión, consultar una factura anterior y abrir su PDF. Emitir un comprobante de prueba y verificar su PDF, XML y estado. Repetir la consulta tras reiniciar el emisor para comprobar la persistencia.
