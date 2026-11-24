@@ -4,6 +4,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends git unzip libxm
     && rm -rf /var/lib/apt/lists/*
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 WORKDIR /var/www/html
+# Render monta los archivos secretos con acceso para el grupo 1000.
+RUN (getent group 1000 >/dev/null || groupadd --gid 1000 render-secrets) \
+    && usermod --append --groups 1000 www-data
 RUN chown root:root /var/www/html && git init . \
     && git fetch --depth=1 https://github.com/angelitosystems/fact_api.git 3adec6840e6df4d49b8f3bb5d7598c341abb5ac6 \
     && git checkout --detach FETCH_HEAD
