@@ -122,7 +122,7 @@ index 56896f3..4bdb1c0 100644
 @@ -29,3 +29,4 @@ public function up(): void
          // Actualizar la estructura del ENUM removiendo tipos no utilizados
 -        DB::statement("ALTER TABLE company_configurations MODIFY COLUMN config_type ENUM(
-+        if (DB::getDriverName() !== 'sqlite') {
++        if (in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
 +            DB::statement("ALTER TABLE company_configurations MODIFY COLUMN config_type ENUM(
              'tax_settings',
 @@ -35,2 +36,3 @@ public function up(): void
@@ -132,7 +132,7 @@ index 56896f3..4bdb1c0 100644
 @@ -150,3 +152,4 @@ public function down(): void
          // Revertir cambios - restaurar ENUM original
 -        DB::statement("ALTER TABLE company_configurations MODIFY COLUMN config_type ENUM(
-+        if (DB::getDriverName() !== 'sqlite') {
++        if (in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
 +            DB::statement("ALTER TABLE company_configurations MODIFY COLUMN config_type ENUM(
              'sunat_credentials',
 @@ -163,2 +166,3 @@ public function down(): void
@@ -158,3 +158,15 @@ index 46194b0..f2dcca0 100644
 -                'mto_ivap'
 +                'daily_summary_id'
              ]);
+diff --git a/config/database.php b/config/database.php
+index 5b318f5..ff7bc0f 100644
+--- a/config/database.php
++++ b/config/database.php
+@@ -93,6 +93,6 @@
+             'charset' => env('DB_CHARSET', 'utf8'),
+             'prefix' => '',
+             'prefix_indexes' => true,
+-            'search_path' => 'public',
++            'search_path' => env('DB_SCHEMA', 'public'),
+             'sslmode' => 'prefer',
+         ],
