@@ -11,7 +11,9 @@ COPY fact-api-beta.patch /tmp/j2f.patch
 RUN git apply /tmp/j2f.patch && rm -rf .git && rm -f .env \
     && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction \
     && a2enmod rewrite && sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|' /etc/apache2/sites-available/000-default.conf \
-    && chown -R www-data:www-data storage bootstrap/cache
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && mkdir -p storage/app/private/certificado \
+    && ln -s /etc/secrets/certificado.pem storage/app/private/certificado/certificado.pem
 # Administrar el emisor por consola.
 RUN printf '%s\n' '<LocationMatch "^/(?!index[.]php$|api/v1/(companies/[0-9]+/?$|invoices(/|$)))">' 'Require all denied' '</LocationMatch>' > /etc/apache2/conf-available/j2f-api.conf \
     && a2enconf j2f-api
