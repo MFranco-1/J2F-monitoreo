@@ -4,7 +4,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends git unzip libxm
     && rm -rf /var/lib/apt/lists/*
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 WORKDIR /var/www/html
-RUN git init . && git fetch --depth=1 https://github.com/angelitosystems/fact_api.git 3adec6840e6df4d49b8f3bb5d7598c341abb5ac6 \
+RUN chown root:root /var/www/html && git init . \
+    && git fetch --depth=1 https://github.com/angelitosystems/fact_api.git 3adec6840e6df4d49b8f3bb5d7598c341abb5ac6 \
     && git checkout --detach FETCH_HEAD
 COPY fact-api-beta.patch /tmp/j2f.patch
 RUN git apply /tmp/j2f.patch && rm -rf .git && rm -f .env \
