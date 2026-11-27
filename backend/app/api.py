@@ -178,6 +178,14 @@ def alert_history(record_id):
     operation("alerts", "get", record_id)
     return operation("history", "detail", record_id)
 
+@api.post("/master-data/clients/import-coolbox", defaults={"batch_id": None})
+@api.post("/master-data/clients/import-coolbox/<int:batch_id>")
+@jwt_required()
+def import_coolbox(batch_id):
+    from app.coolbox import import_clients
+    actor, profile = context()
+    return import_clients(actor, profile, batch_id)
+
 @api.route("/master-data/<resource>/", defaults={"record_id": None}, methods=["GET", "POST"])
 @api.route("/master-data/<resource>/<int:record_id>", methods=["GET", "PUT", "DELETE"])
 @api.route("/<resource>/", defaults={"record_id": None}, methods=["GET", "POST"])

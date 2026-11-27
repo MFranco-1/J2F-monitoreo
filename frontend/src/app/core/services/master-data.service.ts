@@ -1,9 +1,11 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
+import { EMPTY, expand, filter } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   MasterKind,
   Client,
+  ClientImportResult,
   Vehicle,
   GpsDevice,
   EventType,
@@ -24,6 +26,14 @@ export class MasterDataService {
   }
   clients(active = true) {
     return this.list<Client>('clients', { active });
+  }
+  importCoolbox() {
+    const url = `${this.base}/clients/import-coolbox`;
+    type Batch = ClientImportResult | { batch_id: number; next_page: number };
+    return this.http.post<Batch>(url, {}).pipe(
+      expand(batch => 'next_page' in batch ? this.http.post<Batch>(`${url}/${batch.batch_id}`, {}) : EMPTY),
+      filter((batch): batch is ClientImportResult => 'rejections' in batch),
+    );
   }
   vehicles(clientId?: number, active = true) {
     return this.list<Vehicle>('vehicles', { client_id: clientId, active });

@@ -1402,6 +1402,43 @@ test('el formulario exige cliente y vehículo coherentes solo para LOW_FUEL', ()
   assert.equal(payloads.length, 2);
 });
 
+test('COOLBOX continúa un lote largo y solo publica el resultado final', async () => {
+  const { MasterDataService } = load('src/app/core/services/master-data.service.ts');
+  const urls = [];
+  const result = { batch_id: 42, total: 2, created: 0, unchanged: 1, updated: 0, rejected: 1,
+    rejections: [{ page: 2, position: 1, reason: 'DNI inválido' }] };
+  const service = new MasterDataService({ post: url => {
+    urls.push(url);
+    return rx.of(urls.length === 1 ? { batch_id: 42, next_page: 2 } : result);
+  } });
+  assert.deepEqual(await rx.lastValueFrom(service.importCoolbox().pipe(rx.toArray())), [result]);
+  assert.deepEqual(urls, ['/api/master-data/clients/import-coolbox', '/api/master-data/clients/import-coolbox/42']);
+});
+
+test('Datos Maestros limita la importación al perfil autorizado y descarta la respuesta al cambiar de perfil', () => {
+  const response = new rx.Subject();
+  const session = auth(true);
+  let calls = 0;
+  injections = [{ importCoolbox: () => { calls++; return response; } },
+    { getProfiles: () => rx.EMPTY }, session];
+  const page = new MasterDataComponent();
+  page.load = () => {};
+  page.loadReferences = () => {};
+  page.ngOnInit();
+  page.importCoolbox();
+  page.importCoolbox();
+  assert.equal(calls, 1);
+  assert.equal(page.importing(), true);
+  session.isAdmin = () => false;
+  session.profileChanges.next();
+  response.next({ batch_id: 2 });
+  page.importCoolbox();
+  assert.equal(calls, 1);
+  assert.equal(page.importResult(), null);
+  assert.equal(page.importing(), false);
+  page.ngOnDestroy();
+});
+
 test('Datos Maestros conserva el mensaje del backend al bloquear una desactivación', () => {
   const message =
     'Completa primero el abastecimiento de la alerta #25 antes de desactivar el vehículo';

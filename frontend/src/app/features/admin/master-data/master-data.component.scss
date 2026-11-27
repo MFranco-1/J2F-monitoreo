@@ -9,6 +9,23 @@
   color: #fff;
   border-color: #194a6c;
 }
+.import-result {
+  margin-bottom: 16px;
+}
+.import-result dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin: 8px 0;
+}
+.import-result dd {
+  margin: 0;
+  font-weight: 600;
+}
+.import-result ul {
+  max-height: 14rem;
+  overflow: auto;
+}
 @media (max-width: 700px) {
   .action-buttons {
     flex-wrap: wrap;

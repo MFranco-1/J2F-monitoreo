@@ -22,6 +22,21 @@ export interface Client {
   state?: State;
   verification?: ClientVerification;
 }
+export interface ClientImportResult {
+  batch_id: number;
+  total: number;
+  created: number;
+  updated: number;
+  unchanged: number;
+  rejected: number;
+  rejections: {
+    page: number;
+    position: number;
+    document_type: string | null;
+    document_number: string | null;
+    reason: string;
+  }[];
+}
 export interface Vehicle {
   id: number;
   client_id: number;

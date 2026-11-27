@@ -30,6 +30,14 @@ Los archivos de `database/` se aplican en orden: `01_esquema.sql` crea las tabla
 
 Para instalar desde una terminal con `DATABASE_URL` definida, usa `python init_db.py` desde `backend/` **solo en una base vacía**. Para actualizar una instalación compatible con las tablas existentes, usa `python init_db.py --existing`. Para crear el primer administrador en una instalación sin usuarios, usa `python create_admin.py`.
 
+### Importación manual de COOLBOX
+
+En una base existente, aplica `database/08_importacion_clientes_coolbox.sql` en el esquema de J2F. Registra los intentos en `coolbox_import_batches` y las filas recibidas en `coolbox_client_staging`. El maestro se actualiza al recibir la última página. Un fallo del proveedor queda en el lote y conserva intactas las fichas locales.
+
+Configura `COOLBOX_API_KEY` en el archivo privado `.env.local` para uso local o en **Render → j2f-backend → Environment** para el despliegue. Reinicia Flask después de guardar. El endpoint de COOLBOX tiene el valor predeterminado de `.env.example`; usa `COOLBOX_API_URL` si el equipo cambia de dirección.
+
+En **Datos maestros → Clientes**, un perfil con permiso de administración puede pulsar **Importar clientes de COOLBOX**. El resultado indica los nuevos, actualizados, sin cambios y rechazados, con la página y el motivo de cada rechazo. Un documento de otro tipo con el mismo número requiere revisión. Repetir la importación con los mismos datos deja el maestro igual.
+
 ## Pruebas
 
 En `backend/`, instala `requirements-dev.txt` y define `J2F_TEST_DATABASE_URL` con una **base PostgreSQL exclusiva para pruebas** cuyo nombre termine en `_test`. La suite recrea el esquema público de esa base.

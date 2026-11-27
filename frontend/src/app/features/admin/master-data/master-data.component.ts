@@ -7,6 +7,7 @@ import { MasterDataService } from '../../../core/services/master-data.service';
 import { UserService } from '../../../core/services/user.service';
 import {
   Client,
+  ClientImportResult,
   Vehicle,
   MasterKind,
   MasterForm,
@@ -48,6 +49,9 @@ export class MasterDataComponent implements OnInit, OnDestroy {
   loading = signal(true);
   showModal = signal(false);
   saving = signal(false);
+  importing = signal(false);
+  importResult = signal<ClientImportResult | null>(null);
+  private importRequest?: Subscription;
   editing = signal<MasterRecord | null>(null);
   error = signal('');
   success = signal('');
@@ -60,6 +64,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.profileSubscription = this.auth.profileChanges.subscribe(() => {
+      this.resetImport();
       this.showModal.set(false);
       this.editing.set(null);
       this.listRequestId++;
@@ -84,6 +89,7 @@ export class MasterDataComponent implements OnInit, OnDestroy {
 
   select(kind: MasterKind): void {
     if (this.kind === kind) return;
+    this.resetImport();
     this.showModal.set(false);
     this.kind = kind;
     this.load();
@@ -188,9 +194,34 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     if (!this.saving()) this.showModal.set(false);
   }
   ngOnDestroy(): void {
+    this.resetImport();
     this.profileSubscription?.unsubscribe();
     this.listRequestId++;
     this.referenceRequestId++;
+  }
+  private resetImport(): void {
+    this.importRequest?.unsubscribe();
+    this.importing.set(false);
+    this.importResult.set(null);
+  }
+
+  importCoolbox(): void {
+    if (this.kind !== 'clients' || !this.auth.isAdmin() || this.importing()) return;
+    this.importing.set(true);
+    this.importResult.set(null);
+    this.error.set('');
+    this.importRequest = this.service.importCoolbox().subscribe({
+      next: result => {
+        this.importing.set(false);
+        this.importResult.set(result);
+        this.load();
+        this.loadReferences();
+      },
+      error: err => {
+        this.importing.set(false);
+        this.error.set(err?.error?.error || 'No se pudo completar la importación de COOLBOX.');
+      },
+    });
   }
   registerGps(vehicle: MasterRecord): void {
     if (!this.auth.isAdmin()) return;
@@ -244,6 +275,9 @@ export class MasterDataComponent implements OnInit, OnDestroy {
     if (this.kind === 'clients') {
       this.normalizeName('business_name');
       this.normalizeName('contact_name');
+      if (this.form.document_type === 'CE') {
+        this.form.document_number = this.form.document_number?.trim().toUpperCase();
+      }
     }
     const data = { ...this.form };
     delete data.verification;

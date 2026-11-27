@@ -18,9 +18,37 @@
     </button>
   </div>
   <div class="toolbar">
-    <span class="text-muted">{{ records().length }} registros</span
-    ><button *ngIf="auth.isAdmin()" class="btn-primary" (click)="open()">+ Nuevo</button>
+    <span class="text-muted">{{ records().length }} registros</span>
+    <div class="action-buttons" *ngIf="auth.isAdmin()">
+      <button *ngIf="kind === 'clients'" class="btn-secondary" [disabled]="importing()" (click)="importCoolbox()">
+        {{ importing() ? 'Importando clientes…' : 'Importar clientes de COOLBOX' }}
+      </button>
+      <button class="btn-primary" (click)="open()">+ Nuevo</button>
+    </div>
   </div>
+  @if (importResult(); as result) {
+    <div class="import-result" role="status">
+      <strong>Importación de COOLBOX · Lote {{ result.batch_id }}</strong>
+      <dl>
+        <div><dt>Recibidos</dt><dd>{{ result.total }}</dd></div>
+        <div><dt>Nuevos</dt><dd>{{ result.created }}</dd></div>
+        <div><dt>Actualizados</dt><dd>{{ result.updated }}</dd></div>
+        <div><dt>Sin cambios</dt><dd>{{ result.unchanged }}</dd></div>
+        <div><dt>Rechazados</dt><dd>{{ result.rejected }}</dd></div>
+      </dl>
+      @if (result.rejected) {
+        <details open>
+          <summary>Motivos de rechazo</summary>
+          <ul>
+            @for (row of result.rejections; track row.page + ':' + row.position) {
+              <li>Página {{ row.page }}, fila {{ row.position }}
+                · {{ row.document_type }} {{ row.document_number || 'Sin número' }} · {{ row.reason }}</li>
+            }
+          </ul>
+        </details>
+      }
+    </div>
+  }
   <div class="table-container">
     <div class="loading-overlay" *ngIf="loading()"><div class="spinner"></div></div>
     <table class="data-table" *ngIf="!loading()">
@@ -110,7 +138,7 @@
               class="form-control"
               [(ngModel)]="form.document_number"
               [readonly]="isInternalDocument()"
-              [attr.inputmode]="form.document_type === 'PASAPORTE' ? 'text' : 'numeric'"
+              [attr.inputmode]="form.document_type === 'PASAPORTE' || form.document_type === 'CE' ? 'text' : 'numeric'"
               [maxlength]="
                 form.document_type === 'RUC' ? 11 : form.document_type === 'DNI' ? 8 : 12
               "
@@ -125,7 +153,7 @@
                   : form.document_type === 'DNI'
                     ? 'Exactamente 8 dígitos'
                     : form.document_type === 'CE'
-                      ? 'De 9 a 12 dígitos'
+                      ? 'De 9 a 12 letras o dígitos'
                       : 'De 6 a 12 letras o dígitos'
             }}</small>
             <small class="field-error" *ngIf="fieldErrors()['document_number']">{{
