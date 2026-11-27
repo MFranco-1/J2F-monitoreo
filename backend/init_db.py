@@ -9,7 +9,11 @@ if __name__ == "__main__":
     parser.add_argument("--existing", action="store_true", help="Actualizar una BD existente sin recrear tablas")
     args = parser.parse_args()
     directory = Path(__file__).resolve().parents[1] / "database"
-    scripts = (["01_esquema.sql"] if not args.existing else []) + ["02_catalogos.sql", "03_funciones.sql", "04_facturacion.sql", "05_servicios.sql", "06_venta_placas.sql", "07_planes_vendidos.sql", "08_importacion_clientes_coolbox.sql"]
+    scripts = (["01_esquema.sql"] if not args.existing else []) + [
+        "02_catalogos.sql", "03_funciones.sql", "04_facturacion.sql", "05_servicios.sql",
+        "06_venta_placas.sql", "07_planes_vendidos.sql", "08_importacion_clientes_coolbox.sql",
+        "09_consulta_clientes_integracion.sql",
+    ]
     with psycopg2.connect(database_url().set(drivername="postgresql").render_as_string(hide_password=False)) as conn:
         for name in scripts:
             with conn.cursor() as cursor:

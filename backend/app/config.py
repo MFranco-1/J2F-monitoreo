@@ -124,6 +124,7 @@ def get_config(env=None):
         "COOLBOX_API_URL", "https://coolbox-backend-diny.onrender.com/api/integracion/clientes"
     ).strip()
     cfg.COOLBOX_API_KEY = os.environ.get("COOLBOX_API_KEY", "").strip()
+    cfg.J2F_CLIENTS_API_KEY = secret_setting("J2F_CLIENTS_API_KEY", "")
     for key in ('FACT_API_URL', 'FACT_API_TOKEN', 'FACT_API_COMPANY_ID', 'FACT_API_BRANCH_ID', 'FACT_API_SERIES'):
         setattr(cfg, key, os.environ.get(key, '').strip())
     cfg.PORT = integer_setting("PORT", 5000, 1, 65535)

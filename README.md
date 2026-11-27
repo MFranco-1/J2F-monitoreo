@@ -38,6 +38,10 @@ Configura `COOLBOX_API_KEY` en el archivo privado `.env.local` para uso local o 
 
 En **Datos maestros → Clientes**, un perfil con permiso de administración puede pulsar **Importar clientes de COOLBOX**. El resultado indica los nuevos, actualizados, sin cambios y rechazados, con la página y el motivo de cada rechazo. Un documento de otro tipo con el mismo número requiere revisión. Repetir la importación con los mismos datos deja el maestro igual.
 
+### Consulta de clientes desde COOLBOX
+
+Para habilitar la lectura desde el backend de COOLBOX, aplica `database/09_consulta_clientes_integracion.sql` y configura `J2F_CLIENTS_API_KEY` en Flask con una clave aleatoria propia de al menos 32 caracteres. COOLBOX envía esa clave en el encabezado `X-API-Key` de `GET /api/clients/`. La respuesta contiene el tipo y número de documento, nombre o razón social, teléfono, correo y dirección. Para revocar el acceso, retira esa variable y reinicia Flask.
+
 ## Pruebas
 
 En `backend/`, instala `requirements-dev.txt` y define `J2F_TEST_DATABASE_URL` con una **base PostgreSQL exclusiva para pruebas** cuyo nombre termine en `_test`. La suite recrea el esquema público de esa base.

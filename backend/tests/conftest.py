@@ -30,6 +30,11 @@ def app():
     import app.database as database
     original_invoke = database.invoke
     directory = Path(__file__).resolve().parents[2] / 'database'
+    scripts = (
+        '01_esquema.sql', '02_catalogos.sql', '03_funciones.sql', '04_facturacion.sql',
+        '05_servicios.sql', '06_venta_placas.sql', '07_planes_vendidos.sql',
+        '08_importacion_clientes_coolbox.sql', '09_consulta_clientes_integracion.sql',
+    )
     if pgdata:
         import pgserver
         binary = Path(pgserver.__file__).parent / 'pginstall/bin/postgres'
@@ -57,7 +62,7 @@ def app():
             return database.utc_json(json.loads(match[1])) if match else None
         database.invoke=invoke
         execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-        for name in ('01_esquema.sql','02_catalogos.sql','03_funciones.sql','04_facturacion.sql','05_servicios.sql','06_venta_placas.sql','07_planes_vendidos.sql', '08_importacion_clientes_coolbox.sql'):
+        for name in scripts:
             execute((directory/name).read_text(encoding='utf-8'))
         os.environ['DATABASE_URL']='postgresql://localhost/j2f_test'
     else:
@@ -65,7 +70,7 @@ def app():
         with psycopg2.connect(url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-                for name in ('01_esquema.sql','02_catalogos.sql','03_funciones.sql','04_facturacion.sql','05_servicios.sql','06_venta_placas.sql','07_planes_vendidos.sql', '08_importacion_clientes_coolbox.sql'):
+                for name in scripts:
                     cursor.execute((directory/name).read_text(encoding='utf-8'))
         os.environ['DATABASE_URL']=url
     from app import create_app

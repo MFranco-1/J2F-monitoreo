@@ -2,9 +2,19 @@
 import csv
 import io
 import json
-from flask import Blueprint, Response, abort, jsonify, request
-from flask_jwt_extended import create_access_token, create_refresh_token, get_jwt, get_jwt_identity, jwt_required
+from secrets import compare_digest
+
+from flask import Blueprint, Response, abort, current_app, request
+from flask_jwt_extended import (
+    create_access_token,
+    create_refresh_token,
+    get_jwt,
+    get_jwt_identity,
+    jwt_required,
+    verify_jwt_in_request,
+)
 from werkzeug.security import check_password_hash, generate_password_hash
+
 from app.database import invoke
 
 api = Blueprint("api", __name__)
@@ -185,6 +195,22 @@ def import_coolbox(batch_id):
     from app.coolbox import import_clients
     actor, profile = context()
     return import_clients(actor, profile, batch_id)
+
+
+@api.get("/clients/")
+def list_clients():
+    key = request.headers.get("X-API-Key")
+    if key is None:
+        verify_jwt_in_request()
+        return operation("clients", "list", filters=request.args.to_dict())
+
+    expected = current_app.config["J2F_CLIENTS_API_KEY"]
+    if not expected or not compare_digest(key.encode(), expected.encode()):
+        abort(401, "Clave de integración inválida")
+
+    # La integración recibe los campos del convenio, incluso si la petición incluye un JWT.
+    return invoke("j2f_export_clients")
+
 
 @api.route("/master-data/<resource>/", defaults={"record_id": None}, methods=["GET", "POST"])
 @api.route("/master-data/<resource>/<int:record_id>", methods=["GET", "PUT", "DELETE"])
